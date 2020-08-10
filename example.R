@@ -39,11 +39,6 @@ data.dir = here('bigfiles') # These are large binaries, not suitable for git
 if(!dir.exists(data.dir))
 {
   dir.create(data.dir, recursive=TRUE)
-  print(paste('data directory', data.dir, 'created'))
-  
-} else {
-  
-  print(paste('data directory', data.dir, 'exists'))
 }
 
 # define a filename for the hydrology GeoPackage (gpkg) file from NHD
@@ -68,16 +63,27 @@ if(!file.exists(BigTimber.nhdfile))
 #' 
 #' Once the data are downloaded, we can load them and print out a map of the study area
 
-# load the watershed data...
+# load the watershed data
 BigTimber.flowline = read_sf(BigTimber.nhdfile, 'NHDFlowline_Network')
 BigTimber.catchment = read_sf(BigTimber.nhdfile, 'CatchmentSP')
 BigTimber.waterbody = read_sf(BigTimber.nhdfile, 'NHDWaterbody')
 
-# ...and plot them
-plot(st_geometry(BigTimber.flowline), col='blue', main='Upper Yellostone River Watershed (upstream of Big Timber)', cex.main=0.5)
-plot(BigTimber.pt, cex=1.5, lwd=2, col='red', add=TRUE)
-plot(st_geometry(BigTimber.catchment), col=rgb(0, 0, 0, alpha=0.2), border=NA, add=TRUE)
-plot(st_geometry(BigTimber.waterbody), col=rgb(0, 0, 1, alpha=0.5), border=NA, add=TRUE)
+# create a directory for storing graphics
+graphics.dir = here('graphics')
+if(!dir.exists(graphics.dir))
+{
+  dir.create(graphics.dir, recursive=TRUE)
+}
+
+# plot the watershed flowlines and water bodies as a png file
+#+ eval=FALSE
+png(file.path(graphics.dir, 'UYRW_flowlines.png'), height=800, width=400)
+  plot(st_geometry(BigTimber.flowline), col='blue', main='Upper Yellowstone River Watershed \n(upstream of Big Timber)')
+  plot(BigTimber.pt, cex=1.5, lwd=2, col='red', add=TRUE)
+  plot(st_geometry(BigTimber.catchment), col=rgb(0, 0, 0, alpha=0.2), border=NA, add=TRUE)
+  plot(st_geometry(BigTimber.waterbody), col=rgb(0, 0, 1, alpha=0.5), border=NA, add=TRUE)
+dev.off()
+
 
 
 #' Work in progress below...

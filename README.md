@@ -1,6 +1,8 @@
 # URYW_data
 links and R scripts for downloading data relevant to modelling streamflow on the Upper Yellowstone River Watershed
 
+![test caption](https://github.com/deankoch/URYW_data/graphics/UYRW_flowlines.png)
+
 ## about us
 
 Our team is conducting a multi-year research project to develop an operational forecasting system for streamflow and water quality on the [Upper Yellowstone River](http://fwp.mt.gov/mtoutdoors/images/Storyimages/2017/UpperYellowstoneMap.jpg) (UYR) and its tributaries. Our system will be based on [SWAT-MODFLOW](https://www.sciencedirect.com/science/article/abs/pii/S136481521930893X?via%3Dihub), a hybrid of the [SWAT+](https://swatplus.gitbook.io/docs/) (Soil-Water-Assessment Tool) model for surface water dynamics and [MODFLOW](https://www.usgs.gov/mission-areas/water-resources/science/modflow-and-related-programs?qt-science_center_objects=0#qt-science_center_objects) (Modular Finite-Difference Flow) for groundwater dynamics. 
