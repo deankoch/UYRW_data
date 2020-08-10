@@ -1,7 +1,7 @@
 # URYW_data
 links and R scripts for downloading data relevant to modelling streamflow on the Upper Yellowstone River Watershed
 
-![test caption](https://github.com/deankoch/URYW_data/graphics/UYRW_flowlines.png)
+![test caption](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/UYRW_flowlines.png)
 
 ## about us
 
