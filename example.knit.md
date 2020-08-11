@@ -5,7 +5,8 @@ date: "June 19, 2020"
 output: github_document
 ---
 
-MITACS UYRW project
+**MITACS UYRW project**
+
 A basic example script for getting started working with watershed data in R.
 
 For now, this simply follows the example on the `nhdplusTools` github page with some minor modifications.
@@ -15,12 +16,7 @@ A user guide for the NHDPlus dataset is
 
 I'll start by downloading some GIS data on the hydrology of the UYR upstream of Big Timber, MT. The `nhdplusTools` 
 package can be used to fetch this data without having to navigate the USGS website.
-
-
-```r
-## libraries
-```
-
+@details # libraries
 If any of these CRAN packages are not already installed on your machine, run `install.packages('packagename')` to get them
 
 
@@ -40,7 +36,7 @@ library(tmap)
 
 To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to 
 include all catchments upstream. The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info 
-from placenames. This package is loaded automatically with package `HydroData`, which we will use later on to  
+from placenames. This package is loaded automatically with package `HydroData`, which we will use later on to
 pull more hydrology datasets (uncomment two lines below to install from github using devtools).
 
 
@@ -50,7 +46,7 @@ pull more hydrology datasets (uncomment two lines below to install from github u
 library(HydroData)
 ```
 
-Data on geographical landmarks and highways can be downloaded from OSM using the overpass API via the `osmdata` package
+Data on geographical landmarks and highways can be downloaded from OSM using the overpass API via `osmdata`
 
 
 ```r
@@ -62,9 +58,12 @@ The `here` package is helpful for defining working directories on portable code
 
 ```r
 library(here)
+```
 
-## starting location
+@details # starting location
 
+
+```r
 # define a source outlet from which to explore upstream 
 BigTimber.pt = geocode(location='Big Timber, MT', pt=TRUE)
 BigTimber.pt$name = 'Big Timber, MT'
@@ -85,10 +84,9 @@ YellowstoneLake.pt$name = 'Yellowstone Lake, WY'
 
 # get a COMID for the source outlet
 BigTimber.comid = discover_nhdplus_id(BigTimber.pt)
-
-## downloading the data
 ```
 
+@details # downloading the data
 package nhdplusTools will use the COMID from Big Timber to delineate the watershed and download the relevant data.
 To avoid downloading things over and over again, first define a permanent storage location on disk:
 
@@ -125,12 +123,7 @@ if(!file.exists(BigTimber.nhdfile))
 
 Note there is a warning message on the last call, indicating that the package has not been tested on such a large watershed 
 (indicating I should go through by hand later to verify it fetched everything).
-
-
-```r
-## data prep
-```
-
+@details # data prep
 Once the data are downloaded, we can load them into R as sfc objects
 
 
@@ -141,7 +134,7 @@ UYRW.catchment = read_sf(BigTimber.nhdfile, 'CatchmentSP')
 UYRW.waterbody = read_sf(BigTimber.nhdfile, 'NHDWaterbody')
 ```
 
-There are many thousands of catchments...
+There are many thousands of catchments ...
 
 
 ```r
@@ -152,7 +145,7 @@ print(nrow(UYRW.catchment))
 ## [1] 4162
 ```
 
-...Their union delineates the entire UYR watershed as a single polygon. Holes in this polygon may emerge if the 
+... and their union delineates the entire UYR watershed as a single polygon. Holes in this polygon may emerge if the 
 catchements boundaries don't perfectly align (try plotting `st_union(UYRW.catchment)`). These can be filled 
 using the *fill_holes* function in the `smoothr` package.
 
@@ -161,8 +154,8 @@ using the *fill_holes* function in the `smoothr` package.
 UYRW.poly = fill_holes(st_union(UYRW.catchment, by_feature=FALSE), threshold=1e6)
 ```
 
-The water body geometries fetched by `nhdplusTools` include some invalid geometries (self-intersections) and features 
-lying outside this watershed. Clean up this sfc object before continuing...
+The water body geometries fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features 
+lying outside this watershed. We should clean up this sfc object before continuing ...
 
 
 ```r
@@ -177,7 +170,7 @@ UYRW.waterbody = st_intersection(st_make_valid(UYRW.waterbody), UYRW.poly)
 ## Warning: attribute variables are assumed to be spatially constant throughout all geometries
 ```
 
-...and just to be sure, do the same for the flowlines
+... and just to be sure, do the same for the flowlines
 
 
 ```r
@@ -201,16 +194,19 @@ Yellowstone.flowline = UYRW.flowline[UYRW.flowline$gnis_name == 'Yellowstone Riv
 
 # fix self-intersection issues
 Yellowstone.flowline = st_make_valid(st_union(Yellowstone.flowline, by_feature=FALSE))
+```
 
-## coordinate reference system projection
+@details # coordinate reference system
 
+
+```r
 # determine the extent of the watershed in terms of long/lat coordinates
 UYRW.geo.xlim = st_bbox(UYRW.poly)[c(1,3)]
 UYRW.geo.ylim = st_bbox(UYRW.poly)[c(2,4)]
 ```
 
 For now I use Transverse Mercator (UTM), as recommended in the QSWAT+ manual. This is regarded as "close enough"
-to an equal area projection for modeling purposes
+to an equal area projection for modeling purposes.
 
 
 ```r
@@ -230,10 +226,13 @@ UYRW.flowline = st_transform(UYRW.flowline, UYRW.UTM.epsg)
 UYRW.waterbody = st_transform(UYRW.waterbody, UYRW.UTM.epsg)
 UYRW.poly = st_transform(UYRW.poly, UYRW.UTM.epsg)
 Yellowstone.flowline = st_transform(Yellowstone.flowline, UYRW.UTM.epsg)
+```
+
+@details # visualization
+All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
 
 
-## visualization
-
+```r
 # create a directory for storing graphics
 graphics.dir = here('graphics')
 if(!dir.exists(graphics.dir))
@@ -244,7 +243,6 @@ if(!dir.exists(graphics.dir))
 # determine the extent in terms of x/y coordinates
 UYRW.xlim = st_bbox(UYRW.poly)[c(1,3)]
 UYRW.ylim = st_bbox(UYRW.poly)[c(2,4)]
-
 
 # define a padded bounding box for plotting
 cex.xlim = 1.8
