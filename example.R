@@ -17,7 +17,8 @@
 #' I'll start by downloading some GIS data on the hydrology of the UYR upstream of Big Timber, MT. The `nhdplusTools` 
 #' package can be used to fetch this data without having to navigate the USGS website.
 
-#' @section libraries
+#'
+#' ## libraries
 
 #' If any of these CRAN packages are not already installed on your machine, run `install.packages('packagename')` to get them
 library(nhdplusTools)
@@ -42,7 +43,8 @@ library(osmdata)
 #' The `here` package is helpful for defining working directories on portable code
 library(here)
 
-#' @section starting location
+#'
+#' ## starting location
 
 # define a source outlet from which to explore upstream 
 BigTimber.pt = geocode(location='Big Timber, MT', pt=TRUE)
@@ -65,7 +67,8 @@ YellowstoneLake.pt$name = 'Yellowstone Lake, WY'
 # get a COMID for the source outlet
 BigTimber.comid = discover_nhdplus_id(BigTimber.pt)
 
-#' @section downloading the data
+#'
+#' ## downloading the data
 
 #' package nhdplusTools will use the COMID from Big Timber to delineate the watershed and download the relevant data.
 #' To avoid downloading things over and over again, first define a permanent storage location on disk:
@@ -97,7 +100,8 @@ if(!file.exists(BigTimber.nhdfile))
 #' Note there is a warning message on the last call, indicating that the package has not been tested on such a large watershed 
 #' (indicating I should go through by hand later to verify it fetched everything).
 
-#' @section data prep
+#'
+#' ## data prep
 
 #' Once the data are downloaded, we can load them into R as sfc objects
 
@@ -129,7 +133,8 @@ Yellowstone.flowline = UYRW.flowline[UYRW.flowline$gnis_name == 'Yellowstone Riv
 # fix self-intersection issues
 Yellowstone.flowline = st_make_valid(st_union(Yellowstone.flowline, by_feature=FALSE))
 
-#' @section coordinate reference system
+#'
+#' ## coordinate reference system
 
 # determine the extent of the watershed in terms of long/lat coordinates
 UYRW.geo.xlim = st_bbox(UYRW.poly)[c(1,3)]
@@ -151,8 +156,8 @@ UYRW.waterbody = st_transform(UYRW.waterbody, UYRW.UTM.epsg)
 UYRW.poly = st_transform(UYRW.poly, UYRW.UTM.epsg)
 Yellowstone.flowline = st_transform(Yellowstone.flowline, UYRW.UTM.epsg)
 
-
-#' @section visualization
+#'
+#' ## visualization
 #' All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
 
 # create a directory for storing graphics

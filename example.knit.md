@@ -17,9 +17,12 @@ here</a>.
 
 I’ll start by downloading some GIS data on the hydrology of the UYR
 upstream of Big Timber, MT. The `nhdplusTools` package can be used to
-fetch this data without having to navigate the USGS website. @section
-libraries If any of these CRAN packages are not already installed on
-your machine, run `install.packages('packagename')` to get them
+fetch this data without having to navigate the USGS website.
+
+## libraries
+
+If any of these CRAN packages are not already installed on your machine,
+run `install.packages('packagename')` to get them
 
 ``` r
 library(nhdplusTools)
@@ -63,7 +66,7 @@ portable code
 library(here)
 ```
 
-@section starting location
+## starting location
 
 ``` r
 # define a source outlet from which to explore upstream 
@@ -88,10 +91,11 @@ YellowstoneLake.pt$name = 'Yellowstone Lake, WY'
 BigTimber.comid = discover_nhdplus_id(BigTimber.pt)
 ```
 
-@section downloading the data package nhdplusTools will use the COMID
-from Big Timber to delineate the watershed and download the relevant
-data. To avoid downloading things over and over again, first define a
-permanent storage location on disk:
+## downloading the data
+
+package nhdplusTools will use the COMID from Big Timber to delineate the
+watershed and download the relevant data. To avoid downloading things
+over and over again, first define a permanent storage location on disk:
 
 ``` r
 # use the `here` package to define a subdirectory of the RStudio project folder, and create it as needed
@@ -127,8 +131,10 @@ if(!file.exists(BigTimber.nhdfile))
 Note there is a warning message on the last call, indicating that the
 package has not been tested on such a large watershed (indicating I
 should go through by hand later to verify it fetched everything).
-@section data prep Once the data are downloaded, we can load them into R
-as sfc objects
+
+## data prep
+
+Once the data are downloaded, we can load them into R as sfc objects
 
 ``` r
 # load the watershed data
@@ -187,7 +193,7 @@ Yellowstone.flowline = UYRW.flowline[UYRW.flowline$gnis_name == 'Yellowstone Riv
 Yellowstone.flowline = st_make_valid(st_union(Yellowstone.flowline, by_feature=FALSE))
 ```
 
-@section coordinate reference system
+## coordinate reference system
 
 ``` r
 # determine the extent of the watershed in terms of long/lat coordinates
@@ -217,9 +223,10 @@ UYRW.poly = st_transform(UYRW.poly, UYRW.UTM.epsg)
 Yellowstone.flowline = st_transform(Yellowstone.flowline, UYRW.UTM.epsg)
 ```
 
-@section visualization All of the data needed to create the flowlines
-plot in our readme are now loaded into R. The following code creates
-that plot
+## visualization
+
+All of the data needed to create the flowlines plot in our readme are
+now loaded into R. The following code creates that plot
 
 ``` r
 # create a directory for storing graphics
