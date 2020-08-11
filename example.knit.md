@@ -1,69 +1,71 @@
----
-title: "example.R"
-author: "Dean Koch"
-date: "June 19, 2020"
-output: github_document
----
+example.R
+================
+Dean Koch
+June 19, 2020
 
 **MITACS UYRW project**
 
-A basic example script for getting started working with watershed data in R.
+A basic example script for getting started working with watershed data
+in R.
 
-For now, this simply follows the example on the `nhdplusTools` github page with some minor modifications.
-A user guide for the NHDPlus dataset is
-<a href="https://tinyurl.com/y54rlqja" target="_blank">available here</a>, and a 
-<a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
+For now, this simply follows the example on the `nhdplusTools` github
+page with some minor modifications. A user guide for the NHDPlus dataset
+is <a href="https://tinyurl.com/y54rlqja" target="_blank">available
+here</a>, and a
+<a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary
+here</a>.
 
-I'll start by downloading some GIS data on the hydrology of the UYR upstream of Big Timber, MT. The `nhdplusTools` 
-package can be used to fetch this data without having to navigate the USGS website.
-@details # libraries
-If any of these CRAN packages are not already installed on your machine, run `install.packages('packagename')` to get them
+I’ll start by downloading some GIS data on the hydrology of the UYR
+upstream of Big Timber, MT. The `nhdplusTools` package can be used to
+fetch this data without having to navigate the USGS website. @section
+libraries If any of these CRAN packages are not already installed on
+your machine, run `install.packages('packagename')` to get them
 
-
-```r
+``` r
 library(nhdplusTools)
 ```
 
-The `sf` package is needed for handling GIS data; The `smoothr` package is handy for simplifying complex spatial features
-and generating polygons from rasters; and the `tmap` package constructs nice ggplot2-style thematic map graphics.
+The `sf` package is needed for handling GIS data; The `smoothr` package
+is handy for simplifying complex spatial features and generating
+polygons from rasters; and the `tmap` package constructs nice
+ggplot2-style thematic map graphics.
 
-
-```r
+``` r
 library(sf)
 library(smoothr)
 library(tmap)
 ```
 
-To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to 
-include all catchments upstream. The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info 
-from placenames. This package is loaded automatically with package `HydroData`, which we will use later on to
-pull more hydrology datasets (uncomment two lines below to install from github using devtools).
+To define the watershed, we need a starting location. I will use Big
+Timber, Montana, and define the UYRW to include all catchments upstream.
+The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long
+info from placenames. This package is loaded automatically with package
+`HydroData`, which we will use later on to pull more hydrology datasets
+(uncomment two lines below to install from github using devtools).
 
-
-```r
+``` r
 #library(devtools)
 #install_github('mikejohnson51/HydroData')
 library(HydroData)
 ```
 
-Data on geographical landmarks and highways can be downloaded from OSM using the overpass API via `osmdata`
+Data on geographical landmarks and highways can be downloaded from OSM
+using the overpass API via `osmdata`
 
-
-```r
+``` r
 library(osmdata)
 ```
 
-The `here` package is helpful for defining working directories on portable code
+The `here` package is helpful for defining working directories on
+portable code
 
-
-```r
+``` r
 library(here)
 ```
 
-@details # starting location
+@section starting location
 
-
-```r
+``` r
 # define a source outlet from which to explore upstream 
 BigTimber.pt = geocode(location='Big Timber, MT', pt=TRUE)
 BigTimber.pt$name = 'Big Timber, MT'
@@ -86,12 +88,12 @@ YellowstoneLake.pt$name = 'Yellowstone Lake, WY'
 BigTimber.comid = discover_nhdplus_id(BigTimber.pt)
 ```
 
-@details # downloading the data
-package nhdplusTools will use the COMID from Big Timber to delineate the watershed and download the relevant data.
-To avoid downloading things over and over again, first define a permanent storage location on disk:
+@section downloading the data package nhdplusTools will use the COMID
+from Big Timber to delineate the watershed and download the relevant
+data. To avoid downloading things over and over again, first define a
+permanent storage location on disk:
 
-
-```r
+``` r
 # use the `here` package to define a subdirectory of the RStudio project folder, and create it as needed
 data.dir = here('bigfiles') # These are large binaries, not suitable for git
 if(!dir.exists(data.dir))
@@ -103,11 +105,12 @@ if(!dir.exists(data.dir))
 BigTimber.nhdfile = file.path(data.dir, 'nhd_basic.gpkg')
 ```
 
-These next few lines will use the source outlet location (BigTimber.pt) to find/download relevant watershed geometries.
-I've wrapped them in a "if file.exists" conditional to skip this step after the data are downloaded once. 
+These next few lines will use the source outlet location (BigTimber.pt)
+to find/download relevant watershed geometries. I’ve wrapped them in a
+“if file.exists” conditional to skip this step after the data are
+downloaded once.
 
-
-```r
+``` r
 if(!file.exists(BigTimber.nhdfile))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
@@ -121,74 +124,62 @@ if(!file.exists(BigTimber.nhdfile))
 }
 ```
 
-Note there is a warning message on the last call, indicating that the package has not been tested on such a large watershed 
-(indicating I should go through by hand later to verify it fetched everything).
-@details # data prep
-Once the data are downloaded, we can load them into R as sfc objects
+Note there is a warning message on the last call, indicating that the
+package has not been tested on such a large watershed (indicating I
+should go through by hand later to verify it fetched everything).
+@section data prep Once the data are downloaded, we can load them into R
+as sfc objects
 
-
-```r
+``` r
 # load the watershed data
 UYRW.flowline = read_sf(BigTimber.nhdfile, 'NHDFlowline_Network')
 UYRW.catchment = read_sf(BigTimber.nhdfile, 'CatchmentSP')
 UYRW.waterbody = read_sf(BigTimber.nhdfile, 'NHDWaterbody')
 ```
 
-There are many thousands of catchments ...
+There are many thousands of catchments …
 
-
-```r
+``` r
 print(nrow(UYRW.catchment))
 ```
 
-```
-## [1] 4162
-```
+    ## [1] 4162
 
-... and their union delineates the entire UYR watershed as a single polygon. Holes in this polygon may emerge if the 
-catchements boundaries don't perfectly align (try plotting `st_union(UYRW.catchment)`). These can be filled 
-using the *fill_holes* function in the `smoothr` package.
+… and their union delineates the entire UYR watershed as a single
+polygon. Holes in this polygon may emerge if the catchements boundaries
+don’t perfectly align (try plotting `st_union(UYRW.catchment)`). These
+can be filled using the *fill\_holes* function in the `smoothr` package.
 
-
-```r
+``` r
 UYRW.poly = fill_holes(st_union(UYRW.catchment, by_feature=FALSE), threshold=1e6)
 ```
 
-The water body geometries fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features 
-lying outside this watershed. We should clean up this sfc object before continuing ...
+The water body geometries fetched by `nhdplusTools` may include some
+invalid geometries (self-intersections) and features lying outside this
+watershed. We should clean up this sfc object before continuing …
 
-
-```r
+``` r
 UYRW.waterbody = st_intersection(st_make_valid(UYRW.waterbody), UYRW.poly)
 ```
 
-```
-## although coordinates are longitude/latitude, st_intersection assumes that they are planar
-```
+    ## although coordinates are longitude/latitude, st_intersection assumes that they are planar
 
-```
-## Warning: attribute variables are assumed to be spatially constant throughout all geometries
-```
+    ## Warning: attribute variables are assumed to be spatially constant throughout all geometries
 
-... and just to be sure, do the same for the flowlines
+… and just to be sure, do the same for the flowlines
 
-
-```r
+``` r
 UYRW.flowline = st_intersection(st_make_valid(UYRW.flowline), UYRW.poly)
 ```
 
-```
-## although coordinates are longitude/latitude, st_intersection assumes that they are planar
-```
+    ## although coordinates are longitude/latitude, st_intersection assumes that they are planar
 
-```
-## Warning: attribute variables are assumed to be spatially constant throughout all geometries
-```
+    ## Warning: attribute variables are assumed to be spatially constant throughout all geometries
 
-It will be useful to have a line geometry representing the main stem and main tributaries of the river
+It will be useful to have a line geometry representing the main stem and
+main tributaries of the river
 
-
-```r
+``` r
 # find and join all line segments labeled as the 'Yellowstone River'
 Yellowstone.flowline = UYRW.flowline[UYRW.flowline$gnis_name == 'Yellowstone River',]
 
@@ -196,20 +187,19 @@ Yellowstone.flowline = UYRW.flowline[UYRW.flowline$gnis_name == 'Yellowstone Riv
 Yellowstone.flowline = st_make_valid(st_union(Yellowstone.flowline, by_feature=FALSE))
 ```
 
-@details # coordinate reference system
+@section coordinate reference system
 
-
-```r
+``` r
 # determine the extent of the watershed in terms of long/lat coordinates
 UYRW.geo.xlim = st_bbox(UYRW.poly)[c(1,3)]
 UYRW.geo.ylim = st_bbox(UYRW.poly)[c(2,4)]
 ```
 
-For now I use Transverse Mercator (UTM), as recommended in the QSWAT+ manual. This is regarded as "close enough"
-to an equal area projection for modeling purposes.
+For now I use Transverse Mercator (UTM), as recommended in the QSWAT+
+manual. This is regarded as “close enough” to an equal area projection
+for modeling purposes.
 
-
-```r
+``` r
 # determine the EPSG code for the UTM zone (12N) on which our study area is centred
 UYRW.UTM.epsg = 32700 - round((45+mean(UYRW.geo.ylim))/90)*100 + round((183+mean(UYRW.geo.xlim))/6)
 
@@ -219,8 +209,7 @@ latlong.epsg = 4269
 
 Reproject all geometries to from latitude/longitude to UTM
 
-
-```r
+``` r
 UYRW.catchment = st_transform(UYRW.catchment, UYRW.UTM.epsg)
 UYRW.flowline = st_transform(UYRW.flowline, UYRW.UTM.epsg)
 UYRW.waterbody = st_transform(UYRW.waterbody, UYRW.UTM.epsg)
@@ -228,11 +217,11 @@ UYRW.poly = st_transform(UYRW.poly, UYRW.UTM.epsg)
 Yellowstone.flowline = st_transform(Yellowstone.flowline, UYRW.UTM.epsg)
 ```
 
-@details # visualization
-All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
+@section visualization All of the data needed to create the flowlines
+plot in our readme are now loaded into R. The following code creates
+that plot
 
-
-```r
+``` r
 # create a directory for storing graphics
 graphics.dir = here('graphics')
 if(!dir.exists(graphics.dir))
@@ -253,7 +242,7 @@ UYRW.ylim.larger = UYRW.ylim + (cex.ylim-1)*c(0,1)*diff(UYRW.ylim)/2
 # plot the watershed flowlines and water bodies as a png file
 ```
 
-```r
+``` r
 # determine resonable dimensions for output
 flowlines.png.res = round(c(diff(UYRW.xlim.larger), diff(UYRW.ylim.larger))/100)
 
@@ -294,5 +283,3 @@ png(file.path(graphics.dir, 'UYRW_flowlines.png'), width=flowlines.png.res[1], h
             frame=FALSE) 
 dev.off()
 ```
-
-
