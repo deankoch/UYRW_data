@@ -13,7 +13,7 @@ The URYW_data repository is a staging area for R code that can be used to fetch 
 
 Our scripts (\*.R) are documented in dynamic reports -- markdown files of the form \*.knit.md. These document the R code and data preparation process in human-readable detail. They are compiled automatically by `rmarkdown` using [a roxygen2-style markup in comments](https://rmarkdown.rstudio.com/articles_report_from_r_script.html):
 
-* [example.R](https://github.com/deankoch/URYW_data/blob/master/example.knit.md) defines the study area and loads some hydrology info
+* [NHDPlus.R](https://github.com/deankoch/URYW_data/blob/master/NHDPlus.knit.md) defines the study area and loads some hydrology info
 * ... more to follow
 
 ## funding

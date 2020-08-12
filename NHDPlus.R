@@ -1,76 +1,61 @@
----
-title: "example.R"
-author: "Dean Koch"
-date: "August 12, 2020"
-output: github_document
----
+#' ---
+#' title: "NHDPlus.R"
+#' author: "Dean Koch"
+#' date: "August 12, 2020"
+#' output: github_document
+#' ---
+#'
+#' **MITACS UYRW project**
+#' 
+#' A basic example script for getting started working with watershed data in R.
+#' 
+#' For now, this simply follows the example on the `nhdplusTools` github page with some minor modifications.
+#' A user guide for the NHDPlus dataset is
+#' <a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
+#' <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
+#' 
+#' The `nhdplusTools` package can be used to fetch NHDPlus without having to navigate the USGS website.
+#' This script uses it to assemble some basic info on the hydrology of the UYR upstream of Big Timber, MT,
+#' and makes a plot of the watercourses of this watershed. 
 
-**MITACS UYRW project**
+#'
+#' ## libraries
 
-A basic example script for getting started working with watershed data in R.
-
-For now, this simply follows the example on the `nhdplusTools` github page with some minor modifications.
-A user guide for the NHDPlus dataset is
-<a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
-<a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
-
-The `nhdplusTools` package can be used to fetch NHDPlus without having to navigate the USGS website.
-This script uses it to assemble some basic info on the hydrology of the UYR upstream of Big Timber, MT,
-and makes a plot of the watercourses of this watershed. 
-
-## libraries
-If any of these CRAN packages are not installed on your machine, run `install.packages(...)` to get them
-
-
-```r
+#' If any of these CRAN packages are not installed on your machine, run `install.packages(...)` to get them
 library(nhdplusTools)
 library(sf)
 library(smoothr)
 library(tmap)
-```
-
-The `sf` package is needed for handling GIS data; The `smoothr` package simplifies complex spatial features; and the `tmap`
-package constructs nice ggplot2-style thematic map graphics.
-
-To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to
-include all catchments upstream.
-
-The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info from placenames. `AOI` is loaded automatically
-by Mike Johnson's `HydroData` package, which we use later on to fetch more hydrology datasets.
-
-
-```r
+#' The `sf` package is needed for handling GIS data; The `smoothr` package simplifies complex spatial features; and the `tmap`
+#' package constructs nice ggplot2-style thematic map graphics.
+#' 
+#' To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to
+#' include all catchments upstream.
+#' 
+#' The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info from placenames. `AOI` is loaded automatically
+#' by Mike Johnson's `HydroData` package, which we use later on to fetch more hydrology datasets.
 # uncomment two lines below to install from github using devtools
 #library(devtools)
 #install_github('mikejohnson51/HydroData')
 library(HydroData)
-```
 
-Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
-
-
-```r
+#' Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
 library(osmdata)
-```
 
-The `here` package is helpful for defining working directories on portable code
-
-
-```r
+#' The `here` package is helpful for defining working directories on portable code
 library(here)
-```
 
+#'
+#' ## project data
 
-## project data
-To avoid downloading things over and over again, we'll use a permanent storage location on disk ("/data").
-This is where we store large data files and R object binaries, which are not suitable for git.
+#' To avoid downloading things over and over again, we'll use a permanent storage location on disk ("/data").
+#' This is where we store large data files and R object binaries, which are not suitable for git.
+#' 
+#' The `if(!file.exists(...))` conditionals preceding each code chunk indicate the files that will be written in that section.
+#' If these files exist in the local data storage directory, it is assumed that the code chunk can be skipped (to avoid
+#' redundant downloads, etc), and the files loaded from disk instead. 
 
-The `if(!file.exists(...))` conditionals preceding each code chunk indicate the files that will be written in that section.
-If these files exist in the local data storage directory, it is assumed that the code chunk can be skipped (to avoid
-redundant downloads, etc), and the files loaded from disk instead. 
-
-
-```r
+#+ results='hide'
 # figures directory 'graphics' will be created in the RStudio project folder
 graphics.dir = 'graphics'
 
@@ -162,15 +147,11 @@ if(!file.exists(here(uyrw.metadata.file)))
   uyrw.metadata.df = read.csv(here(uyrw.metadata.file), header=TRUE, row.names=1)
   
 }
-```
 
-
-## starting location
-Define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
-querying OSM and USGS and computing things all over again.
-
-
-```r
+#'
+#' ## starting location
+#' Define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
+#' querying OSM and USGS and computing things all over again.
 if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 {
   # define some points of interest in the watershed
@@ -197,16 +178,12 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
   poi.list = readRDS(here(uyrw.metadata.df['poi', 'file']))
   
 }
-```
 
-
-## downloading the data
-package `nhdplusTools` will use the COMID from Big Timber to delineate the watershed and download the relevant data.
-These next few lines use the source outlet location `poi.pt$bigtimber` to find/download relevant watershed geometries.
-
-
-
-```r
+#'
+#' ## downloading the data
+#' package `nhdplusTools` will use the COMID from Big Timber to delineate the watershed and download the relevant data.
+#' These next few lines use the source outlet location `poi.pt$bigtimber` to find/download relevant watershed geometries.
+#' 
 if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
@@ -218,18 +195,15 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
   # download geometries defining catchements, water bodies, and the full flowline network
   subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(uyrw.metadata.df['nhd', 'file']), nhdplus_data='download')
 }
-```
 
-Note there is a warning message on the last call letting us know that the package has not been tested on such a large watershed,
-indicating we should verify it fetched everything before proceeding.
+#' Note there is a warning message on the last call letting us know that the package has not been tested on such a large watershed,
+#' indicating we should verify it fetched everything before proceeding.
 
-## watershed boundary and projection
-Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
-boundary polygon to a reference system more appropriate for hydrology modeling, and computes the bounding box extent.
-
-
-
-```r
+#'
+#' ## watershed boundary and projection
+#' Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
+#' boundary polygon to a reference system more appropriate for hydrology modeling, and computes the bounding box extent.
+#' 
 if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.df['crs', 'file'])))))
 {
   # load the watershed catchments. There are several thousand
@@ -275,20 +249,18 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
   crs.list = readRDS(here(uyrw.metadata.df['crs', 'file']))
   uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
 }
-```
 
-Note that holes in this watershed boundary polygon can emerge if the catchement boundaries don't perfectly align - eg. try
-plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
-
-## data prep
-
-With the watershed boundaries and projection defined, we can now transform the rest of the data and derive the main stem line geometry.
-
-Files fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features lying outside this watershed, so
-we clean up the sfc objects before continuing
+#' Note that holes in this watershed boundary polygon can emerge if the catchement boundaries don't perfectly align - eg. try
+#' plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
 
 
-```r
+#'
+#' ## data prep
+#' 
+#' With the watershed boundaries and projection defined, we can now transform the rest of the data and derive the main stem line geometry.
+#' 
+#' Files fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features lying outside this watershed, so
+#' we clean up the sfc objects before continuing
 if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
@@ -320,15 +292,12 @@ if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline'
   uyrw.mainstem = readRDS(here(uyrw.metadata.df['mainstem', 'file']))
   
 }
-```
 
+#'
+#' ## visualization
+#' All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
+#' using the `tmap` package
 
-## visualization
-All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
-using the `tmap` package
-
-
-```r
 # define a padded bounding box for plotting
 cex.xlim = 1.8
 cex.ylim = 1.1
@@ -336,9 +305,8 @@ uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$
 uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
 
 # plot the watershed flowlines and water bodies as a png file
-```
+#+ eval=FALSE
 
-```r
 # determine reasonable dimensions for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
@@ -371,6 +339,7 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
               frame=FALSE) 
   dev.off()
 }
-```
 
-
+#+ include=FALSE
+# Convert to markdown by running the following line (uncommented)...
+# rmarkdown::render(here('NHDPlus.R'), run_pandoc=FALSE, clean=TRUE)
