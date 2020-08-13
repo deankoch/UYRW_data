@@ -14,6 +14,7 @@ The URYW_data repository is a staging area for R code that can be used to fetch 
 Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These are meant to document our code and methods in human-readable detail, complete with console output and embedded figures. They are compiled automatically by [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html):
 
 * [NHDPlus.R](https://github.com/deankoch/URYW_data/blob/master/NHDPlus.knit.md) defines the study area and loads some hydrology info
+* [stotelr.R](https://github.com/deankoch/URYW_data/blob/master/snotelr.knit.md) finds SNOTEL climatic sensor station data
 * ... more to follow
 
 ## funding
