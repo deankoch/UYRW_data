@@ -7,7 +7,8 @@
 #'
 #' **MITACS UYRW project**
 #' 
-#' Fetch SNOTEL data
+#' **get_weatherstations**: finds climatic sensor stations located in the UYRW
+#' 
 #' 
 #' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package can be used to fetch
 #' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA. We use it to build a map of climatic

@@ -1,13 +1,13 @@
 #' ---
-#' title: "NHDPlus.R"
+#' title: "get_basins.R"
 #' author: "Dean Koch"
 #' date: "August 12, 2020"
 #' output: github_document
 #' ---
 #'
-#' **MITACS UYRW project**
+#' **MITACS UYRW project** 
 #' 
-#' A basic example script for getting started working with watershed data in R.
+#' **get_basins**: getting started working with watershed data in R
 #' 
 #' For now, this simply follows the example on the `nhdplusTools` github page with some minor modifications.
 #' A user guide for the NHDPlus dataset is
@@ -71,7 +71,7 @@ my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE
 lapply(here(c(src.subdir, out.subdir, graphics.dir)), my_dir)
 
 # this CSV file will serve as a guide for all files written to the project folder
-uyrw.metadata.file = 'data/uyrw_metadata.csv'
+uyrw.metadata.file = 'data/basins_metadata.csv'
 if(!file.exists(here(uyrw.metadata.file)))
 {
   # filename for points-of-interest, their comids, and plotting labels
@@ -408,4 +408,4 @@ st_layers(here(uyrw.metadata.df['nhd', 'file']))
 
 #+ include=FALSE
 # Convert to markdown by running the following line (uncommented)
-# rmarkdown::render(here('NHDPlus.R'), run_pandoc=FALSE, clean=TRUE)
+# rmarkdown::render(here('get_basins.R'), run_pandoc=FALSE, clean=TRUE)

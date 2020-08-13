@@ -1,7 +1,7 @@
 # URYW_data
 R scripts for downloading data relevant to streamflow modelling on the Upper Yellowstone River Watershed
 
-![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
+![](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
 
 ## about us
 
@@ -13,8 +13,10 @@ The URYW_data repository is a staging area for R code that can be used to fetch 
 
 Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These are meant to document our code and methods in human-readable detail, complete with console output and embedded figures. They are compiled automatically by [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html):
 
-* [NHDPlus.R](https://github.com/deankoch/URYW_data/blob/master/NHDPlus.knit.md) defines the study area and loads some hydrology info
-* [stotelr.R](https://github.com/deankoch/URYW_data/blob/master/snotelr.knit.md) finds SNOTEL climatic sensor station data
+* [get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md)
+defines the study area and loads some hydrology info using `NHDPlusR`
+* [get_weatherstations.R](https://github.com/deankoch/URYW_data/blob/master/get_weatherstations.knit.md)
+finds SNOTEL and NOAA climatic sensor station data
 * ... more to follow
 
 ## funding
