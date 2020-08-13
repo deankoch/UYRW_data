@@ -14,9 +14,9 @@ A user guide for the NHDPlus dataset is
 <a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
 <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
 
-The `nhdplusTools` package can be used to fetch NHDPlus without having to navigate the USGS website.
-This script uses it to assemble some basic info on the hydrology of the UYR upstream of Big Timber, MT,
-and makes a plot of the watercourses of this watershed. 
+The `nhdplusTools` package can be used to fetch NHDPlus products from the web without having to navigate the USGS
+website. We use it to assemble some basic info on the hydrology of the UYRW upstream of Big Timber, Montana. This script
+transforms that data into a more convenient format, and produces some plots giving an overview of the watershed.
 
 ## libraries
 If any of these CRAN packages are not installed on your machine, run `install.packages(...)` to get them
@@ -30,13 +30,12 @@ library(tmap)
 ```
 
 The `sf` package is needed for handling GIS data; The `smoothr` package simplifies complex spatial features; and the `tmap`
-package constructs nice ggplot2-style thematic map graphics.
+package constructs nice ggplot2-based thematic map graphics.
 
-To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to
-include all catchments upstream.
-
-The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info from placenames. `AOI` is loaded automatically
-by Mike Johnson's `HydroData` package, which we use later on to fetch more hydrology datasets.
+To define the watershed, we need a starting location. Here we use Big Timber, MT, and define the UYRW to include all catchments upstream.
+We find the coordinates of Big Timber in R using the `AOI` package, which interfaces with OpenStreetMaps (OSM) to get the latitude/longitude
+pair corresponding to a placename. `AOI` is loaded automatically by Mike Johnson's `HydroData` package, which we use later on to fetch more
+hydrology datasets.
 
 
 ```r
@@ -65,9 +64,11 @@ library(here)
 To avoid downloading things over and over again, we'll use a permanent storage location on disk ("/data").
 This is where we store large data files and R object binaries, which are not suitable for git.
 
-The `if(!file.exists(...))` conditionals preceding each code chunk indicate the files that will be written in that section.
-If these files exist in the local data storage directory, it is assumed that the code chunk can be skipped (to avoid
-redundant downloads, etc), and the files loaded from disk instead. 
+The `if(!file.exists(...))` conditionals preceding each code chunk indicate which files will be written in that section.
+If the files are detected in the local data storage directory, then code chunk can be skipped (to avoid redundant downloads,
+*etc*), and the files are loaded from disk instead. 
+
+We start by defining a project directory tree and a list of files and metadata to download
 
 
 ```r
@@ -171,9 +172,10 @@ if(!file.exists(here(uyrw.metadata.file)))
 }
 ```
 
+This list of files and descriptions is stored as a [.csv file in the /data directory](https://raw.githubusercontent.com/deankoch/URYW_data/master/data/uyrw_metadata.csv)
 
 ## starting location
-Define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
+Now we define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
 querying OSM and USGS and computing things all over again.
 
 
@@ -208,8 +210,9 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 
 
 ## downloading the data
-package `nhdplusTools` will use the COMID from Big Timber to delineate the watershed and download the relevant data.
-These next few lines use the source outlet location `poi.pt$bigtimber` to find/download relevant watershed geometries.
+package `nhdplusTools` uses the NHD's common identifier number (COMID) from Big Timber to delineate the watershed and
+download the relevant data. These next few lines use the outlet location `poi.list$pt$bigtimber` to find and download
+relevant watershed geometries.
 
 
 
@@ -217,7 +220,7 @@ These next few lines use the source outlet location `poi.pt$bigtimber` to find/d
 if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
-  uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.comid$bigtimber), mode='upstreamTributaries', data_source = '')
+  uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
   
   # notice that we now have a huge number of COMIDs for the watershed upstream of Big Timber
   print(uyrw.flowlines$nhdplus_comid)
@@ -227,12 +230,10 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
 }
 ```
 
-Note there is a warning message on the last call letting us know that the package has not been tested on such a large watershed,
-indicating we should verify it fetched everything before proceeding.
 
 ## watershed boundary and projection
 Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
-boundary polygon to a reference system more appropriate for hydrology modeling, and computes the bounding box extent.
+boundary polygon to a reference system more appropriate for hydrology modeling, then computes the bounding box extent.
 
 
 
@@ -284,15 +285,14 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
 }
 ```
 
-Note that holes in this watershed boundary polygon can emerge if the catchement boundaries don't perfectly align - eg. try
+Note that holes in this watershed boundary polygon can emerge, when the catchement boundaries don't perfectly align - *eg.* try
 plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
 
 ## data prep
 
-With the watershed boundaries and projection defined, we can now transform the rest of the data and derive the main stem line geometry.
-
-Files fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features lying outside this watershed, so
-we clean up the sfc objects before continuing
+With the watershed boundaries and projection so defined, we can now transform the rest of the data. Files fetched by `nhdplusTools`
+may include some invalid geometries (self-intersections) and features lying outside this watershed, so we clean up the sfc objects
+before continuing.
 
 
 ```r
@@ -342,13 +342,10 @@ cex.ylim = 1.1
 uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$xlim)/2
 uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
 
-# plot the watershed flowlines and water bodies as a png file
-```
-
-```r
-# determine reasonable dimensions for output
+# determine some reasonable dimensions (in pixels) for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
+# plot the watershed flowlines and water bodies as a png file
 if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 {
   # render/write the plot
@@ -385,9 +382,6 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 
 ```r
 # plot the watershed drainage basins and water bodies as a png file
-```
-
-```r
 if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 {
   # render/write the plot
