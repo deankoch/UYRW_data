@@ -1,0 +1,4 @@
+"","file","type","description"
+"csv","data/source/snotel_sites.csv","CSV table","metadata list for sites on SNOTEL website"
+"sfc","data/prepared/snotel_sites.rds","R sfc object","sfc object with SNOTEL sensor locations in UYRW"
+"img_snotel","graphics/snotel_sites.png","png graphic","image of SNOTEL site locations in the UYRW"
