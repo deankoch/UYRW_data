@@ -14,9 +14,9 @@
 #' <a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
 #' <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
 #' 
-#' The `nhdplusTools` package can be used to fetch NHDPlus without having to navigate the USGS website.
-#' This script uses it to assemble some basic info on the hydrology of the UYR upstream of Big Timber, MT,
-#' and makes a plot of the watercourses of this watershed. 
+#' The `nhdplusTools` package can be used to fetch NHDPlus products from the web without having to navigate the USGS
+#' website. We use it to assemble some basic info on the hydrology of the UYRW upstream of Big Timber, Montana. This script
+#' transforms that data into a more convenient format, and produces some plots giving an overview of the watershed.
 
 #'
 #' ## libraries
@@ -27,13 +27,12 @@ library(sf)
 library(smoothr)
 library(tmap)
 #' The `sf` package is needed for handling GIS data; The `smoothr` package simplifies complex spatial features; and the `tmap`
-#' package constructs nice ggplot2-style thematic map graphics.
+#' package constructs nice ggplot2-based thematic map graphics.
 #' 
-#' To define the watershed, we need a starting location. I will use Big Timber, Montana, and define the UYRW to
-#' include all catchments upstream.
-#' 
-#' The `AOI` package interfaces with OpenStreetMaps (OSM) to get lat/long info from placenames. `AOI` is loaded automatically
-#' by Mike Johnson's `HydroData` package, which we use later on to fetch more hydrology datasets.
+#' To define the watershed, we need a starting location. Here we use Big Timber, MT, and define the UYRW to include all catchments upstream.
+#' We find the coordinates of Big Timber in R using the `AOI` package, which interfaces with OpenStreetMaps (OSM) to get the latitude/longitude
+#' pair corresponding to a placename. `AOI` is loaded automatically by Mike Johnson's `HydroData` package, which we use later on to fetch more
+#' hydrology datasets.
 # uncomment two lines below to install from github using devtools
 #library(devtools)
 #install_github('mikejohnson51/HydroData')
@@ -51,9 +50,11 @@ library(here)
 #' To avoid downloading things over and over again, we'll use a permanent storage location on disk ("/data").
 #' This is where we store large data files and R object binaries, which are not suitable for git.
 #' 
-#' The `if(!file.exists(...))` conditionals preceding each code chunk indicate the files that will be written in that section.
-#' If these files exist in the local data storage directory, it is assumed that the code chunk can be skipped (to avoid
-#' redundant downloads, etc), and the files loaded from disk instead. 
+#' The `if(!file.exists(...))` conditionals preceding each code chunk indicate which files will be written in that section.
+#' If the files are detected in the local data storage directory, then code chunk can be skipped (to avoid redundant downloads,
+#' *etc*), and the files are loaded from disk instead. 
+#' 
+#' We start by defining a project directory tree and a list of files and metadata to download
 
 #+ results='hide'
 # figures directory 'graphics' will be created in the RStudio project folder

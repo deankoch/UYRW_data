@@ -1,5 +1,5 @@
 # URYW_data
-links and R scripts for downloading data relevant to modelling streamflow on the Upper Yellowstone River Watershed
+R scripts for downloading data relevant to streamflow modelling on the Upper Yellowstone River Watershed
 
 ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
 
@@ -11,7 +11,7 @@ We are a team of mathematicians, statisticians, and ecologists, conducting a mul
 
 The URYW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model.
 
-Our scripts (\*.R) are documented in dynamic reports -- markdown files of the form \*.knit.md. These document the R code and data preparation process in human-readable detail. They are compiled automatically by `rmarkdown` using [a roxygen2-style markup in comments](https://rmarkdown.rstudio.com/articles_report_from_r_script.html):
+Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These are meant to document our code and methods in human-readable detail, complete with console output and embedded figures. They are compiled automatically by [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html):
 
 * [NHDPlus.R](https://github.com/deankoch/URYW_data/blob/master/NHDPlus.knit.md) defines the study area and loads some hydrology info
 * ... more to follow
