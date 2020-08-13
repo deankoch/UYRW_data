@@ -156,7 +156,12 @@ if(!file.exists(here(uyrw.metadata.file)))
   
 }
 
-#' This list of files and descriptions is stored as a [.csv file in the /data directory](https://raw.githubusercontent.com/deankoch/URYW_data/master/data/uyrw_metadata.csv)
+#' This list of files and descriptions is now stored as a
+#' [.csv file](https://github.com/deankoch/URYW_data/blob/master/data/uyrw_metadata.csv)
+#' in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
+#' shared in this repository (see my 
+#' [.gitignore](https://raw.githubusercontent.com/deankoch/URYW_data/master/.gitignore) file). 
+#' However you can reproduce all of them by running this script.
 
 
 #'
@@ -323,8 +328,8 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 
     print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='greenyellow', border.col='yellowgreen') +
-          tm_shape(uyrw.flowline) +
-            tm_lines(col='dodgerblue3') +
+          #tm_shape(uyrw.flowline) +
+          #  tm_lines(col='dodgerblue3') +
           tm_shape(uyrw.mainstem) +
             tm_lines(col='dodgerblue4', lwd=2) +
           tm_shape(uyrw.waterbody) + 
@@ -341,7 +346,7 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
           tm_shape(poi.list$pt[['yellowstonelake']]) +   
             tm_text('request', just='top', xmod=-4, size=0.8) +
           tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-          tm_scale_bar() +
+          tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.7) +
           tm_layout(title='major watercourses in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
     
   dev.off()
@@ -362,7 +367,7 @@ if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
           tm_shape(uyrw.waterbody) + 
             tm_polygons(col=adjustcolor('deepskyblue3', alpha=0.8), border.col='deepskyblue4') +
           tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-          tm_scale_bar() +
+            tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.7) +
           tm_layout(title=paste0('drainage basins of the UYRW (n=', nrow(uyrw.catchment), ')'),
                     title.position=c('center', 'TOP'),
                     frame=FALSE))
@@ -380,24 +385,24 @@ if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 st_layers(here(uyrw.metadata.df['nhd', 'file']))
 
 
-
+#+ include=FALSE
 ####
 # testing to make sure we get the same number of catchments if we download everything in pieces (to avoid warning):
-uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
-testfiles = sapply(1:10, function(x) here(paste0('data/source/nhd_test', x, '.gpkg')))
-idx.storage = rep(1:10, each=length(uyrw.flowlines$nhdplus_comid)/10)
-for(idx in 1:10)
-{
-  testcomids = uyrw.flowlines$nhdplus_comid[idx.storage==idx]
-  subset_nhdplus(comids=testcomids, output_file=testfiles[idx], nhdplus_data='download')
-}
-testcatch = vector(mode='list', length=10)
-for(idx in 1:10)
-{
-  testcatch[[idx]] = read_sf(testfiles[idx], 'CatchmentSP')
-}
-xx = do.call(rbind, testcatch)
-nrow(xx)
+# uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
+# testfiles = sapply(1:10, function(x) here(paste0('data/source/nhd_test', x, '.gpkg')))
+# idx.storage = rep(1:10, each=length(uyrw.flowlines$nhdplus_comid)/10)
+# for(idx in 1:10)
+# {
+#   testcomids = uyrw.flowlines$nhdplus_comid[idx.storage==idx]
+#   subset_nhdplus(comids=testcomids, output_file=testfiles[idx], nhdplus_data='download')
+# }
+# testcatch = vector(mode='list', length=10)
+# for(idx in 1:10)
+# {
+#   testcatch[[idx]] = read_sf(testfiles[idx], 'CatchmentSP')
+# }
+# xx = do.call(rbind, testcatch)
+# nrow(xx)
 # 4162, same as before. A plot of the flowlines also matches with earlier. I think we are good.
 ####
 
