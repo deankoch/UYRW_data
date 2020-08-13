@@ -380,7 +380,7 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 }
 ```
 
-![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/UYRW_flowlines.png)
+![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
 
 
 ```r
@@ -408,7 +408,7 @@ if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 }
 ```
 
-![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/UYRW_basins.png)
+![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_basins.png)
 
 
 
