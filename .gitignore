@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+README.html
+data/prepared
+data/source
+*.rds
+project-howto-links.txt
