@@ -328,8 +328,8 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 
     print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='greenyellow', border.col='yellowgreen') +
-          #tm_shape(uyrw.flowline) +
-          #  tm_lines(col='dodgerblue3') +
+          tm_shape(uyrw.flowline) +
+            tm_lines(col='dodgerblue3') +
           tm_shape(uyrw.mainstem) +
             tm_lines(col='dodgerblue4', lwd=2) +
           tm_shape(uyrw.waterbody) + 
