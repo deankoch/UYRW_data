@@ -1,39 +1,47 @@
-#' ---
-#' title: "get_weatherstations.R"
-#' author: "Dean Koch"
-#' date: "August 13, 2020"
-#' output: github_document
-#' ---
-#'
-#' **MITACS UYRW project**
-#' 
-#' **get_weatherstations**: finds climatic sensor stations located in the UYRW
-#' 
-#' 
-#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
-#' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
-#' [`rnoaa`](https://github.com/ropensci/rnoaa ) package fetches
-#' [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description) data. We use them to build a map of climatic
-#' sensor stations in the UYRW, and to query historical data for model training.
-#' 
-#' [get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md)
-#' which creates some required directories and project config files, should be run before this script.
+---
+title: "get_weatherstations.R"
+author: "Dean Koch"
+date: "August 13, 2020"
+output: github_document
+---
 
-#'
-#' ## libraries
+**MITACS UYRW project**
+
+**get_weatherstations**: finds climatic sensor stations located in the UYRW
+
+
+The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
+[SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
+[`rnoaa`](https://github.com/ropensci/rnoaa ) package fetches
+[GHCN](https://www.ncdc.noaa.gov/ghcn-daily-description) data. We use them to build a map of climatic
+sensor stations in the UYRW, and to query historical data for model training.
+
+[get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md)
+which creates some required directories and project config files, should be run before this script.
+
+## libraries
+
+
+```r
 library(snotelr)
 library(rnoaa)
 library(sf)
 library(tmap)
 library(here)
+```
 
-#' Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
+Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
+
+
+```r
 library(osmdata)
+```
 
-#'
-#' ## project data
 
-#+ results='hide'
+## project data
+
+
+```r
 # project directory names
 graphics.dir = 'graphics'
 src.subdir = 'data/source'
@@ -46,8 +54,8 @@ uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
 
 
 # this CSV file will serve as a guide for all files written to the project folder
-weatherstation.metadata.file = 'data/weatherstation_metadata.csv'
-if(!file.exists(here(weatherstation.metadata.file)))
+snotel.metadata.file = 'data/snotel_metadata.csv'
+if(!file.exists(here(snotel.metadata.file)))
 {
   # filename for metadata table downloaded from SNOTEL website
   snotel.csv.file = c(name='snotel.csv',
@@ -61,34 +69,38 @@ if(!file.exists(here(weatherstation.metadata.file)))
                       type='R sfc object', 
                       description='sfc object with SNOTEL sensor locations in UYRW')
   
-  # filename for graphic showing SNOTEL and GHCND site locations on the UYRW
-  sensor.sites.png.file = c(name='img_weatherstation',
-                            file=file.path(graphics.dir, 'weatherstation_sites.png'),
+  # filename for graphic showing flowlines in study area
+  snotel.sites.png.file = c(name='img_snotel',
+                            file=file.path(graphics.dir, 'snotel_sites.png'),
                             type='png graphic', 
-                            description='image of SNOTEL and GHCND site locations in the UYRW')
+                            description='image of SNOTEL site locations in the UYRW')
 
   
   # bind all the individual filename info vectors into a data frame
-  weatherstation.metadata.df = data.frame(rbind(snotel.csv.file,
-                                                snotel.sfc.file,
-                                                sensor.sites.png.file), row.names='name')
+  snotel.metadata.df = data.frame(rbind(snotel.csv.file,
+                                        snotel.sfc.file,
+                                        snotel.sites.png.file), row.names='name')
   
   # save the data frame
-  write.csv(weatherstation.metadata.df, here(weatherstation.metadata.file))
+  write.csv(snotel.metadata.df, here(snotel.metadata.file))
   
 } else {
   
   # load the data frame
-  snotel.metadata.df = read.csv(here(weatherstation.metadata.file), header=TRUE, row.names=1)
+  snotel.metadata.df = read.csv(here(snotel.metadata.file), header=TRUE, row.names=1)
   
 }
-#' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/URYW_data/blob/master/data/weatherstation_metadata.csv)
-#' in the `/data` directory.
+```
 
-#'
-#' ## Find SNOTEL sites
-#' the `snotel_info` function in `snotelr` downloads a CSV containing site IDs and coordinates
+This list of files and descriptions is now stored as a
+[.csv file](https://github.com/deankoch/URYW_data/blob/master/data/snotel_metadata.csv)
+in the `/data` directory.
+
+## Find SNOTEL sites
+the `snotel_info` function in `snotelr` downloads a CSV containing site IDs and coordinates
+
+
+```r
 if(!file.exists(here(snotel.metadata.df['snotel.csv', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
@@ -124,20 +136,23 @@ if(!file.exists(here(snotel.metadata.df['snotel.sfc', 'file'])))
   snotel.sf = readRDS(here(snotel.metadata.df['snotel.sfc', 'file']))
   
 }
+```
 
 
-#'
-#' ## Find NOAA Global Historical Climatology Network (GHCN) Daily sites
-#' the `ghcnd_stations` function in `rnoaa` downloads a table of site IDs and coordinates
-if(!file.exists(here(snotel.metadata.df['ghcnd.csv', 'file'])))
-{
-  # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
-  snotel_info(path=here(src.subdir))
+## Find NOAA sites
+the `snotel_info` function in `snotelr` downloads a CSV containing site IDs and coordinates
 
-  # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
-  file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(snotel.metadata.df['snotel.csv', 'file']))
 
-}
+```r
+# if(!file.exists(here(snotel.metadata.df['snotel.csv', 'file'])))
+# {
+#   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
+#   snotel_info(path=here(src.subdir))
+#   
+#   # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
+#   file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(snotel.metadata.df['snotel.csv', 'file']))
+#   
+# }
 # 
 # if(!file.exists(here(snotel.metadata.df['snotel.sfc', 'file'])))
 # {
@@ -190,13 +205,14 @@ snotel.sf$duration = year.end - year.start
 
 # split the points into upper and lower, for plotting text labels that don't overlap
 idx.lower = snotel.sf$site_name %in% c('s fork shields ', 'sacajawea ', 'monument peak ')
+```
+
+
+## visualization
 
 
 
-#'
-#' ## visualization
-#' 
-
+```r
 # define a padded bounding box for plotting
 cex.xlim = 1.8
 cex.ylim = 1.1
@@ -232,14 +248,10 @@ if(!file.exists(here(snotel.metadata.df['img_snotel', 'file'])))
     
   dev.off()
 }
+```
 
-#' ![SNOTEL stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/snotel_sites.png)
-
-
-#+ include=FALSE
-# Development code
+![SNOTEL stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/snotel_sites.png)
 
 
-#+ include=FALSE
-# Convert to markdown by running the following line (uncommented)
-# rmarkdown::render(here('get_weatherstations.R'), run_pandoc=FALSE, clean=TRUE)
+
+
