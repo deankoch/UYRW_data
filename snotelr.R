@@ -168,10 +168,10 @@ if(!file.exists(here(snotel.metadata.df['img_snotel', 'file'])))
             tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
           tm_shape(sites.sf[idx.lower,]) +
             tm_dots(size=0.5, col='red') +
-            tm_text('site_name', just='bottom', ymod=-0.5, size=0.8) +
+            tm_text('site_name', just='bottom', ymod=-0.8, size=0.8) +
           tm_shape(sites.sf[!idx.lower,]) +
             tm_dots(size=0.5, col='red') +
-            tm_text('site_name', just='top', ymod=0.5, size=0.8) +
+            tm_text('site_name', just='top', ymod=0.8, size=0.8) +
           tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
           tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.5) +
           tm_layout(title='SNOTEL stations in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))

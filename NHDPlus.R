@@ -108,13 +108,13 @@ if(!file.exists(here(uyrw.metadata.file)))
   uyrw.catchment.file = c(name='catchment',
                           file=file.path(out.subdir, 'uyrw_nhd_catchment.rds'), 
                           type='R sfc object', 
-                          description='reprojected/repaired NHDPlus polygons')
+                          description='reprojected/repaired NHDPlus catchment polygons')
   
   # ... water bodies ...
   uyrw.waterbody.file = c(name='waterbody',
                           file=file.path(out.subdir, 'uyrw_nhd_waterbody.rds'), 
                           type='R sfc object', 
-                          description='reprojected/repaired NHDPlus polygons')
+                          description='reprojected/repaired NHDPlus water body polygons')
   
   # ... and flowlines
   uyrw.flowline.file = c(name='flowline',
@@ -166,7 +166,7 @@ if(!file.exists(here(uyrw.metadata.file)))
 
 #'
 #' ## starting location
-#' Now we define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
+#' Now we define a source outlet from which to explore upstream. Later on, we can load this information from disk instead of
 #' querying OSM and USGS and computing things all over again.
 if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 {
@@ -237,8 +237,8 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
   # determine the EPSG code for the UTM zone (12N) on which our study area is centred
   uyrw.UTM.epsg = 32700 - round((45+mean(uyrw.geo.ylim))/90)*100 + round((183+mean(uyrw.geo.xlim))/6)
   
-  # and for plotting purposes, we may want the epsg code for latitude/longitude
-  latlong.epsg = 4269
+  # and for plotting purposes, we may want the EPSG code for latitude/longitude in WGS84 datum
+  latlong.epsg = 4326
   
   #' Reproject the watershed boundary polygon from latitude/longitude to UTM
   uyrw.poly = st_transform(uyrw.poly, uyrw.UTM.epsg)
