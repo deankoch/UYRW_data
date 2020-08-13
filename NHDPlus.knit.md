@@ -136,11 +136,17 @@ if(!file.exists(here(uyrw.metadata.file)))
                          type='R sfc object', 
                          description='reprojected/repaired NHDPlus flowline geometries')
   
-  # filename for graphic showing flowlines in study area...
+  # filename for graphic showing flowlines in study area
   uyrw.flowline.png.file = c(name='img_flowlines',
                              file=file.path(graphics.dir, 'uyrw_flowlines.png'),
                              type='png graphic', 
                              description='image of flowlines in the UYRW with placenames')
+  
+  # filename for graphic showing flowlines in study area...
+  uyrw.basin.png.file = c(name='img_basins',
+                          file=file.path(graphics.dir, 'uyrw_basins.png'),
+                          type='png graphic', 
+                          description='image of some 4000 drainage basins in the UYRW')
   
   # bind all the individual filename info vectors into a data frame
   uyrw.metadata.df = data.frame(rbind(uyrw.poi.file,
@@ -151,7 +157,8 @@ if(!file.exists(here(uyrw.metadata.file)))
                                       uyrw.catchment.file,
                                       uyrw.waterbody.file,
                                       uyrw.flowline.file,
-                                      uyrw.flowline.png.file), row.names='name')
+                                      uyrw.flowline.png.file,
+                                      uyrw.basin.png.file), row.names='name')
   
   # save the data frame
   write.csv(uyrw.metadata.df, here(uyrw.metadata.file))
@@ -325,7 +332,7 @@ if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline'
 
 ## visualization
 All of the data needed to create the flowlines plot in our readme are now loaded into R. The following code creates that plot
-using the `tmap` package
+(and a few others) using the `tmap` package
 
 
 ```r
@@ -346,31 +353,63 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 {
   # render/write the plot
   png(here(uyrw.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
-    tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
-      tm_polygons(col='greenyellow', border.col='yellowgreen') +
-    tm_shape(uyrw.flowline) +
-      tm_lines(col='dodgerblue3') +
-    tm_shape(uyrw.mainstem) +
-      tm_lines(col='dodgerblue4', lwd=2) +
-    tm_shape(uyrw.waterbody) + 
-      tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
-    tm_shape(poi.list$pt[['bigtimber']]) +   
-      tm_dots(size=0.2, col='red') +
-      tm_text('request', just='top', ymod=0.5, xmod=2.5, size=0.8) +
-    tm_shape(do.call(rbind, poi.list$pt[c('emigrant','livingston')])) +   
-      tm_dots(size=0.2, col='red') +
-      tm_text('request', just='bottom', xmod=-2.5, size=0.8) +
-    tm_shape(poi.list$pt[['corwinsprings']]) +   
-      tm_dots(size=0.2, col='red') +
-      tm_text('request', just='bottom', ymod=-0.5, xmod=-3.5, size=0.8) +
-    tm_shape(poi.list$pt[['yellowstonelake']]) +   
-      tm_text('request', just='top', xmod=-4, size=0.8) +
-    tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-    tm_layout(title='Upper Yellowstone River Watershed',
-              title.position=c('center', 'TOP'),
-              frame=FALSE) 
+
+    print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
+            tm_polygons(col='greenyellow', border.col='yellowgreen') +
+          tm_shape(uyrw.flowline) +
+            tm_lines(col='dodgerblue3') +
+          tm_shape(uyrw.mainstem) +
+            tm_lines(col='dodgerblue4', lwd=2) +
+          tm_shape(uyrw.waterbody) + 
+            tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+          tm_shape(poi.list$pt[['bigtimber']]) +   
+            tm_dots(size=0.2, col='red') +
+            tm_text('request', just='top', ymod=0.5, xmod=2.5, size=0.8) +
+          tm_shape(do.call(rbind, poi.list$pt[c('emigrant','livingston')])) +   
+            tm_dots(size=0.2, col='red') +
+            tm_text('request', just='bottom', xmod=-2.5, size=0.8) +
+          tm_shape(poi.list$pt[['corwinsprings']]) +   
+            tm_dots(size=0.2, col='red') +
+            tm_text('request', just='bottom', ymod=-0.5, xmod=-3.5, size=0.8) +
+          tm_shape(poi.list$pt[['yellowstonelake']]) +   
+            tm_text('request', just='top', xmod=-4, size=0.8) +
+          tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
+          tm_layout(title='Watercourses in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
+    
   dev.off()
 }
 ```
+
+![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/UYRW_flowlines.png)
+
+
+```r
+# plot the watershed drainage basins and water bodies as a png file
+```
+
+```r
+if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
+{
+  # render/write the plot
+  png(here(uyrw.metadata.df['img_basins', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+    
+    print(tm_shape(uyrw.catchment, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
+            tm_polygons(col='MAP_COLORS', border.col=NA) +
+          tm_shape(uyrw.mainstem) +
+            tm_lines(col=adjustcolor('dodgerblue4', alpha=0.8), lwd=2) +
+          tm_shape(uyrw.waterbody) + 
+            tm_polygons(col=adjustcolor('deepskyblue3', alpha=0.8), border.col='deepskyblue4') +
+          tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
+          tm_layout(title=paste0('Drainage basins of the UYRW (n=', nrow(uyrw.catchment), ')'),
+                    title.position=c('center', 'TOP'),
+                    frame=FALSE))
+    
+  dev.off()
+}
+```
+
+![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/UYRW_basins.png)
+
+
 
 
