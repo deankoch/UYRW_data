@@ -156,9 +156,12 @@ if(!file.exists(here(uyrw.metadata.file)))
   
 }
 
+#' This list of files and descriptions is stored as a [.csv file in the /data directory](https://raw.githubusercontent.com/deankoch/URYW_data/master/data/uyrw_metadata.csv)
+
+
 #'
 #' ## starting location
-#' Define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
+#' Now we define a source outlet from which to explore upstream. Later on we can load this information from disk instead of
 #' querying OSM and USGS and computing things all over again.
 if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 {
@@ -189,13 +192,14 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 
 #'
 #' ## downloading the data
-#' package `nhdplusTools` will use the COMID from Big Timber to delineate the watershed and download the relevant data.
-#' These next few lines use the source outlet location `poi.pt$bigtimber` to find/download relevant watershed geometries.
+#' package `nhdplusTools` uses the NHD's common identifier number (COMID) from Big Timber to delineate the watershed and
+#' download the relevant data. These next few lines use the outlet location `poi.list$pt$bigtimber` to find and download
+#' relevant watershed geometries.
 #' 
 if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
-  uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.comid$bigtimber), mode='upstreamTributaries', data_source = '')
+  uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
   
   # notice that we now have a huge number of COMIDs for the watershed upstream of Big Timber
   print(uyrw.flowlines$nhdplus_comid)
@@ -204,13 +208,10 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
   subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(uyrw.metadata.df['nhd', 'file']), nhdplus_data='download')
 }
 
-#' Note there is a warning message on the last call letting us know that the package has not been tested on such a large watershed,
-#' indicating we should verify it fetched everything before proceeding.
-
 #'
 #' ## watershed boundary and projection
 #' Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
-#' boundary polygon to a reference system more appropriate for hydrology modeling, and computes the bounding box extent.
+#' boundary polygon to a reference system more appropriate for hydrology modeling, then computes the bounding box extent.
 #' 
 if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.df['crs', 'file'])))))
 {
@@ -258,17 +259,16 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
   uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
 }
 
-#' Note that holes in this watershed boundary polygon can emerge if the catchement boundaries don't perfectly align - eg. try
+#' Note that holes in this watershed boundary polygon can emerge, when the catchement boundaries don't perfectly align - *eg.* try
 #' plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
 
 
 #'
 #' ## data prep
 #' 
-#' With the watershed boundaries and projection defined, we can now transform the rest of the data and derive the main stem line geometry.
-#' 
-#' Files fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features lying outside this watershed, so
-#' we clean up the sfc objects before continuing
+#' With the watershed boundaries and projection so defined, we can now transform the rest of the data. Files fetched by `nhdplusTools`
+#' may include some invalid geometries (self-intersections) and features lying outside this watershed, so we clean up the sfc objects
+#' before continuing.
 if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
@@ -312,12 +312,10 @@ cex.ylim = 1.1
 uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$xlim)/2
 uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
 
-# plot the watershed flowlines and water bodies as a png file
-#+ eval=FALSE
-
-# determine reasonable dimensions for output
+# determine some reasonable dimensions (in pixels) for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
+# plot the watershed flowlines and water bodies as a png file
 if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 {
   # render/write the plot
@@ -351,8 +349,6 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 #' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
 
 # plot the watershed drainage basins and water bodies as a png file
-#+ eval=FALSE
-
 if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 {
   # render/write the plot
