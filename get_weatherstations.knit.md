@@ -301,6 +301,8 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
                   tm_polygons(col='gray', border.col=NA) +
                 tm_shape(uyrw.poly) +
                   tm_polygons(col='greenyellow', border.col='yellowgreen') +
+                tm_shape(uyrw.waterbody) +
+                  tm_polygons(col='yellowgreen', border.col='yellowgreen') +
                 tm_shape(uyrw.mainstem) +
                   tm_lines(col='yellowgreen', lwd=2) +
                 tm_shape(uyrw.flowline) +
