@@ -145,7 +145,7 @@ dem.tight.tif = mask(dem.tif, as_Spatial(uyrw.poly))
 if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
 {
   tmap.dem = tm_shape(dem.tif) +
-              tm_raster(palette=gray.colors(100), legend.show=FALSE) +
+              tm_raster(palette=rev(gray.colors(100)), legend.show=FALSE) +
               tm_shape(dem.tight.tif, raster.downsample=F, style='cont') +
               tm_raster(palette='-viridis', title='elevation (meters)') +
     tm_layout(main.title='Digital elevation map of the UYRW',
