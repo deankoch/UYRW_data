@@ -28,9 +28,6 @@ library(sf)
 library(tmap)
 library(here)
 
-#' Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
-library(osmdata)
-
 #'
 #' ## project data
 
@@ -313,7 +310,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
   tmap_save(tm=tmap.precip, here(weatherstation.metadata.df['img_weatherstation', 'file']), width=2000, height=2400, pointsize=16)
 }
 
-#' ![SNOTEL stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
+#' ![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
 
 
 #+ include=FALSE
