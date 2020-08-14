@@ -244,66 +244,71 @@ if(!file.exists(here(weatherstation.metadata.df['ghcnd', 'file'])))
   ghcnd.sf = readRDS(here(weatherstation.metadata.df['ghcnd', 'file']))
   
 } 
-  
-
-# identify SNOWTEL sites (special symbol)
-idx.snotel = is.na(ghcnd.sf$snotel_id)
-
-# identify stations with snow gauge data (special symbol)
-idx.ghcnd.snow = !is.na(ghcnd.sf$SNWD) & !is.na(ghcnd.sf$SNOW)
-
-# identify end-year of time series for PRCP (point colour), and duration of time series for PRCP (point size)
-years.ghcnd.PRCP = strsplit(ghcnd.sf$PRCP,'-')
-endyear.ghcnd.PRCP = sapply(years.ghcnd.PRCP, function(xx) as.numeric(xx[2]))
-totalyears.ghcnd.PRCP = endyear.ghcnd.PRCP - sapply(years.ghcnd.PRCP, function(xx) as.numeric(xx[1]))
-
-# identify stations with only temperature data
-idx.ghcnd.onlytemp = is.na(totalyears.ghcnd.PRCP) & !idx.ghcnd.snow
-
-# add these as sf columns
-ghcnd.sf$endyear.ghcnd.PRCP = endyear.ghcnd.PRCP
-ghcnd.sf$totalyears.ghcnd.PRCP = totalyears.ghcnd.PRCP
 
 #'
 #' ## visualization
 #' 
 
+# make a copy of the points datasets, omitting stations with only temperature data
+idx.onlytemp = is.na(ghcnd.sf$PRCP) & is.na(ghcnd.sf$SNWD) & is.na(ghcnd.sf$SNOW)
+precip.sf = ghcnd.sf[!idx.onlytemp,]
 
-# define a padded bounding box for plotting
-cex.xlim = 1.8
-cex.ylim = 1.1
-uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$xlim)/2
-uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
+# add columns for duration and end-year of time series for precipitation
+years.PRCP = strsplit(precip.sf$PRCP,'-')
+endyear.PRCP = sapply(years.PRCP, function(xx) as.numeric(xx[2]))
+duration.PRCP = endyear.PRCP - sapply(years.PRCP, function(xx) as.numeric(xx[1]))
+precip.sf$duration = duration.PRCP
+precip.sf$endyear = endyear.PRCP
+precip.sf$endyear[precip.sf$endyear == 2020] = NA
 
-# determine some reasonable dimensions (in pixels) for output
-png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
+# add a dummy column for plotting SNOTEL stations
+precip.sf$constant = 'SNOTEL station'
 
-# plot the SNOTEL stations as a png file
+# plot precipitation sensor station locations as a png file
 if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
 {
+  # build the tmap plot object
+  tmap.precip = tm_shape(uyrw.padded.poly) +
+                  tm_polygons(col='gray', border.col=NA) +
+                tm_shape(uyrw.poly) +
+                  tm_polygons(col='greenyellow', border.col='yellowgreen') +
+                tm_shape(uyrw.mainstem) +
+                  tm_lines(col='yellowgreen', lwd=2) +
+                tm_shape(uyrw.flowline) +
+                  tm_lines(col='yellowgreen') +
+                tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
+                  tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
+                tm_shape(precip.sf) +
+                  tm_dots(size='duration',
+                          col='endyear',
+                          shape=16,
+                          palette='magma',
+                          alpha=0.7, 
+                          contrast=0.7, 
+                          title.size='duration (years)',
+                          legend.size.is.portrait = TRUE,
+                          shapes.legend.fill='grey',
+                          perceptual = TRUE,
+                          sizes.legend=c(5,25,50,75,125),
+                          title='decomissioned', 
+                          textNA='currently operational',
+                          colorNA='red2') +
+                tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
+                tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
+                tm_layout(main.title='GHCN (daily) precipitation sensor data in the UYRW',
+                          main.title.size=1,
+                          main.title.position='center',
+                          legend.title.size=0.7,
+                          legend.text.size=0.5,
+                          frame=FALSE,
+                          legend.format=list(fun=function(x) formatC(x, digits=0, format='d')),
+                          legend.outside=TRUE,
+                          legend.outside.position='right',
+                          title.snap.to.legend=FALSE)
+  
+  
   # render/write the plot
-  png(here(weatherstation.metadata.df['img_weatherstation', 'file']), width=png.res[1], height=png.res[2], pointsize=56)
-    
-    print(tm_shape(uyrw.padded.poly) +
-      tm_polygons(border.col=NA) +
-    tm_shape(uyrw.poly) +
-      tm_polygons(col='greenyellow', border.col='yellowgreen') +
-    tm_shape(uyrw.flowline) +
-      tm_lines(col='yellowgreen') +
-    tm_shape(uyrw.mainstem) +
-      tm_lines(col='yellowgreen', lwd=2) +
-    tm_shape(uyrw.waterbody) + 
-      tm_polygons(col='yellowgreen', border.col='yellowgreen') +
-    tm_shape(ghcnd.sf) +
-      tm_dots(size=0.4, col='totalyears.ghcnd.PRCP', palette='magma', contrast=0.7, title='years total') +
-    tm_shape(snotel.sf) +
-      tm_dots(size=0.7, shape=6) +
-    tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-    tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.5) +
-    tm_layout(title='precipitation sensor stations around the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
-
-    
-  dev.off()
+  tmap_save(tm=tmap.precip, here(weatherstation.metadata.df['img_weatherstation', 'file']), width=2000, height=2400, pointsize=16)
 }
 
 #' ![SNOTEL stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
@@ -319,5 +324,5 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
 
 
 #+ include=FALSE
-# Convert to markdown by running the following line (uncommented)
+# Convert to markdown by running the following line uncommented
 # rmarkdown::render(here('get_weatherstations.R'), run_pandoc=FALSE, clean=TRUE)
