@@ -38,12 +38,12 @@ src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 
 # load metadata csv, CRS info list and watershed geometries from disk
-uyrw.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
-crs.list = readRDS(here(uyrw.metadata.df['crs', 'file']))
-uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
-uyrw.waterbody = readRDS(here(uyrw.metadata.df['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(uyrw.metadata.df['mainstem', 'file']))
-uyrw.flowline = readRDS(here(uyrw.metadata.df['flowline', 'file']))
+basins.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
+crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
+uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
+uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
+uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
 
 # this CSV file will serve as a guide for all files written to the project folder
 weatherstation.metadata.file = 'data/weatherstation_metadata.csv'
