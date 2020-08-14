@@ -1,5 +1,5 @@
 #' ---
-#' title: "get_DEM.R"
+#' title: "get_dem.R"
 #' author: "Dean Koch"
 #' date: "August 14, 2020"
 #' output: github_document
@@ -8,14 +8,6 @@
 #' **MITACS UYRW project**
 #' 
 #' **get_DEM**: download a DEM and warp to our reference coordinate system 
-#' 
-#' 
-#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
-#' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
-#' [`rnoaa`](https://github.com/ropensci/rnoaa ) package fetches
-#' [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description) data (see documentation 
-#' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)).
-#' We use them to build a map of climatic sensor stations in the UYRW, and to query historical data for model training.
 #' 
 #' [get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md) and 
 #' [get_weatherstations.R](https://github.com/deankoch/URYW_data/blob/master/get_weatherstations.knit.md), 
@@ -155,7 +147,7 @@ if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
   tmap.dem = tm_shape(dem.tif) +
               tm_raster(palette=gray.colors(100), legend.show=FALSE) +
               tm_shape(dem.tight.tif, raster.downsample=F, style='cont') +
-              tm_raster(palette='viridis', title='elevation (meters)') +
+              tm_raster(palette='-viridis', title='elevation (meters)') +
     tm_layout(main.title='Digital elevation map of the UYRW',
               main.title.size=1,
               main.title.position='center',
@@ -178,4 +170,4 @@ if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
 
 #+ include=FALSE
 # Convert to markdown by running the following line uncommented
-# rmarkdown::render(here('get_DEM.R'), run_pandoc=FALSE, clean=TRUE)
+# rmarkdown::render(here('get_dem.R'), run_pandoc=FALSE, clean=TRUE)

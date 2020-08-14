@@ -12,6 +12,8 @@ Our R data analysis workflow is structured around git and markdown, as outlined 
 defines the study area and loads some hydrology info using `NHDPlusR`
 * [get_weatherstations.R](https://github.com/deankoch/URYW_data/blob/master/get_weatherstations.knit.md)
 finds SNOTEL and NOAA climatic sensor station data
+* [get_dem.R](https://github.com/deankoch/URYW_data/blob/master/get_dem.knit.md)
+downloads and processes the National Elevation Dataset from USGS
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
 
