@@ -294,7 +294,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
                           colorNA='red2') +
                 tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
                 tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
-                tm_layout(main.title='GHCN (daily) precipitation sensor data in the UYRW',
+                tm_layout(main.title='GHCN (daily) precipitation records in the UYRW',
                           main.title.size=1,
                           main.title.position='center',
                           legend.title.size=0.7,

@@ -31,13 +31,6 @@ library(tmap)
 library(here)
 ```
 
-Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
-
-
-```r
-library(osmdata)
-```
-
 
 ## project data
 
@@ -49,12 +42,12 @@ src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 
 # load metadata csv, CRS info list and watershed geometries from disk
-uyrw.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
-crs.list = readRDS(here(uyrw.metadata.df['crs', 'file']))
-uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
-uyrw.waterbody = readRDS(here(uyrw.metadata.df['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(uyrw.metadata.df['mainstem', 'file']))
-uyrw.flowline = readRDS(here(uyrw.metadata.df['flowline', 'file']))
+basins.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
+crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
+uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
+uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
+uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
 
 # this CSV file will serve as a guide for all files written to the project folder
 weatherstation.metadata.file = 'data/weatherstation_metadata.csv'
@@ -326,7 +319,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
                           colorNA='red2') +
                 tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
                 tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
-                tm_layout(main.title='GHCN (daily) precipitation sensor data in the UYRW',
+                tm_layout(main.title='GHCN (daily) precipitation records in the UYRW',
                           main.title.size=1,
                           main.title.position='center',
                           legend.title.size=0.7,
@@ -343,7 +336,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
 }
 ```
 
-![SNOTEL stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
+![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
 
 
 
