@@ -206,7 +206,7 @@ if(!file.exists(here(weatherstation.metadata.df['ghcnd', 'file'])))
   # some (polar area) points are undefined in the UTM transformation, remove them
   ghcnd.sf = ghcnd.sf[!st_is_empty(ghcnd.sf),]
   
-  # clip to UYRW watershed region (65 stations) then join with the other attributes that are constant across "id"
+  # clip to UYRW watershed region (138 stations) then join with the other attributes that are constant across "id"
   ghcnd.sf = st_intersection(ghcnd.sf, uyrw.padded.poly)
   idx.ghcnd.uyrw = which(!idx.duplicateID)[ghcnd.df$id[!idx.duplicateID] %in% ghcnd.sf$id]
   ghcnd.sf = cbind(ghcnd.sf, ghcnd.df[idx.ghcnd.uyrw, c('longitude', 'latitude', 'elevation', 'name')])
@@ -245,29 +245,24 @@ if(!file.exists(here(weatherstation.metadata.df['ghcnd', 'file'])))
   
 } 
   
-  
 
+# identify SNOWTEL sites (special symbol)
+idx.snotel = is.na(ghcnd.sf$snotel_id)
 
+# identify stations with snow gauge data (special symbol)
+idx.ghcnd.snow = !is.na(ghcnd.sf$SNWD) & !is.na(ghcnd.sf$SNOW)
 
+# identify end-year of time series for PRCP (point colour), and duration of time series for PRCP (point size)
+years.ghcnd.PRCP = strsplit(ghcnd.sf$PRCP,'-')
+endyear.ghcnd.PRCP = sapply(years.ghcnd.PRCP, function(xx) as.numeric(xx[2]))
+totalyears.ghcnd.PRCP = endyear.ghcnd.PRCP - sapply(years.ghcnd.PRCP, function(xx) as.numeric(xx[1]))
 
+# identify stations with only temperature data
+idx.ghcnd.onlytemp = is.na(totalyears.ghcnd.PRCP) & !idx.ghcnd.snow
 
-
-
-
-
-
-
-
-# define a new attribute: the number of years in the record
-year.start = sapply(strsplit(snotel.sf$start, '-'), function(xx) as.numeric(xx[[1]]))
-year.end = sapply(strsplit(snotel.sf$end, '-'), function(xx) as.numeric(xx[[1]]))
-# snotel.sf$duration = year.end - year.start 
-
-
-# split the points into upper and lower, for plotting text labels that don't overlap
-idx.lower = snotel.sf$site_name %in% c('s fork shields ', 'sacajawea ', 'monument peak ')
-
-
+# add these as sf columns
+ghcnd.sf$endyear.ghcnd.PRCP = endyear.ghcnd.PRCP
+ghcnd.sf$totalyears.ghcnd.PRCP = totalyears.ghcnd.PRCP
 
 #'
 #' ## visualization
@@ -275,38 +270,19 @@ idx.lower = snotel.sf$site_name %in% c('s fork shields ', 'sacajawea ', 'monumen
 
 
 # define a padded bounding box for plotting
-# cex.xlim = 1.8
-# cex.ylim = 1.1
-# uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$xlim)/2
-# uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
+cex.xlim = 1.8
+cex.ylim = 1.1
+uyrw.xlim.larger = crs.list$dims$xlim + (cex.xlim-1)*c(-1,1)*diff(crs.list$dims$xlim)/2
+uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$ylim)/2
 
 # determine some reasonable dimensions (in pixels) for output
-# flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
+png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
 # plot the SNOTEL stations as a png file
 if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
 {
   # render/write the plot
-  # png(here(weatherstation.metadata.df['img_snotel', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
-  png(here(weatherstation.metadata.df['img_weatherstation', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
-
-    # print(tm_shape(uyrw.padded.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
-    #         tm_polygons(col='greenyellow', border.col='yellowgreen') +
-    #       tm_shape(uyrw.flowline) +
-    #         tm_lines(col='dodgerblue3') +
-    #       tm_shape(uyrw.mainstem) +
-    #         tm_lines(col='dodgerblue4', lwd=2) +
-    #       tm_shape(uyrw.waterbody) + 
-    #         tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
-    #       tm_shape(snotel.sf[idx.lower,]) +
-    #         tm_dots(size=0.5, col='red') +
-    #         tm_text('site_name', just='bottom', ymod=-0.8, size=0.8) +
-    #       tm_shape(snotel.sf[!idx.lower,]) +
-    #         tm_dots(size=0.5, col='red') +
-    #         tm_text('site_name', just='top', ymod=0.8, size=0.8) +
-    #       tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-    #       tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.5) +
-    #       tm_layout(title='SNOTEL stations in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
+  png(here(weatherstation.metadata.df['img_weatherstation', 'file']), width=png.res[1], height=png.res[2], pointsize=56)
     
     print(tm_shape(uyrw.padded.poly) +
       tm_polygons(border.col=NA) +
@@ -318,13 +294,13 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
       tm_lines(col='yellowgreen', lwd=2) +
     tm_shape(uyrw.waterbody) + 
       tm_polygons(col='yellowgreen', border.col='yellowgreen') +
-    tm_shape(ghcnd.sf[!is.na(ghcnd.sf$SNOW),]) +
-      tm_dots(size=0.1, col='red') +
+    tm_shape(ghcnd.sf) +
+      tm_dots(size=0.4, col='totalyears.ghcnd.PRCP', palette='magma', contrast=0.7, title='years total') +
     tm_shape(snotel.sf) +
-      tm_dots(size=0.1, col='purple') +
-      tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-      tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.5) +
-      tm_layout(title='climatic sensor stations in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
+      tm_dots(size=0.7, shape=6) +
+    tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
+    tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.5) +
+    tm_layout(title='precipitation sensor stations around the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
 
     
   dev.off()
@@ -339,7 +315,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
 #' Data downloads look like this:
 #' 
 # xx = meteo_pull_monitors('US1MTPK0001')
-# yy = snotel_download(site_id = 806, internal=TRUE)
+# yy = snotel_download(site_id = 363, internal=TRUE)
 
 
 #+ include=FALSE
