@@ -1,0 +1,4 @@
+"","file","type","description"
+"ned","data/source/UYRW_NED_1.tif","GeoTIFF raster file","mosaic of elevation tiles from the NED (unchanged)"
+"dem","data/prepared/dem.tif","GeoTIFF raster file","digital elevation map of the UYRW and surrounding area"
+"img_dem","graphics/dem.png","png graphic","image of DEM for the UYRW"
