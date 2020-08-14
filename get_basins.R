@@ -135,7 +135,7 @@ if(!file.exists(here(uyrw.metadata.file)))
                           description='image of some 4000 drainage basins in the UYRW')
   
   # bind all the individual filename info vectors into a data frame
-  uyrw.metadata.df = data.frame(rbind(uyrw.poi.file,
+  basins.metadata.df = data.frame(rbind(uyrw.poi.file,
                                       uyrw.crs.file,
                                       uyrw.nhd.file,
                                       uyrw.poly.file, 
@@ -147,12 +147,12 @@ if(!file.exists(here(uyrw.metadata.file)))
                                       uyrw.basin.png.file), row.names='name')
   
   # save the data frame
-  write.csv(uyrw.metadata.df, here(uyrw.metadata.file))
+  write.csv(basins.metadata.df, here(uyrw.metadata.file))
 
 } else {
   
   # load the data frame
-  uyrw.metadata.df = read.csv(here(uyrw.metadata.file), header=TRUE, row.names=1)
+  basins.metadata.df = read.csv(here(uyrw.metadata.file), header=TRUE, row.names=1)
   
 }
 
@@ -168,7 +168,7 @@ if(!file.exists(here(uyrw.metadata.file)))
 #' ## starting location
 #' Now we define a source outlet from which to explore upstream. Later on, we can load this information from disk instead of
 #' querying OSM and USGS and computing things all over again.
-if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
+if(!file.exists(here(basins.metadata.df['poi', 'file'])))
 {
   # define some points of interest in the watershed
   poi.name = c(bigtimber = 'Big Timber, MT',
@@ -186,12 +186,12 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
   
   # compile into a list and save to disk
   poi.list = list(name = poi.name, pt = poi.pt, comid = poi.comid)
-  saveRDS(poi.list, here(uyrw.metadata.df['poi', 'file']))
+  saveRDS(poi.list, here(basins.metadata.df['poi', 'file']))
 
 } else {
   
   # load from disk 
-  poi.list = readRDS(here(uyrw.metadata.df['poi', 'file']))
+  poi.list = readRDS(here(basins.metadata.df['poi', 'file']))
   
 }
 
@@ -201,7 +201,7 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
 #' download the relevant data. These next few lines use the outlet location `poi.list$pt$bigtimber` to find and download
 #' relevant watershed geometries.
 #' 
-if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
+if(!file.exists(here(basins.metadata.df['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
   uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
@@ -210,7 +210,7 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
   print(uyrw.flowlines$nhdplus_comid)
   
   # download geometries defining catchements, water bodies, and the full flowline network
-  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(uyrw.metadata.df['nhd', 'file']), nhdplus_data='download')
+  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(basins.metadata.df['nhd', 'file']), nhdplus_data='download')
 }
 
 #'
@@ -218,10 +218,10 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
 #' Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
 #' boundary polygon to a reference system more appropriate for hydrology modeling, then computes the bounding box extent.
 #' 
-if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.df['crs', 'file'])))))
+if(any(!file.exists(here(c(basins.metadata.df['boundary', 'file'], basins.metadata.df['crs', 'file'])))))
 {
   # load the watershed catchments. There are several thousand
-  uyrw.catchment = read_sf(here(uyrw.metadata.df['nhd', 'file']), 'CatchmentSP')
+  uyrw.catchment = read_sf(here(basins.metadata.df['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
   
   # Their union delineates the entire UYR watershed as a single polygon
@@ -254,14 +254,14 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
                   dims = list(xlim=uyrw.xlim, ylim=uyrw.ylim))
   
   # save to disk
-  saveRDS(crs.list, here(uyrw.metadata.df['crs', 'file']))
-  saveRDS(uyrw.poly, here(uyrw.metadata.df['boundary', 'file']))
+  saveRDS(crs.list, here(basins.metadata.df['crs', 'file']))
+  saveRDS(uyrw.poly, here(basins.metadata.df['boundary', 'file']))
   
 } else {
   
   # load CRS info list and watershed boundary from disk
-  crs.list = readRDS(here(uyrw.metadata.df['crs', 'file']))
-  uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
+  crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
+  uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
 }
 
 #' Note that holes in this watershed boundary polygon can emerge, when the catchement boundaries don't perfectly align - *eg.* try
@@ -274,12 +274,12 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
 #' With the watershed boundaries and projection so defined, we can now transform the rest of the data. Files fetched by `nhdplusTools`
 #' may include some invalid geometries (self-intersections) and features lying outside this watershed, so we clean up the sfc objects
 #' before continuing.
-if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
+if(any(!file.exists(here(basins.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
-  uyrw.catchment = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
-  uyrw.flowline = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
-  uyrw.waterbody = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
+  uyrw.catchment = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
+  uyrw.flowline = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
+  uyrw.waterbody = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
   
   # fix invalid geometries and mask with watershed boundary
   uyrw.waterbody = st_intersection(st_make_valid(uyrw.waterbody), uyrw.poly)
@@ -291,18 +291,18 @@ if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline'
   uyrw.mainstem = st_make_valid(st_union(uyrw.mainstem, by_feature=FALSE))
   
   # save to disk
-  saveRDS(uyrw.catchment, here(uyrw.metadata.df['catchment', 'file']))
-  saveRDS(uyrw.flowline, here(uyrw.metadata.df['flowline', 'file']))
-  saveRDS(uyrw.waterbody, here(uyrw.metadata.df['waterbody', 'file']))
-  saveRDS(uyrw.mainstem, here(uyrw.metadata.df['mainstem', 'file']))
+  saveRDS(uyrw.catchment, here(basins.metadata.df['catchment', 'file']))
+  saveRDS(uyrw.flowline, here(basins.metadata.df['flowline', 'file']))
+  saveRDS(uyrw.waterbody, here(basins.metadata.df['waterbody', 'file']))
+  saveRDS(uyrw.mainstem, here(basins.metadata.df['mainstem', 'file']))
   
 } else {
   
   # load from disk
-  uyrw.catchment = readRDS(here(uyrw.metadata.df['catchment', 'file']))
-  uyrw.flowline = readRDS(here(uyrw.metadata.df['flowline', 'file']))
-  uyrw.waterbody = readRDS(here(uyrw.metadata.df['waterbody', 'file']))
-  uyrw.mainstem = readRDS(here(uyrw.metadata.df['mainstem', 'file']))
+  uyrw.catchment = readRDS(here(basins.metadata.df['catchment', 'file']))
+  uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
+  uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
+  uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
   
 }
 
@@ -321,10 +321,10 @@ uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$y
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
 # plot the watershed flowlines and water bodies as a png file
-if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
+if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
 {
   # render/write the plot
-  png(here(uyrw.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+  png(here(basins.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
 
     print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='greenyellow', border.col='yellowgreen') +
@@ -355,10 +355,10 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 #' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
 
 # plot the watershed drainage basins and water bodies as a png file
-if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
+if(!file.exists(here(basins.metadata.df['img_basins', 'file'])))
 {
   # render/write the plot
-  png(here(uyrw.metadata.df['img_basins', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+  png(here(basins.metadata.df['img_basins', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
     
     print(tm_shape(uyrw.catchment, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='MAP_COLORS', border.col=NA) +
@@ -382,7 +382,7 @@ if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 # Development code
 
 # there is another layer here called NHDArea
-st_layers(here(uyrw.metadata.df['nhd', 'file']))
+st_layers(here(basins.metadata.df['nhd', 'file']))
 
 
 #+ include=FALSE
