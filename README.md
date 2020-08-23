@@ -14,6 +14,8 @@ defines the study area and loads some hydrology info using `NHDPlusR`
 finds SNOTEL and NOAA climatic sensor station data
 * [get_dem.R](https://github.com/deankoch/URYW_data/blob/master/get_dem.knit.md)
 downloads and processes the National Elevation Dataset from USGS
+* [get_streamgages.R](https://github.com/deankoch/URYW_data/blob/master/get_streamgages.knit.md)
+finds streamflow and groundwater sensor data using the USGS NWIS
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
 
