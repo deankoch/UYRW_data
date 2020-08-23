@@ -108,23 +108,21 @@ if(!file.exists(here(dem.metadata.df['ned', 'file'])))
 #' Warp (gridded CRS transform) and clip the raster to our reference system and study area 
 if(!file.exists(here(dem.metadata.df['dem', 'file'])))
 {
+  # define a temporary file
+  temp.tif = tempfile()
+  
   # package 'gdalUtils' performs these kinds of operations much faster than `raster`
   gdalwarp(srcfile=here(dem.metadata.df['ned', 'file']), 
-           dstfile=here(dem.metadata.df['dem', 'file']),
+           dstfile=temp.tif,
            s_srs=crs(dem.original.tif), 
            t_srs=paste0('EPSG:', crs.list$epsg),
-           #tr=
-           #te=raster::bbox(bc.mask.tif), 
            overwrite=TRUE,
            verbose=TRUE)
   
   # load the transformed raster (resolution is approx 30x30m)
-  dem.tif = raster(here(dem.metadata.df['dem', 'file']))
+  dem.tif = raster(temp.tif)
   
-  # clip to padded boundary
-  dem.tif = mask(dem.tif, as_Spatial(uyrw.padded.poly))
-  
-  # overwrite on disk
+  # write to output directory
   writeRaster(dem.tif, here(dem.metadata.df['dem', 'file']), overwrite=TRUE)
 
 } else {
@@ -141,21 +139,21 @@ if(!file.exists(here(dem.metadata.df['dem', 'file'])))
 # create a copy of the dem clipped to exact boundary
 dem.tight.tif = mask(dem.tif, as_Spatial(uyrw.poly))
 
-# plot precipitation sensor station locations as a png file
+# plot dem raster as a png file
 if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
 {
   tmap.dem = tm_shape(dem.tif) +
-              tm_raster(palette=rev(gray.colors(100)), legend.show=FALSE) +
-              tm_shape(dem.tight.tif, raster.downsample=F, style='cont') +
-              tm_raster(palette='-viridis', title='elevation (meters)') +
-    tm_layout(main.title='Digital elevation map of the UYRW',
-              main.title.size=1,
-              main.title.position='center',
-              legend.title.size=0.7,
-              legend.text.size=0.5,
-              frame=FALSE,
-              title.snap.to.legend=FALSE,
-              legend.position=c('left', 'bottom'))
+                tm_raster(palette=gray.colors(100), legend.show=FALSE, style='cont') +
+              tm_shape(dem.tight.tif, raster.downsample=F) +
+                tm_raster(palette='viridis', title='elevation (meters)', style='cont') +
+              tm_layout(main.title='Digital elevation map of the UYRW',
+                        main.title.size=1,
+                        main.title.position='center',
+                        legend.title.size=0.7,
+                        legend.text.size=0.5,
+                        frame=FALSE,
+                        title.snap.to.legend=FALSE,
+                        legend.position=c('left', 'bottom'))
               
   # render/write the plot
   tmap_save(tm=tmap.dem, here(dem.metadata.df['img_dem', 'file']), width=2000, height=2400, pointsize=16)
