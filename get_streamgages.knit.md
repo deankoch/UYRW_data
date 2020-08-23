@@ -141,13 +141,13 @@ if(!file.exists(here(streamgage.metadata.df['USGS_sites.rdb', 'file'])))
   usgs.sf = st_intersection(usgs.sf, uyrw.poly)
   
   # save to disk
-  saveRDS(usgs.sf, here(streamgage.metadata.df['usgs.sfc', 'file']))
+  saveRDS(usgs.sf, here(streamgage.metadata.df['USGS_sites.sfc', 'file']))
 
   
 } else {
   
   # load from disk 
-  usgs.sf = readRDS(here(streamgage.metadata.df['usgs', 'file']))
+  usgs.sf = readRDS(here(streamgage.metadata.df['USGS_sites.sfc', 'file']))
   
 }
 
@@ -316,17 +316,16 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
   # build the tmap plot object
   tmap.streamgage = tm_shape(uyrw.poly) +
                   tm_polygons(col='greenyellow', border.col='yellowgreen') +
-                #tm_shape(uyrw.waterbody) +
-                #  tm_polygons(col='yellowgreen', border.col='yellowgreen') +
-                #tm_shape(uyrw.mainstem) +
-                #  tm_lines(col='yellowgreen', lwd=2) +
-                #tm_shape(uyrw.flowline) +
-                #  tm_lines(col='yellowgreen') +
-                #tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
-                #  tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
+                tm_shape(uyrw.waterbody) +
+                  tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+                tm_shape(uyrw.mainstem) +
+                  tm_lines(col='dodgerblue4', lwd=2) +
+                tm_shape(uyrw.flowline) +
+                  tm_lines(col='dodgerblue3') +
                 tm_shape(usgs.streamflow.ts.sf) +
                   tm_dots(size='duration',
                           col='endyear',
+                          style='cont',
                           shape=16,
                           palette='magma',
                           alpha=0.7, 
@@ -347,13 +346,11 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                           legend.title.size=0.7,
                           legend.text.size=0.5,
                           frame=FALSE,
+                          legend.format=list(fun=function(x) formatC(x, digits=0, format='d')),
                           legend.outside=TRUE,
                           legend.outside.position='right',
                           title.snap.to.legend=FALSE)
   
-  #tmap.streamgage
-  
-  #formatC(endyear.streamflow.ts, digits=0, format='d')
   
   # render/write the plot
   tmap_save(tm=tmap.streamgage, here(streamgage.metadata.df['img_streamgage', 'file']), width=2000, height=2400, pointsize=16)

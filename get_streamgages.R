@@ -131,13 +131,13 @@ if(!file.exists(here(streamgage.metadata.df['USGS_sites.rdb', 'file'])))
   usgs.sf = st_intersection(usgs.sf, uyrw.poly)
   
   # save to disk
-  saveRDS(usgs.sf, here(streamgage.metadata.df['usgs.sfc', 'file']))
+  saveRDS(usgs.sf, here(streamgage.metadata.df['USGS_sites.sfc', 'file']))
 
   
 } else {
   
   # load from disk 
-  usgs.sf = readRDS(here(streamgage.metadata.df['usgs', 'file']))
+  usgs.sf = readRDS(here(streamgage.metadata.df['USGS_sites.sfc', 'file']))
   
 }
 
