@@ -162,38 +162,53 @@ paramcodes.df = do.call(rbind, paramcodes.list)
 paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
 idx.streamflow = usgs.sf$parm_cd == paramcode.streamflow
 
-# 34 entries are time series of streamflow: make a copy of this dataset
-idx.streamflow.ts = idx.streamflow & idx.ts
+# find all entries corresponding to groundwater time series
+paramcode.groundwater = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Height, gage']
+idx.groundwater = usgs.sf$parm_cd == paramcode.groundwater
+
+# 35 entries: 34 are time series of streamflow and one of groundwater
+idx.streamflow.ts = idx.streamflow & idx.ts 
+idx.groundwater.ts = idx.groundwater & idx.ts 
 sum(idx.streamflow.ts)
-usgs.streamflow.ts.sf = usgs.sf[idx.streamflow.ts, ]
+sum(idx.groundwater.ts)
+
+# make a copy of the time series data
+usgs.ts.sf = usgs.sf[idx.streamflow.ts | idx.groundwater.ts, ]
 
 # find the end-years and durations as integers
-endyear.streamflow.ts = as.integer(sapply(strsplit(usgs.streamflow.ts.sf$end_date,'-'), function(xx) xx[1]))
-startyear.streamflow.ts = as.integer(sapply(strsplit(usgs.streamflow.ts.sf$begin_date,'-'), function(xx) xx[1]))
-duration.streamflow.ts = endyear.streamflow.ts - startyear.streamflow.ts
+usgs.ts.sf$endyear = as.integer(sapply(strsplit(usgs.ts.sf$end_date,'-'), function(xx) xx[1]))
+usgs.ts.startyear = as.integer(sapply(strsplit(usgs.ts.sf$begin_date,'-'), function(xx) xx[1]))
+usgs.ts.sf$duration = usgs.ts.sf$endyear - usgs.ts.startyear
+
+# add a dummy column for plotting groundwater station(s)
+usgs.ts.sf$constant = 'groundwater time series'
+
+# find all intermittent groundwater data
+idx.gw = usgs.sf$data_type_cd == 'gw'
+sum(idx.gw)
 
 #'
 #' ## visualization
 #' 
 
 # add columns for duration and end-year of time series for precipitation
-usgs.streamflow.ts.sf$duration = duration.streamflow.ts
-usgs.streamflow.ts.sf$endyear = endyear.streamflow.ts
-usgs.streamflow.ts.sf$endyear[usgs.streamflow.ts.sf$endyear == 2020] = NA
+usgs.ts.sf$endyear[usgs.ts.sf$endyear == 2020] = NA
 
 # plot streamflow sensor station locations as a png file
 if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
 {
   # build the tmap plot object
   tmap.streamgage = tm_shape(uyrw.poly) +
-                  tm_polygons(col='greenyellow', border.col='yellowgreen') +
+                  tm_polygons(col='skyblue', border.col='yellowgreen') +
                 tm_shape(uyrw.waterbody) +
                   tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
                 tm_shape(uyrw.mainstem) +
                   tm_lines(col='dodgerblue4', lwd=2) +
                 tm_shape(uyrw.flowline) +
                   tm_lines(col='dodgerblue3') +
-                tm_shape(usgs.streamflow.ts.sf) +
+                tm_shape(usgs.ts.sf[usgs.ts.sf$parm_cd == paramcode.groundwater,]) +
+                  tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
+                tm_shape(usgs.ts.sf) +
                   tm_dots(size='duration',
                           col='endyear',
                           style='cont',
@@ -211,7 +226,7 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                           colorNA='red2') +
                 tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
                 tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
-                tm_layout(main.title='NWIS daily streamflow records in the UYRW',
+                tm_layout(main.title='NWIS daily discharge records in the UYRW',
                           main.title.size=1,
                           main.title.position='center',
                           legend.title.size=0.7,
@@ -221,7 +236,7 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                           legend.outside=TRUE,
                           legend.outside.position='right',
                           title.snap.to.legend=FALSE)
-  
+  tmap.streamgage
   
   # render/write the plot
   tmap_save(tm=tmap.streamgage, here(streamgage.metadata.df['img_streamgage', 'file']), width=2000, height=2400, pointsize=16)
