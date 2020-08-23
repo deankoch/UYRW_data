@@ -18,34 +18,9 @@ should be run before this script.
 
 ```r
 library(raster)
-```
-
-```
-## Loading required package: sp
-```
-
-```r
 library(gdalUtils)
 library(FedData)
 library(sf)
-```
-
-```
-## Linking to GEOS 3.8.0, GDAL 3.0.4, PROJ 6.3.1
-```
-
-```
-## 
-## Attaching package: 'sf'
-```
-
-```
-## The following object is masked from 'package:gdalUtils':
-## 
-##     gdal_rasterize
-```
-
-```r
 library(tmap)
 library(here)
 ```
@@ -185,6 +160,7 @@ if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
                 tm_raster(palette=gray.colors(100), legend.show=FALSE, style='cont') +
               tm_shape(dem.tight.tif, raster.downsample=F) +
                 tm_raster(palette='viridis', title='elevation (meters)', style='cont') +
+              tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
               tm_layout(main.title='Digital elevation map of the UYRW',
                         main.title.size=1,
                         main.title.position='center',
