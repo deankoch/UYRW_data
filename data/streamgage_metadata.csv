@@ -1,0 +1,4 @@
+"","file","type","description"
+"USGS_sites.rdb","data/source/USGS_sites.rdb","USGS rdb file","results of USGS Site web service search for sites in UYRW"
+"USGS_sites.sfc","data/prepared/USGS_sites.rds","R sf object","sfc object with USGS sensor locations in UYRW"
+"img_streamgage","graphics/streamgage_sites.png","png graphic","image of stream gage locations in the UYRW"
