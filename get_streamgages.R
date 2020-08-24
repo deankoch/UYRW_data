@@ -19,9 +19,7 @@ library(sf)
 library(tmap)
 library(here)
 library(dataRetrieval)
-library(waterData)
-#library(nhdplusTools)
-library('readtext')
+#?library(waterData)
 
 
 #'
