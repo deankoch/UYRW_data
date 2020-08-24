@@ -34,13 +34,12 @@ src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 
 # load metadata csv, CRS info list and watershed geometries from disk
-# basins.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
+basins.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
 crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
 uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
-# uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
-# uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
-# uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
-
+uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
+uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
 
 
 # this CSV file will serve as a guide for all files written to the project folder
@@ -141,51 +140,61 @@ if(!file.exists(here(streamgage.metadata.df['USGS_sites.rdb', 'file'])))
   
 }
 
-usgs.sf$begin_date
 
 # find 115 time-series entries (see https://waterservices.usgs.gov/rest/Site-Service.html#outputDataTypeCd) 
 idx.ts = usgs.sf$data_type_cd %in% c('dv', 'iv', 'id')
 sum(idx.ts)
 
+# make a copy of the time-series data
+usgs.ts.sf = usgs.sf[idx.ts,]
+
 # these correspond to 37 locations
-uyrw.sitecodes = unique(usgs.sf[idx.ts,]$site_no)
+uyrw.sitecodes = unique(usgs.ts.sf$site_no)
 length(uyrw.sitecodes)
 
-# query the meaning of these parameter codes
+# query the meaning of the parameter codes
 uyrw.paramcodes = unique(usgs.sf[idx.ts,]$parm_cd)
 paramcodes.url = 'https://help.waterdata.usgs.gov/code/parameter_cd_nm_query'
-paramcodes.query = paste0(url.paramcodes, '?parm_nm_cd=', uyrw.paramcodes, '&fmt=rdb')
+paramcodes.query = paste0(paramcodes.url, '?parm_nm_cd=', uyrw.paramcodes, '&fmt=rdb')
 paramcodes.list = lapply(paramcodes.query, function(urlstring) read.csv(url(urlstring), comment.char='#', sep='\t')[-1,])
 paramcodes.df = do.call(rbind, paramcodes.list)
 
 # find all entries corresponding to streamflow
 paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
-idx.streamflow = usgs.sf$parm_cd == paramcode.streamflow
+idx.streamflow = usgs.ts.sf$parm_cd == paramcode.streamflow
 
 # find all entries corresponding to groundwater time series
 paramcode.groundwater = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Height, gage']
-idx.groundwater = usgs.sf$parm_cd == paramcode.groundwater
+idx.groundwater = usgs.ts.sf$parm_cd == paramcode.groundwater
 
-# 35 entries: 34 are time series of streamflow and one of groundwater
-idx.streamflow.ts = idx.streamflow & idx.ts 
-idx.groundwater.ts = idx.groundwater & idx.ts 
-sum(idx.streamflow.ts)
-sum(idx.groundwater.ts)
+# find all entries corresponding to turbidity and suspended sediment time series
+paramcode.turbidity = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Turbidity']
+paramcode.sediment = paramcodes.df$parameter_cd[paramcodes.df$SRSName %in% c('Suspended sediment concentration (SSC)', 'Suspended sediment discharge')]
+idx.turbidity = usgs.ts.sf$parm_cd == paramcode.turbidity
+idx.sediment = usgs.ts.sf$parm_cd %in%  paramcode.sediment
 
-# make a copy of the time series data
-usgs.ts.sf = usgs.sf[idx.streamflow.ts | idx.groundwater.ts, ]
+# 49 entries: one is a GW time series, 34 are of streamflow, 6 are of turbidity, 8 are of suspended sediment
+idx.all = idx.streamflow | idx.groundwater | idx.turbidity | idx.sediment
+sum(idx.all)
+sum(idx.streamflow)
+sum(idx.groundwater)
+sum(idx.turbidity)
+sum(idx.sediment)
 
 # find the end-years and durations as integers
 usgs.ts.sf$endyear = as.integer(sapply(strsplit(usgs.ts.sf$end_date,'-'), function(xx) xx[1]))
 usgs.ts.startyear = as.integer(sapply(strsplit(usgs.ts.sf$begin_date,'-'), function(xx) xx[1]))
 usgs.ts.sf$duration = usgs.ts.sf$endyear - usgs.ts.startyear
 
-# add a dummy column for plotting groundwater station(s)
-usgs.ts.sf$constant = 'groundwater time series'
+# add dummy columns for indicating the variable recorded
+usgs.ts.sf$plotlabel_sf = 'streamflow time series'
+usgs.ts.sf$plotlabel_gw = 'groundwater time series'
+usgs.ts.sf$plotlabel_tb = 'turbidity time series'
+usgs.ts.sf$plotlabel_ss = 'suspended sediment time series'
 
 # find all intermittent groundwater data
-idx.gw = usgs.sf$data_type_cd == 'gw'
-sum(idx.gw)
+#idx.gw = usgs.sf$data_type_cd == 'gw'
+#sum(idx.gw)
 
 #'
 #' ## visualization
@@ -206,9 +215,7 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                   tm_lines(col='dodgerblue4', lwd=2) +
                 tm_shape(uyrw.flowline) +
                   tm_lines(col='dodgerblue3') +
-                tm_shape(usgs.ts.sf[usgs.ts.sf$parm_cd == paramcode.groundwater,]) +
-                  tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
-                tm_shape(usgs.ts.sf) +
+                tm_shape(usgs.ts.sf[idx.all,]) +
                   tm_dots(size='duration',
                           col='endyear',
                           style='cont',
@@ -223,7 +230,15 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                           sizes.legend=c(5,25,50,75,125),
                           title='decomissioned', 
                           textNA='currently operational',
-                          colorNA='red2') +
+                          colorNA='orange') +
+                tm_shape(usgs.ts.sf[idx.streamflow,]) +
+                  tm_dots(col='plotlabel_sf', palette='black', size=0.5, shape=1, title='') +
+                tm_shape(usgs.ts.sf[idx.sediment,]) +
+                  tm_dots(col='plotlabel_ss', palette='black', size=0.5, shape=2, title='') +
+                tm_shape(usgs.ts.sf[idx.turbidity,]) +
+                  tm_dots(col='plotlabel_tb', palette='black', size=0.5, shape=6, title='') +
+                tm_shape(usgs.ts.sf[idx.groundwater,]) +
+                  tm_dots(col='plotlabel_gw', palette='black', size=0.5, shape=0, title='') +
                 tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
                 tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.5) +
                 tm_layout(main.title='NWIS daily discharge records in the UYRW',
@@ -236,7 +251,6 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
                           legend.outside=TRUE,
                           legend.outside.position='right',
                           title.snap.to.legend=FALSE)
-  tmap.streamgage
   
   # render/write the plot
   tmap_save(tm=tmap.streamgage, here(streamgage.metadata.df['img_streamgage', 'file']), width=2000, height=2400, pointsize=16)
