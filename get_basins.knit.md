@@ -24,8 +24,36 @@ If any of these CRAN packages are not installed on your machine, run `install.pa
 
 ```r
 library(nhdplusTools)
+```
+
+```
+## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
+```
+
+```r
 library(sf)
+```
+
+```
+## Linking to GEOS 3.8.0, GDAL 3.0.4, PROJ 6.3.1
+```
+
+```r
 library(smoothr)
+```
+
+```
+## 
+## Attaching package: 'smoothr'
+```
+
+```
+## The following object is masked from 'package:stats':
+## 
+##     smooth
+```
+
+```r
 library(tmap)
 ```
 
@@ -45,11 +73,23 @@ hydrology datasets.
 library(HydroData)
 ```
 
+```
+## Loading required package: AOI
+```
+
+```
+## Loading required package: leaflet
+```
+
 Data on geographical landmarks and highways are available from OSM using the overpass API via `osmdata`
 
 
 ```r
 library(osmdata)
+```
+
+```
+## Data (c) OpenStreetMap contributors, ODbL 1.0. https://www.openstreetmap.org/copyright
 ```
 
 The `here` package is helpful for defining working directories on portable code
@@ -173,7 +213,7 @@ if(!file.exists(here(uyrw.metadata.file)))
 ```
 
 This list of files and descriptions is now stored as a
-[.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/uyrw_metadata.csv)
+[.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/basins_metadata.csv)
 in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
 shared in this repository (see my 
 [.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 

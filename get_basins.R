@@ -157,11 +157,13 @@ if(!file.exists(here(uyrw.metadata.file)))
 }
 
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/uyrw_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/basins_metadata.csv)
 #' in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
 #' shared in this repository (see my 
 #' [.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 
 #' However you can reproduce all of them by running this script.
+
+
 
 
 #'
