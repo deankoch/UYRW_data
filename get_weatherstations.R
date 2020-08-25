@@ -17,7 +17,7 @@
 #' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)).
 #' We use them to build a map of climatic sensor stations in the UYRW, and to query historical data for model training.
 #' 
-#' [get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md)
+#' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/get_basins.knit.md)
 #' which creates some required directories and project config files, should be run before this script.
 
 #'
@@ -104,7 +104,7 @@ if(!file.exists(here(weatherstation.metadata.file)))
   
 }
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/URYW_data/blob/master/data/weatherstation_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/weatherstation_metadata.csv)
 #' in the `/data` directory.
 
 #' Climatic data near the boundaries of the watershed will be useful for interpolation.
@@ -149,7 +149,7 @@ if(!file.exists(here(weatherstation.metadata.df['snotel', 'file'])))
   snotel.sfc = st_sfc(lapply(1:nrow(snotel.df), function(xx) st_point(sites.coords.matrix[xx,])), crs=crs.list$epsg.geo)
   snotel.sf = st_sf(cbind(snotel.df, snotel.sfc))
   
-  # transform to UTM and clip to URYW area (30 stations identified)
+  # transform to UTM and clip to UYRW area (30 stations identified)
   snotel.sf = st_transform(snotel.sf, crs=crs.list$epsg)
   snotel.sf = st_intersection(snotel.sf, uyrw.padded.poly)
   
@@ -310,7 +310,7 @@ if(!file.exists(here(weatherstation.metadata.df['img_weatherstation', 'file'])))
   tmap_save(tm=tmap.precip, here(weatherstation.metadata.df['img_weatherstation', 'file']), width=2000, height=2400, pointsize=16)
 }
 
-#' ![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/weatherstation_sites.png)
+#' ![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/weatherstation_sites.png)
 
 
 #+ include=FALSE

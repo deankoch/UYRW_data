@@ -157,10 +157,10 @@ if(!file.exists(here(uyrw.metadata.file)))
 }
 
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/URYW_data/blob/master/data/uyrw_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/uyrw_metadata.csv)
 #' in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
 #' shared in this repository (see my 
-#' [.gitignore](https://raw.githubusercontent.com/deankoch/URYW_data/master/.gitignore) file). 
+#' [.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 
 #' However you can reproduce all of them by running this script.
 
 
@@ -320,6 +320,16 @@ uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$y
 # determine some reasonable dimensions (in pixels) for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
+# find some of the major watercourses and prepare labels for them
+uyrw.flowline[rev(order(uyrw.flowline$lengthkm)),]$gnis_name
+# 
+# 
+# uyrw.flowline[rev(order(uyrw.flowline$surfarea)),]$gnis_name
+# 
+# names(uyrw.flowline)
+# unique(uyrw.flowline$surfarea)
+# which(uyrw.flowline$gnis_name == 'Mill Creek')
+
 # plot the watershed flowlines and water bodies as a png file
 if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
 {
@@ -352,7 +362,7 @@ if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
   dev.off()
 }
 
-#' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
+#' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
 
 # plot the watershed drainage basins and water bodies as a png file
 if(!file.exists(here(basins.metadata.df['img_basins', 'file'])))
@@ -375,7 +385,7 @@ if(!file.exists(here(basins.metadata.df['img_basins', 'file'])))
   dev.off()
 }
 
-#' ![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_basins.png)
+#' ![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
 
 
 #+ include=FALSE

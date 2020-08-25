@@ -9,8 +9,8 @@
 #' 
 #' **get_DEM**: download a DEM and warp to our reference coordinate system 
 #' 
-#' [get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md) and 
-#' [get_weatherstations.R](https://github.com/deankoch/URYW_data/blob/master/get_weatherstations.knit.md), 
+#' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/get_basins.knit.md) and 
+#' [get_weatherstations.R](https://github.com/deankoch/UYRW_data/blob/master/get_weatherstations.knit.md), 
 #' should be run before this script.
 
 #'
@@ -74,7 +74,7 @@ if(!file.exists(here(dem.metadata.file)))
   
 }
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/URYW_data/blob/master/data/dem_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/dem_metadata.csv)
 #' in the `/data` directory.
 
 
@@ -154,7 +154,7 @@ if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
   tmap_save(tm=tmap.dem, here(dem.metadata.df['img_dem', 'file']), width=2000, height=2400, pointsize=16)
 }
 
-#' ![elevation map of the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/dem.png)
+#' ![elevation map of the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png)
 
 
 #+ include=FALSE

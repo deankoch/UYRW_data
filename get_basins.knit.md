@@ -150,7 +150,7 @@ if(!file.exists(here(uyrw.metadata.file)))
                           description='image of some 4000 drainage basins in the UYRW')
   
   # bind all the individual filename info vectors into a data frame
-  uyrw.metadata.df = data.frame(rbind(uyrw.poi.file,
+  basins.metadata.df = data.frame(rbind(uyrw.poi.file,
                                       uyrw.crs.file,
                                       uyrw.nhd.file,
                                       uyrw.poly.file, 
@@ -162,21 +162,21 @@ if(!file.exists(here(uyrw.metadata.file)))
                                       uyrw.basin.png.file), row.names='name')
   
   # save the data frame
-  write.csv(uyrw.metadata.df, here(uyrw.metadata.file))
+  write.csv(basins.metadata.df, here(uyrw.metadata.file))
 
 } else {
   
   # load the data frame
-  uyrw.metadata.df = read.csv(here(uyrw.metadata.file), header=TRUE, row.names=1)
+  basins.metadata.df = read.csv(here(uyrw.metadata.file), header=TRUE, row.names=1)
   
 }
 ```
 
 This list of files and descriptions is now stored as a
-[.csv file](https://github.com/deankoch/URYW_data/blob/master/data/uyrw_metadata.csv)
+[.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/uyrw_metadata.csv)
 in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
 shared in this repository (see my 
-[.gitignore](https://raw.githubusercontent.com/deankoch/URYW_data/master/.gitignore) file). 
+[.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 
 However you can reproduce all of them by running this script.
 
 ## starting location
@@ -185,7 +185,7 @@ querying OSM and USGS and computing things all over again.
 
 
 ```r
-if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
+if(!file.exists(here(basins.metadata.df['poi', 'file'])))
 {
   # define some points of interest in the watershed
   poi.name = c(bigtimber = 'Big Timber, MT',
@@ -203,12 +203,12 @@ if(!file.exists(here(uyrw.metadata.df['poi', 'file'])))
   
   # compile into a list and save to disk
   poi.list = list(name = poi.name, pt = poi.pt, comid = poi.comid)
-  saveRDS(poi.list, here(uyrw.metadata.df['poi', 'file']))
+  saveRDS(poi.list, here(basins.metadata.df['poi', 'file']))
 
 } else {
   
   # load from disk 
-  poi.list = readRDS(here(uyrw.metadata.df['poi', 'file']))
+  poi.list = readRDS(here(basins.metadata.df['poi', 'file']))
   
 }
 ```
@@ -222,7 +222,7 @@ relevant watershed geometries.
 
 
 ```r
-if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
+if(!file.exists(here(basins.metadata.df['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
   uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
@@ -231,7 +231,7 @@ if(!file.exists(here(uyrw.metadata.df['nhd', 'file'])))
   print(uyrw.flowlines$nhdplus_comid)
   
   # download geometries defining catchements, water bodies, and the full flowline network
-  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(uyrw.metadata.df['nhd', 'file']), nhdplus_data='download')
+  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(basins.metadata.df['nhd', 'file']), nhdplus_data='download')
 }
 ```
 
@@ -243,10 +243,10 @@ boundary polygon to a reference system more appropriate for hydrology modeling, 
 
 
 ```r
-if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.df['crs', 'file'])))))
+if(any(!file.exists(here(c(basins.metadata.df['boundary', 'file'], basins.metadata.df['crs', 'file'])))))
 {
   # load the watershed catchments. There are several thousand
-  uyrw.catchment = read_sf(here(uyrw.metadata.df['nhd', 'file']), 'CatchmentSP')
+  uyrw.catchment = read_sf(here(basins.metadata.df['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
   
   # Their union delineates the entire UYR watershed as a single polygon
@@ -279,14 +279,14 @@ if(any(!file.exists(here(c(uyrw.metadata.df['boundary', 'file'], uyrw.metadata.d
                   dims = list(xlim=uyrw.xlim, ylim=uyrw.ylim))
   
   # save to disk
-  saveRDS(crs.list, here(uyrw.metadata.df['crs', 'file']))
-  saveRDS(uyrw.poly, here(uyrw.metadata.df['boundary', 'file']))
+  saveRDS(crs.list, here(basins.metadata.df['crs', 'file']))
+  saveRDS(uyrw.poly, here(basins.metadata.df['boundary', 'file']))
   
 } else {
   
   # load CRS info list and watershed boundary from disk
-  crs.list = readRDS(here(uyrw.metadata.df['crs', 'file']))
-  uyrw.poly = readRDS(here(uyrw.metadata.df['boundary', 'file']))
+  crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
+  uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
 }
 ```
 
@@ -301,12 +301,12 @@ before continuing.
 
 
 ```r
-if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
+if(any(!file.exists(here(basins.metadata.df[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
-  uyrw.catchment = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
-  uyrw.flowline = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
-  uyrw.waterbody = st_transform(read_sf(here(uyrw.metadata.df['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
+  uyrw.catchment = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
+  uyrw.flowline = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
+  uyrw.waterbody = st_transform(read_sf(here(basins.metadata.df['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
   
   # fix invalid geometries and mask with watershed boundary
   uyrw.waterbody = st_intersection(st_make_valid(uyrw.waterbody), uyrw.poly)
@@ -318,18 +318,18 @@ if(any(!file.exists(here(uyrw.metadata.df[c('catchment', 'waterbody', 'flowline'
   uyrw.mainstem = st_make_valid(st_union(uyrw.mainstem, by_feature=FALSE))
   
   # save to disk
-  saveRDS(uyrw.catchment, here(uyrw.metadata.df['catchment', 'file']))
-  saveRDS(uyrw.flowline, here(uyrw.metadata.df['flowline', 'file']))
-  saveRDS(uyrw.waterbody, here(uyrw.metadata.df['waterbody', 'file']))
-  saveRDS(uyrw.mainstem, here(uyrw.metadata.df['mainstem', 'file']))
+  saveRDS(uyrw.catchment, here(basins.metadata.df['catchment', 'file']))
+  saveRDS(uyrw.flowline, here(basins.metadata.df['flowline', 'file']))
+  saveRDS(uyrw.waterbody, here(basins.metadata.df['waterbody', 'file']))
+  saveRDS(uyrw.mainstem, here(basins.metadata.df['mainstem', 'file']))
   
 } else {
   
   # load from disk
-  uyrw.catchment = readRDS(here(uyrw.metadata.df['catchment', 'file']))
-  uyrw.flowline = readRDS(here(uyrw.metadata.df['flowline', 'file']))
-  uyrw.waterbody = readRDS(here(uyrw.metadata.df['waterbody', 'file']))
-  uyrw.mainstem = readRDS(here(uyrw.metadata.df['mainstem', 'file']))
+  uyrw.catchment = readRDS(here(basins.metadata.df['catchment', 'file']))
+  uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
+  uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
+  uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
   
 }
 ```
@@ -350,11 +350,362 @@ uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$y
 # determine some reasonable dimensions (in pixels) for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
+# find some of the major watercourses and prepare labels for them
+uyrw.flowline[rev(order(uyrw.flowline$lengthkm)),]$gnis_name
+```
+
+```
+##    [1] "Pelican Creek"                      "Pelican Creek"                      "Broad Creek"                       
+##    [4] "Raven Creek"                        "Little Timber Creek"                "North Fork Willow Creek"           
+##    [7] "North Fork Sixmile Creek"           "Deep Creek"                         "Tower Creek"                       
+##   [10] "Alum Creek"                         "Tobin Creek"                        " "                                 
+##   [13] "Cottonwood Creek"                   "Pebble Creek"                       "Fawn Creek"                        
+##   [16] "Ferry Creek"                        "Indian Creek"                       "Bridge Creek"                      
+##   [19] "Bangtail Creek"                     "West Fork Duck Creek"               "Soda Butte Creek"                  
+##   [22] "Fairy Creek"                        "Solution Creek"                     " "                                 
+##   [25] "Wrong Creek"                        "Lupine Creek"                       "Grouse Creek"                      
+##   [28] "Cold Creek"                         "Panther Creek"                      "Burnt Creek"                       
+##   [31] " "                                  "South Fork McDonald Creek"          "Dog Creek"                         
+##   [34] "West Chippy Creek"                  "Sour Creek"                         "Wolverine Creek"                   
+##   [37] "Middle Fork Willow Creek"           " "                                  "Clear Creek"                       
+##   [40] "Rocky Creek"                        "Yellowstone River"                  " "                                 
+##   [43] "North Fork Elk Creek"               "Bear Creek"                         "Poison Creek"                      
+##   [46] "North Fork Horse Creek"             "Calfee Creek"                       " "                                 
+##   [49] "Strawberry Creek"                   "Yellowstone River"                  "Carnelian Creek"                   
+##   [52] "Amphitheater Creek"                 "Slough Creek"                       "Yellowstone River"                 
+##   [55] "Senecio Creek"                      "Shallow Creek"                      "Hornaday Creek"                    
+##   [58] "Miles Creek"                        "Alum Creek"                         "Lost Creek"                        
+##   [61] "Sheep Creek"                        "Falls Creek"                        "South Fork Yellowstone River"      
+##   [64] " "                                  " "                                  "Bangtail Creek"                    
+##   [67] "Middle Fork Horse Creek"            "Muddy Creek"                        "Mist Creek"                        
+##   [70] "Cache Creek"                        "Boulder River"                      "Rose Creek"                        
+##   [73] " "                                  "Dry Creek"                          "Blacktail Deer Creek"              
+##   [76] "Miller Creek"                       "Woody Creek"                        " "                                 
+##   [79] "Jay Creek"                          " "                                  " "                                 
+##   [82] "Lowell Creek"                       "Columbine Creek"                    "Dry Creek"                         
+##   [85] " "                                  "Escarpment Creek"                   "Astringent Creek"                  
+##   [88] "Great Falls Creek"                  " "                                  "Yellowstone River"                 
+##   [91] "Little Buffalo Creek"               "Falcon Creek"                       "Sedge Creek"                       
+##   [94] "Cort Creek"                         " "                                  " "                                 
+##   [97] "Cache Creek"                        "Shields River"                      " "                                 
+##  [100] "Tucker Creek"                       "Tower Creek"                        "Yellowstone River"                 
+##  [103] " "                                  " "                                  " "                                 
+##  [106] "Stoughten Creek"                    "Cliff Creek"                        "East Fork Duck Creek"              
+##  [109] "Glen Creek"                         " "                                  "East Fork Hellroaring Creek"       
+##  [112] " "                                  "Cottonwood Creek"                   "Willow Creek"                      
+##  [115] "Buffalo Fork"                       " "                                  "Moss Creek"                        
+##  [118] "Oxbow Creek"                        "Rock Creek"                         " "                                 
+##  [121] "Little Rock Creek"                  " "                                  "Looking Glass Creek"               
+##  [124] "Area Creek"                         "Pass Creek"                         "Cub Creek"                         
+##  [127] " "                                  "Beaverdam Creek"                    "Little Lamar River"                
+##  [130] " "                                  " "                                  " "                                 
+##  [133] "Yellowstone River"                  "Lamar River"                        "Passage Creek"                     
+##  [136] "Amethyst Creek"                     " "                                  "Noel Creek"                        
+##  [139] " "                                  "Cottonwood Creek"                   "Lewis Creek"                       
+##  [142] "Elbow Creek"                        "East Boulder River"                 " "                                 
+##  [145] " "                                  "Badger Creek"                       "South Fork Pine Creek"             
+##  [148] "Suce Creek"                         "Yellowstone River"                  "Willow Creek"                      
+##  [151] "Sour Creek"                         "Buffalo Creek"                      "North Fork Butte Creek"            
+##  [154] "Grassy Creek"                       "Slough Creek"                       " "                                 
+##  [157] " "                                  "Bridgman Creek"                     "Little Thumb Creek"                
+##  [160] " "                                  "Elk Tongue Creek"                   "Yellowstone River"                 
+##  [163] " "                                  "Pebble Creek"                       " "                                 
+##  [166] "Perkins Creek"                      "Grizzly Creek"                      "Potter Creek"                      
+##  [169] "Yellowstone River"                  " "                                  "Yellowstone River"                 
+##  [172] "Mill Creek"                         "Dry Creek"                          " "                                 
+##  [175] "Cascade Creek"                      " "                                  "Lamar River"                       
+##  [178] "Slaughterhouse Creek"               "Hellroaring Creek"                  "Daisy Dean Creek"                  
+##  [181] " "                                  "Chicken Creek"                      "Arrow Canyon Creek"                
+##  [184] " "                                  "Speculator Creek"                   " "                                 
+##  [187] "Winter Creek"                       "Thorofare Creek"                    "Basin Creek"                       
+##  [190] " "                                  " "                                  "West Fork Mendenhall Creek"        
+##  [193] "Rice Creek"                         "Big Creek"                          " "                                 
+##  [196] "Lava Creek"                         " "                                  "Mist Creek"                        
+##  [199] "Cache Creek"                        " "                                  "Miller Creek"                      
+##  [202] "East Fork Boulder River"            "Little Donahue Creek"               "Cottonwood Creek"                  
+##  [205] " "                                  " "                                  "Tumble Creek"                      
+##  [208] "Rock Creek"                         "Slough Creek"                       " "                                 
+##  [211] " "                                  "Crazy Head Creek"                   "Bark Cabin Creek"                  
+##  [214] "Donahue Creek"                      " "                                  " "                                 
+##  [217] "South Fork Horse Creek"             " "                                  " "                                 
+##  [220] "Meadow Creek"                       "Straight Creek"                     " "                                 
+##  [223] " "                                  " "                                  "Rock Creek"                        
+##  [226] " "                                  " "                                  "Hellroaring Creek"                 
+##  [229] "Boulder River"                      " "                                  "Trespass Creek"                    
+##  [232] "East Fork Spring Creek"             "Elk Antler Creek"                   " "                                 
+##  [235] " "                                  " "                                  " "                                 
+##  [238] " "                                  "Hunters Creek"                      " "                                 
+##  [241] "Colley Creek"                       "Palmer Creek"                       "Bluff Creek"                       
+##  [244] "Shields River"                      "Antelope Creek"                     " "                                 
+##  [247] " "                                  " "                                  "Meatrack Creek"                    
+##  [250] "Work Creek"                         "West Boulder River"                 "Lamar River"                       
+##  [253] " "                                  "Yellowstone River"                  "South Fork Elk Creek"              
+##  [256] "Crandall Creek"                     "West Boulder River"                 " "                                 
+##  [259] " "                                  "Horse Creek"                        "Canyon Creek"                      
+##  [262] "Lava Creek"                         "Hellroaring Creek"                  "Bassett Creek"                     
+##  [265] " "                                  " "                                  " "                                 
+##  [268] " "                                  " "                                  " "                                 
+##  [271] " "                                  "Eagle Creek"                        "Donahue Creek"                     
+##  [274] "Lamar River"                        "Oxbow Creek"                        " "                                 
+##  [277] "Unnamed Creek"                      " "                                  "Lynx Creek"                        
+##  [280] " "                                  "Yellowstone River"                  "South Fork Daisy Dean Creek"       
+##  [283] "Pebble Creek"                       "Spring Creek"                       "Yellowstone River"                 
+##  [286] " "                                  "Shields River"                      " "                                 
+##  [289] "Yellowstone River"                  " "                                  "Falls Creek"                       
+##  [292] "Cascade Creek"                      "North Fork McDonald Creek"          " "                                 
+##  [295] "Monitor Creek"                      " "                                  "Antelope Creek"                    
+##  [298] "Electric Creek"                     " "                                  "Middle Fork Flathead Creek"        
+##  [301] "Horse Creek"                        " "                                  " "                                 
+##  [304] "Pine Creek"                         "Obsidian Creek"                     "Sedge Creek"                       
+##  [307] " "                                  "Cache Creek"                        "Potter Creek"                      
+##  [310] " "                                  " "                                  " "                                 
+##  [313] " "                                  " "                                  " "                                 
+##  [316] "Horse Creek"                        "Bull Creek"                         "Atlantic Creek"                    
+##  [319] " "                                  "Big Creek"                          " "                                 
+##  [322] " "                                  "Soda Butte Creek"                   "South Fork Shields River"          
+##  [325] " "                                  "Mission Creek"                      "Hammond Creek"                     
+##  [328] "Canyon Creek"                       "Republic Creek"                     "Lamar River"                       
+##  [331] "Clause Creek"                       " "                                  "Lynx Creek"                        
+##  [334] "Dike Creek"                         " "                                  "Elk Creek"                         
+##  [337] "East Chippy Creek"                  "McDonald Creek"                     "Slip and Slide Creek"              
+##  [340] " "                                  "Yellowstone River"                  "Grouse Creek"                      
+##  [343] "Opal Creek"                         "Silvertip Creek"                    "Frazier Creek"                     
+##  [346] "Little Trail Creek"                 "Yellowstone River"                  "Middle Creek"                      
+##  [349] "Wild Creek"                         "Twin Peaks Creek"                   "Spring Creek"                      
+##  [352] "North Fork Flathead Creek"          "Open Creek"                         "East Boulder River"                
+##  [355] " "                                  "Davis Creek"                        " "                                 
+##  [358] "Geode Creek"                        "Arrastra Creek"                     " "                                 
+##  [361] "Grouse Creek"                       "Agate Creek"                        " "                                 
+##  [364] " "                                  "Burnt Creek"                        "Dry Creek"                         
+##  [367] "Hole-In-The-Rock Creek"             "Butte Creek"                        "Trappers Creek"                    
+##  [370] "Smokey Creek"                       " "                                  "Lake Abundance Creek"              
+##  [373] " "                                  "Cow Creek"                          "East Branch Hellroaring Creek"     
+##  [376] "Howell Creek"                       " "                                  "North Fork Brackett Creek"         
+##  [379] " "                                  " "                                  "Hidden Creek"                      
+##  [382] "Elk Creek"                          "East Fork Mill Creek"               "Yellowstone River"                 
+##  [385] "Cottonwood Creek"                   "Passage Creek"                      "Suce Creek"                        
+##  [388] " "                                  " "                                  " "                                 
+##  [391] " "                                  "Middle Fork Muddy Creek"            "Pool Creek"                        
+##  [394] " "                                  "East Boulder River"                 "Mill Fork Creek"                   
+##  [397] " "                                  "Fleshman Creek"                     "West Fork Little Timber Creek"     
+##  [400] "Thistle Creek"                      "North Fork Clover Creek"            "West Boulder River"                
+##  [403] "Cedar Creek"                        " "                                  " "                                 
+##  [406] "Needle Creek"                       " "                                  "Little Indian Creek"               
+##  [409] "Yellowstone River"                  "Castle Creek"                       "Lamar River"                       
+##  [412] "Buck Creek"                         "Chalcedony Creek"                   " "                                 
+##  [415] "Middle Fork Rock Creek"             "Lost Creek"                         " "                                 
+##  [418] " "                                  "Falls Creek"                        " "                                 
+##  [421] "North Fork Elbow Creek"             "Crystal Creek"                      " "                                 
+##  [424] "Porcupine Creek"                    "Sheep Creek"                        " "                                 
+##  [427] "Clear Creek"                        " "                                  " "                                 
+##  [430] "Thompson Creek"                     "Elbow Creek"                        "Thorofare Creek"                   
+##  [433] "Basin Creek"                        " "                                  " "                                 
+##  [436] "Shallow Creek"                      "North Two Ocean Creek"              " "                                 
+##  [439] "Soldier Creek"                      " "                                  "Flint Creek"                       
+##  [442] "North Fork Elk Creek"               " "                                  " "                                 
+##  [445] "Beaverdam Creek"                    "Falls Creek"                        " "                                 
+##  [448] " "                                  "Thorofare Creek"                    "Sulphur Creek"                     
+##  [451] "Grouse Creek"                       "Trappers Creek"                     "South Fork Shields River"          
+##  [454] " "                                  " "                                  " "                                 
+##  [457] " "                                  "Silver Creek"                       "West Fork Duck Creek"              
+##  [460] "Emigrant Creek"                     "Carrol Creek"                       " "                                 
+##  [463] "Sunlight Creek"                     " "                                  "Bear Creek"                        
+##  [466] "Henry Creek"                        "North Fork Daisy Dean Creek"        " "                                 
+##  [469] "Obsidian Creek"                     "South Fork Dry Creek"               " "                                 
+##  [472] " "                                  "Gold Prize Creek"                   " "                                 
+##  [475] " "                                  "Dugout Creek"                       "Yellowstone River"                 
+##  [478] "Glen Creek"                         "Mountain Creek"                     "Kay Creek"                         
+##  [481] " "                                  " "                                  "Boulder River"                     
+##  [484] "Sheep Creek"                        " "                                  "Indian Creek"                      
+##  [487] "Sheep Creek"                        " "                                  "Bailey Creek"                      
+##  [490] "Lamar River"                        "Antelope Creek"                     " "                                 
+##  [493] "Greeley Creek"                      " "                                  "Pelican Creek"                     
+##  [496] " "                                  "Indian Creek"                       " "                                 
+##  [499] "Pass Creek"                         "Bailey Creek"                       "Fridley Creek"                     
+##  [502] "North Fork Deep Creek"              " "                                  "Frenchy Creek"                     
+##  [505] " "                                  "North Fork Cedar Creek"             "Fleshman Creek"                    
+##  [508] "Wicked Creek"                       "South Fork Carrol Creek"            "Elk Creek"                         
+##  [511] " "                                  " "                                  " "                                 
+##  [514] "Davis Creek"                        "Little Indian Creek"                "Potter Creek"                      
+##  [517] "Little Cottonwood Creek"            "Mission Creek"                      "Shields River"                     
+##  [520] " "                                  " "                                  " "                                 
+##  [523] " "                                  "Rock Creek"                         " "                                 
+##  [526] " "                                  "West Fork Little Timber Creek"      " "                                 
+##  [529] " "                                  "Jarrett Creek"                      " "                                 
+##  [532] "Obsidian Creek"                     "Cliff Creek"                        " "                                 
+##  [535] " "                                  "Upper Sage Creek"                   " "                                 
+##  [538] "Brackett Creek"                     "Shed Creek"                         "Shields River"                     
+##  [541] "Little Timber Creek"                "Falls Creek"                        " "                                 
+##  [544] " "                                  "Lambert Creek"                      " "                                 
+##  [547] " "                                  " "                                  " "                                 
+##  [550] "Yellowstone River"                  " "                                  " "                                 
+##  [553] "Little Cottonwood Creek"            "Cache Creek"                        " "                                 
+##  [556] "Emigrant Creek"                     "Jay Creek"                          "Sixmile Creek"                     
+##  [559] " "                                  "Graham Creek"                       "Little Mission Creek"              
+##  [562] "Indian Creek"                       " "                                  "Canyon Creek"                      
+##  [565] " "                                  " "                                  " "                                 
+##  [568] "Adair Creek"                        "Bullrun Creek"                      "Skully Creek"                      
+##  [571] "Flathead Creek"                     "Cedar Creek"                        " "                                 
+##  [574] "Dry Creek"                          " "                                  "East Fork West Boulder River"      
+##  [577] " "                                  "Yellowstone River"                  "Cascade Creek"                     
+##  [580] " "                                  "Miller Creek"                       "Eightmile Creek"                   
+##  [583] " "                                  " "                                  "Wigwam Creek"                      
+##  [586] "Deep Creek"                         "East Dam Creek"                     "Sixmile Creek"                     
+##  [589] "North Fork Muddy Creek"             "Hidden Creek"                       "Falls Creek"                       
+##  [592] "Walsh Creek"                        " "                                  "Green Canyon Creek"                
+##  [595] "Middle Fork Cottonwood Creek"       "North Fork Bear Creek"              "Tobin Creek"                       
+##  [598] "Steele Creek"                       "South Fork Elk Creek"               " "                                 
+##  [601] "Jasper Creek"                       "South Fork Bridge Creek"            "Duck Creek"                        
+##  [604] "Horse Creek"                        " "                                  " "                                 
+##  [607] " "                                  "Pass Creek"                         "Lamar River"                       
+##  [610] "Counts Creek"                       "Hoppe Creek"                        "North Fork Carrol Creek"           
+##  [613] "Mission Creek"                      " "                                  "North Fork Butte Creek"            
+##  [616] "South Cache Creek"                  " "                                  " "                                 
+##  [619] " "                                  "Balm of Gilead Creek"               "South Fork Daisy Dean Creek"       
+##  [622] "Little Cottonwood Creek"            "Anderson Creek"                     " "                                 
+##  [625] " "                                  " "                                  " "                                 
+##  [628] "Contact Creek"                      "South Fork Elk Creek"               " "                                 
+##  [631] "Yellowstone River"                  "North Fork Deep Creek"              "Buck Creek"                        
+##  [634] "Bitter Creek"                       "Buffalo Creek"                      " "                                 
+##  [637] "Indian Creek"                       " "                                  "East Fork Boulder River"           
+##  [640] " "                                  " "                                  " "                                 
+##  [643] " "                                  " "                                  "West Fork Little Timber Creek"     
+##  [646] " "                                  "Blakely Creek"                      " "                                 
+##  [649] " "                                  "Billman Creek"                      " "                                 
+##  [652] "Lost Creek"                         "Shields River"                      "Siggins Fork"                      
+##  [655] "Bullrun Creek"                      "Skunk Creek"                        "Fiddle Creek"                      
+##  [658] "Hammond Creek"                      " "                                  " "                                 
+##  [661] "Deaf Jim Creek"                     " "                                  " "                                 
+##  [664] "South Fork Flathead Creek"          " "                                  " "                                 
+##  [667] "Jungle Creek"                       " "                                  "West Fork Buffalo Creek"           
+##  [670] "Canyon Creek"                       " "                                  "Placer Basin Creek"                
+##  [673] "Buffalo Creek"                      " "                                  "Slough Creek"                      
+##  [676] "Crevice Creek"                      " "                                  " "                                 
+##  [679] " "                                  " "                                  " "                                 
+##  [682] " "                                  " "                                  " "                                 
+##  [685] " "                                  " "                                  "Slippery Creek"                    
+##  [688] " "                                  " "                                  "Trail Creek"                       
+##  [691] " "                                  "Greeley Creek"                      " "                                 
+##  [694] " "                                  "Deep Creek"                         "Horse Creek"                       
+##  [697] " "                                  "Winter Creek"                       " "                                 
+##  [700] "Spring Creek"                       " "                                  "Rock Creek"                        
+##  [703] " "                                  " "                                  "Shields River"                     
+##  [706] "Fridley Creek"                      "Cold Creek"                         "Arrow Canyon Creek"                
+##  [709] " "                                  " "                                  "Rescue Creek"                      
+##  [712] "Turkey Pen Creek"                   "Pine Creek"                         "Thompson Creek"                    
+##  [715] "Passage Creek"                      " "                                  " "                                 
+##  [718] " "                                  " "                                  "Lava Creek"                        
+##  [721] "Eagle Creek"                        "Little Trail Creek"                 " "                                 
+##  [724] "Shorty Creek"                       "Potter Creek"                       " "                                 
+##  [727] " "                                  " "                                  " "                                 
+##  [730] " "                                  " "                                  " "                                 
+##  [733] "South Fork Carrol Creek"            "Middle Fork Muddy Creek"            " "                                 
+##  [736] "Yellowstone River"                  "Hidden Creek"                       " "                                 
+##  [739] " "                                  "Cabin Creek"                        " "                                 
+##  [742] "Little Pine Creek"                  "South Fork Eightmile Creek"         "Grizzly Creek"                     
+##  [745] "West Fork Horse Creek"              " "                                  "Daniels Creek"                     
+##  [748] "Fleshman Creek"                     " "                                  " "                                 
+##  [751] "North Fork Lena Creek"              " "                                  " "                                 
+##  [754] "Elk Creek"                          " "                                  " "                                 
+##  [757] "East Fork Duck Creek"               "Sour Creek"                         " "                                 
+##  [760] " "                                  " "                                  " "                                 
+##  [763] "Bull Creek"                         "Copper Creek"                       " "                                 
+##  [766] " "                                  "West Fork Duck Creek"               "Beaverdam Creek"                   
+##  [769] " "                                  "South Fork Bull Creek"              "Whistle Creek"                     
+##  [772] " "                                  "South Fork Shields River"           " "                                 
+##  [775] " "                                  "Trail Creek"                        "Mendenhall Creek"                  
+##  [778] " "                                  " "                                  " "                                 
+##  [781] " "                                  "Rock Creek"                         "Mill Creek"                        
+##  [784] "Spring Creek"                       " "                                  "Goat Creek"                        
+##  [787] "Yellowstone River"                  " "                                  " "                                 
+##  [790] "Cottonwood Creek"                   "West Boulder River"                 "Meadow Creek"                      
+##  [793] " "                                  " "                                  " "                                 
+##  [796] " "                                  " "                                  "Little Timber Creek"               
+##  [799] "Cub Creek"                          "Lava Creek"                         " "                                 
+##  [802] "Yellowstone River"                  " "                                  "Lowell Creek"                      
+##  [805] "West Fork Spring Creek"             "Three Creeks"                       " "                                 
+##  [808] " "                                  " "                                  "Slough Creek"                      
+##  [811] " "                                  "Hellroaring Creek"                  "Second Fork West Fork Buffalo Fork"
+##  [814] "Arnica Creek"                       " "                                  "Open Creek"                        
+##  [817] " "                                  "Flathead Creek"                     " "                                 
+##  [820] " "                                  "Rapid Creek"                        " "                                 
+##  [823] " "                                  "West Fork Crevice Creek"            " "                                 
+##  [826] "Eightmile Creek"                    " "                                  " "                                 
+##  [829] "Obsidian Creek"                     "Brundage Creek"                     " "                                 
+##  [832] "Beaver Creek"                       "Flathead Creek"                     "Sixmile Creek"                     
+##  [835] " "                                  "Castle Creek"                       " "                                 
+##  [838] "South Fork Brackett Creek"          "Brackett Creek"                     "Middle Fork Dry Creek"             
+##  [841] "Yellowstone River"                  " "                                  "Dry Creek"                         
+##  [844] " "                                  "Bennett Creek"                      "South Cache Creek"                 
+##  [847] "Yellowstone River"                  " "                                  " "                                 
+##  [850] "Meatrack Creek"                     " "                                  " "                                 
+##  [853] " "                                  " "                                  "Sunlight Creek"                    
+##  [856] "Pine Creek"                         "Thorofare Creek"                    " "                                 
+##  [859] "Bear Creek"                         " "                                  " "                                 
+##  [862] "Yellowstone River"                  " "                                  "Alkali Creek"                      
+##  [865] "Boulder River"                      " "                                  " "                                 
+##  [868] " "                                  " "                                  "East Fork Boulder River"           
+##  [871] "Brackett Creek"                     " "                                  "Cache Creek"                       
+##  [874] "Fourmile Creek"                     "Rock Creek"                         " "                                 
+##  [877] "Dixon Creek"                        "Cole Creek"                         "East Fork Emigrant Creek"          
+##  [880] " "                                  "Coyote Creek"                       " "                                 
+##  [883] " "                                  " "                                  "Clear Creek"                       
+##  [886] "Falls Creek"                        " "                                  " "                                 
+##  [889] " "                                  " "                                  " "                                 
+##  [892] " "                                  "Lake Abundance Creek"               "East Fork Rock Creek"              
+##  [895] "Hellroaring Creek"                  " "                                  "Valley Fork"                       
+##  [898] " "                                  " "                                  "Rock Creek"                        
+##  [901] "Smith Creek"                        " "                                  " "                                 
+##  [904] "Mendenhall Creek"                   " "                                  "Specimen Creek"                    
+##  [907] " "                                  "West Boulder River"                 "North Fork Frazier Creek"          
+##  [910] "Elk Creek"                          " "                                  " "                                 
+##  [913] " "                                  "Mill Creek"                         "Chicken Creek"                     
+##  [916] "Potter Creek"                       "Tom Miner Creek"                    " "                                 
+##  [919] " "                                  " "                                  " "                                 
+##  [922] "Deep Creek"                         " "                                  " "                                 
+##  [925] " "                                  " "                                  " "                                 
+##  [928] " "                                  "Phelps Creek"                       "North Fork Bull Creek"             
+##  [931] " "                                  "Weasel Creek"                       " "                                 
+##  [934] " "                                  " "                                  " "                                 
+##  [937] " "                                  " "                                  "Cutoff Creek"                      
+##  [940] "Wallace Creek"                      " "                                  "Cole Creek"                        
+##  [943] " "                                  " "                                  "Snowslide Creek"                   
+##  [946] "Davis Creek"                        " "                                  " "                                 
+##  [949] " "                                  "Winter Creek"                       "Miller Creek"                      
+##  [952] " "                                  "Phelps Creek"                       " "                                 
+##  [955] " "                                  " "                                  " "                                 
+##  [958] " "                                  "Yellowstone River"                  " "                                 
+##  [961] "Serrett Creek"                      " "                                  "Trail Creek"                       
+##  [964] "West Fork Mill Creek"               " "                                  "North Fork Pine Creek"             
+##  [967] " "                                  "East Fork Buffalo Fork"             " "                                 
+##  [970] " "                                  "Slough Creek"                       " "                                 
+##  [973] "Howell Fork"                        " "                                  " "                                 
+##  [976] "Little Indian Creek"                " "                                  "Boulder River"                     
+##  [979] "Spring Creek"                       "Lava Creek"                         " "                                 
+##  [982] "Pole Creek"                         "Tom Miner Creek"                    "Speculator Creek"                  
+##  [985] " "                                  "Dry Creek"                          "Middle Fork Hellroaring Creek"     
+##  [988] " "                                  " "                                  " "                                 
+##  [991] " "                                  "Chicken Creek"                      "Emigrant Creek"                    
+##  [994] " "                                  " "                                  "Reeder Creek"                      
+##  [997] "Bailey Creek"                       " "                                  " "                                 
+## [1000] " "                                 
+##  [ reached getOption("max.print") -- omitted 3335 entries ]
+```
+
+```r
+# 
+# 
+# uyrw.flowline[rev(order(uyrw.flowline$surfarea)),]$gnis_name
+# 
+# names(uyrw.flowline)
+# unique(uyrw.flowline$surfarea)
+# which(uyrw.flowline$gnis_name == 'Mill Creek')
+
 # plot the watershed flowlines and water bodies as a png file
-if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
+if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
 {
   # render/write the plot
-  png(here(uyrw.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+  png(here(basins.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
 
     print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='greenyellow', border.col='yellowgreen') +
@@ -383,15 +734,15 @@ if(!file.exists(here(uyrw.metadata.df['img_flowline', 'file'])))
 }
 ```
 
-![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_flowlines.png)
+![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
 
 
 ```r
 # plot the watershed drainage basins and water bodies as a png file
-if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
+if(!file.exists(here(basins.metadata.df['img_basins', 'file'])))
 {
   # render/write the plot
-  png(here(uyrw.metadata.df['img_basins', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+  png(here(basins.metadata.df['img_basins', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
     
     print(tm_shape(uyrw.catchment, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='MAP_COLORS', border.col=NA) +
@@ -409,7 +760,7 @@ if(!file.exists(here(uyrw.metadata.df['img_basins', 'file'])))
 }
 ```
 
-![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/uyrw_basins.png)
+![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
 
 
 

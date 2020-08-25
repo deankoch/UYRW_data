@@ -9,8 +9,8 @@ output: github_document
 
 **get_DEM**: download a DEM and warp to our reference coordinate system 
 
-[get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md) and 
-[get_weatherstations.R](https://github.com/deankoch/URYW_data/blob/master/get_weatherstations.knit.md), 
+[get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/get_basins.knit.md) and 
+[get_weatherstations.R](https://github.com/deankoch/UYRW_data/blob/master/get_weatherstations.knit.md), 
 should be run before this script.
 
 ## libraries
@@ -18,7 +18,28 @@ should be run before this script.
 
 ```r
 library(raster)
+```
+
+```
+## Loading required package: sp
+```
+
+```r
 library(gdalUtils)
+```
+
+```
+## 
+## Attaching package: 'gdalUtils'
+```
+
+```
+## The following object is masked from 'package:sf':
+## 
+##     gdal_rasterize
+```
+
+```r
 library(FedData)
 library(sf)
 library(tmap)
@@ -35,16 +56,10 @@ graphics.dir = 'graphics'
 src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 
-# load metadata csv, CRS info list and watershed geometries from disk
+# load metadata csv, CRS info list and watershed polygon from disk
 basins.metadata.df = read.csv(here('data/basins_metadata.csv'), header=TRUE, row.names=1)
-weatherstation.metadata.df = read.csv(here('data/weatherstation_metadata.csv'), header=TRUE, row.names=1)
 crs.list = readRDS(here(basins.metadata.df['crs', 'file']))
 uyrw.poly = readRDS(here(basins.metadata.df['boundary', 'file']))
-uyrw.padded.poly = readRDS(here(weatherstation.metadata.df['boundary_padded', 'file']))
-uyrw.waterbody = readRDS(here(basins.metadata.df['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(basins.metadata.df['mainstem', 'file']))
-uyrw.flowline = readRDS(here(basins.metadata.df['flowline', 'file']))
-
 
 # this CSV file documents files written to the project data folder
 dem.metadata.file = 'data/dem_metadata.csv'
@@ -86,7 +101,7 @@ if(!file.exists(here(dem.metadata.file)))
 ```
 
 This list of files and descriptions is now stored as a
-[.csv file](https://github.com/deankoch/URYW_data/blob/master/data/dem_metadata.csv)
+[.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/dem_metadata.csv)
 in the `/data` directory.
 
 ## Download the DEM raster
@@ -175,7 +190,7 @@ if(!file.exists(here(dem.metadata.df['img_dem', 'file'])))
 }
 ```
 
-![elevation map of the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/dem.png)
+![elevation map of the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png)
 
 
 

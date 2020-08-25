@@ -10,7 +10,7 @@ output: github_document
 **get_streamgages**: finds stream sensor stations located in the UYRW
 
 
-[get_basins.R](https://github.com/deankoch/URYW_data/blob/master/get_basins.knit.md)
+[get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/get_basins.knit.md)
 which creates some required directories and project config files, should be run before this script.
 
 ## libraries
@@ -21,9 +21,7 @@ library(sf)
 library(tmap)
 library(here)
 library(dataRetrieval)
-library(waterData)
-#library(nhdplusTools)
-library('readtext')
+#?library(waterData)
 ```
 
 
@@ -86,7 +84,7 @@ if(!file.exists(here(streamgage.metadata.file)))
 ```
 
 This list of files and descriptions is now stored as a
-[.csv file](https://github.com/deankoch/URYW_data/blob/master/data/streamgage_metadata.csv)
+[.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/streamgage_metadata.csv)
 in the `/data` directory.
 
 ## Find sites
@@ -135,7 +133,7 @@ if(!file.exists(here(streamgage.metadata.df['USGS_sites.rdb', 'file'])))
   usgs.sfc = st_sfc(lapply(1:nrow(usgs.df), function(xx) st_point(sites.coords.matrix[xx,])), crs=crs.list$epsg.geo)
   usgs.sf = st_sf(cbind(usgs.df, usgs.sfc))
   
-  # transform to UTM and clip to URYW (11,000 data records identified, most of which are one-time)
+  # transform to UTM and clip to UYRW (11,000 data records identified, most of which are one-time)
   usgs.sf = st_transform(usgs.sf, crs=crs.list$epsg)
   usgs.sf = st_intersection(usgs.sf, uyrw.poly)
   
@@ -316,7 +314,7 @@ if(!file.exists(here(streamgage.metadata.df['img_streamgage', 'file'])))
 }
 ```
 
-![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/URYW_data/master/graphics/streamgage_sites.png)
+![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/streamgage_sites.png)
 
 
 
