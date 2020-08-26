@@ -322,23 +322,37 @@ uyrw.ylim.larger = crs.list$dims$ylim + (cex.ylim-1)*c(0,1)*diff(crs.list$dims$y
 # determine some reasonable dimensions (in pixels) for output
 flowlines.png.res = round(c(diff(uyrw.xlim.larger), diff(uyrw.ylim.larger))/100)
 
-# find some of the major watercourses and prepare labels for them
-uyrw.flowline[rev(order(uyrw.flowline$lengthkm)),]$gnis_name
-# 
-# 
-# uyrw.flowline[rev(order(uyrw.flowline$surfarea)),]$gnis_name
-# 
-# names(uyrw.flowline)
-# unique(uyrw.flowline$surfarea)
-# which(uyrw.flowline$gnis_name == 'Mill Creek')
+#######
+
+# identify "Mill Creek" from pilot study - this query actually returns 5 separate stream reaches
+millcreek.gniscodes = unique(uyrw.flowline$gnis_id[grepl('Mill Creek', uyrw.flowline$gnis_name, fixed=TRUE)])
+
+# identify the "Mill Creek" based on length - it is the longest of the stream reaches
+millcreek.gniscode = names(which.max(sapply(millcreek.gniscodes, function(gniscode) sum(uyrw.flowline[uyrw.flowline$gnis_id == gniscode,]$lengthkm))))
+millcreek.mainstem = uyrw.flowline[uyrw.flowline$gnis_id == millcreek.gniscode,]
+
+# find COMIDs of upstream tributaries, using COMID creek outlet (notice this searches our local copy of the data)
+millcreek.comids = get_UT(uyrw.flowline, millcreek.mainstem$comid[as.logical(millcreek.mainstem$divergence)])
+
+# query all upstream tributaries and their catchments
+millcreek.flowlines = uyrw.flowline[uyrw.flowline$comid %in% millcreek.comids,]
+millcreek.catchments = uyrw.catchment[uyrw.catchment$featureid %in% millcreek.comids,]
+
+# build a boundary polygon for this watershed
+millcreek.poly = fill_holes(st_union(millcreek.catchments, by_feature=FALSE), threshold=1e6)
+
+#######
+
 
 # plot the watershed flowlines and water bodies as a png file
 if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
 {
-  # render/write the plot
-  png(here(basins.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+  
 
-    print(tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
+  # render/write the plot
+  #png(here(basins.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=56)
+
+  tmap.watercourses = tm_shape(uyrw.poly, xlim=uyrw.xlim.larger, ylim=uyrw.ylim.larger) + 
             tm_polygons(col='greenyellow', border.col='yellowgreen') +
           tm_shape(uyrw.flowline) +
             tm_lines(col='dodgerblue3') +
@@ -346,6 +360,8 @@ if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
             tm_lines(col='dodgerblue4', lwd=2) +
           tm_shape(uyrw.waterbody) + 
             tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+          tm_shape(millcreek.poly) +
+            tm_polygons(col='purple', alpha=0.3, border.alpha=0) +
           tm_shape(poi.list$pt[['bigtimber']]) +   
             tm_dots(size=0.2, col='red') +
             tm_text('request', just='top', ymod=0.5, xmod=2.5, size=0.8) +
@@ -359,9 +375,12 @@ if(!file.exists(here(basins.metadata.df['img_flowline', 'file'])))
             tm_text('request', just='top', xmod=-4, size=0.8) +
           tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
           tm_scale_bar(breaks=c(0, 20, 40), position=c('center', 'bottom'), text.size=0.7) +
-          tm_layout(title='major watercourses in the UYRW', title.position=c('center', 'TOP'), frame=FALSE))
+          tm_layout(title='major watercourses in the UYRW', title.position=c('center', 'TOP'), frame=FALSE)
     
-  dev.off()
+  # render/write the plot
+  tmap_save(tm=tmap.watercourses, here(basins.metadata.df['img_flowline', 'file']), width=flowlines.png.res[1], height=flowlines.png.res[2], pointsize=16)
+  
+  #dev.off()
 }
 
 #' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
