@@ -6,5 +6,6 @@ README.html
 data/prepared
 data/source
 data/demo
+markdown/*.html
 *.rds
 project-howto-links.txt
