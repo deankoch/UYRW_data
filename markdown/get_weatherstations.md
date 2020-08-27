@@ -1,40 +1,42 @@
-#' ---
-#' title: "get_weatherstations.R"
-#' author: "Dean Koch"
-#' date: "August 13, 2020"
-#' output: github_document
-#' ---
-#'
-#' **MITACS UYRW project**
-#' 
-#' **get_weatherstations**: finds climatic sensor stations located in the UYRW
-#' 
-#' 
-#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
-#' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
-#' [`rnoaa`](https://github.com/ropensci/rnoaa ) package fetches
-#' [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description) data (see documentation 
-#' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)).
-#' We use them to build a map of climatic sensor stations in the UYRW, and to query historical data for model training.
-#' 
-#' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-#' which creates some required directories and project config files, should be run before this script.
+get\_weatherstations.R
+================
+Dean Koch
+August 13, 2020
 
-#'
-#' ## libraries
-#' 
+**MITACS UYRW project**
 
-#' `snotelr` and `rnoaa` are used to fetch data. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
-#' for other required libraries
+**get\_weatherstations**: finds climatic sensor stations located in the
+UYRW
+
+The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package
+fetches [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from
+the USDA; and the [`rnoaa`](https://github.com/ropensci/rnoaa) package
+fetches [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description)
+data (see documentation
+[here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)). We
+use them to build a map of climatic sensor stations in the UYRW, and to
+query historical data for model training.
+
+[get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
+which creates some required directories and project config files, should
+be run before this script.
+
+## libraries
+
+`snotelr` and `rnoaa` are used to fetch data. See the [get\_helperfun.R
+script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+for other required libraries
+
+``` r
 library(here)
 source(here('get_helperfun.R'))
 library(snotelr)
 library(rnoaa)
+```
 
-#'
-#' ## project data
+## project data
 
+``` r
 # load metadata csv, CRS info list and watershed geometries from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
@@ -91,13 +93,27 @@ files.towrite = list(
 
 # write this information to disk
 my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
+```
 
-#' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
-#' in the `/data` directory.
+    ## [1] "writing to data/get_weatherstations_metadata.csv"
 
-#' Climatic data near the boundaries of the watershed will be useful for interpolation.
-#' Define a padded boundary polygon to search inside for station data
+    ##                                                      file          type                                                            description
+    ## tmap.pars               data/get_weatherstations_tmap.rds R list object                parameters for writing png plots using tmap and tm_save
+    ## snotel.csv                   data/source/snotel_sites.csv           CSV                             metadata list for SNOTEL sites (unchanged)
+    ## snotel                     data/prepared/snotel_sites.rds   R sf object                        sfc object with SNOTEL sensor locations in UYRW
+    ## ghcnd.csv                     data/source/ghcnd_sites.csv           CSV                              metadata list for GHCND sites (unchanged)
+    ## ghcnd                       data/prepared/ghcnd_sites.rds   R sf object                    sfc object with GHCN Daily sensor locations in UYRW
+    ## boundary_padded    data/prepared/uyrw_boundary_padded.rds   R sf object padded watershed boundary polygon for querying nearby weather stations
+    ## img_weatherstation      graphics/weatherstation_sites.png   png graphic                   image of SNOTEL and GHCND site locations in the UYRW
+    ## metadata            data/get_weatherstations_metadata.csv           CSV                   list files of files written by get_weatherstations.R
+
+This list of files and descriptions is now stored as a [.csv
+file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
+in the `/data` directory. Climatic data near the boundaries of the
+watershed will be useful for interpolation. Define a padded boundary
+polygon to search inside for station data
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['boundary_padded', 'file'])))
 {
   # for now I use a 25km buffer
@@ -110,12 +126,14 @@ if(!file.exists(here(my_metadata('get_weatherstations')['boundary_padded', 'file
   uyrw.padded.poly = readRDS(here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
   
 }
+```
 
+## Find SNOTEL sites
 
-#'
-#' ## Find SNOTEL sites
-#' 
-#' the `snotel_info` function in `snotelr` downloads a CSV containing site IDs and coordinates
+the `snotel_info` function in `snotelr` downloads a CSV containing site
+IDs and coordinates
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['snotel.csv', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
@@ -125,8 +143,12 @@ if(!file.exists(here(my_metadata('get_weatherstations')['snotel.csv', 'file'])))
   file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(my_metadata('get_weatherstations')['snotel.csv', 'file']))
   
 }
+```
 
-#' Load this CSV, omit stations not in UYRW, and convert it to a `sf` object, then save to disk
+Load this CSV, omit stations not in UYRW, and convert it to a `sf`
+object, then save to disk
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['snotel', 'file'])))
 {
    # load the site info table into a data frame and extract coordinates
@@ -150,11 +172,14 @@ if(!file.exists(here(my_metadata('get_weatherstations')['snotel', 'file'])))
   snotel.sf = readRDS(here(my_metadata('get_weatherstations')['snotel', 'file']))
   
 }
+```
 
+## Find NOAA Global Historical Climatology Network (GHCN) Daily sites
 
-#'
-#' ## Find NOAA Global Historical Climatology Network (GHCN) Daily sites
-#' the `ghcnd_stations` function in `rnoaa` downloads a table of site IDs and coordinates
+the `ghcnd_stations` function in `rnoaa` downloads a table of site IDs
+and coordinates
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd.csv', 'file'])))
 {
   # download the metadata table and load into R (slow, 1-2min)
@@ -164,10 +189,14 @@ if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd.csv', 'file'])))
   write.csv(ghcnd.df, here(my_metadata('get_weatherstations')['ghcnd.csv', 'file']))
 
 }
+```
 
-#' Load this CSV. It indexed over 100,000 stations worldwide! This chunk transforms the coordinates to UTM,
-#' omits stations not in UYRW (leaving 138), converts the result to an `sf` object with one feature per station,
-#' and saves the result to disk
+Load this CSV. It indexed over 100,000 stations worldwide\! This chunk
+transforms the coordinates to UTM, omits stations not in UYRW (leaving
+138), converts the result to an `sf` object with one feature per
+station, and saves the result to disk
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd', 'file'])))
 {
 
@@ -219,12 +248,13 @@ if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd', 'file'])))
   ghcnd.sf = readRDS(here(my_metadata('get_weatherstations')['ghcnd', 'file']))
   
 } 
+```
 
-#'
-#' ## visualization
-#' 
+## visualization
 
-#' Set up the aesthetics to use for these types of plots
+Set up the aesthetics to use for these types of plots
+
+``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['tmap.pars', 'file'])))
 {
   # load the plotting parameters used in get_basins.R
@@ -267,9 +297,12 @@ if(!file.exists(here(my_metadata('get_weatherstations')['tmap.pars', 'file'])))
   tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
   
 } 
+```
 
-#' Start by preparing some data for a plot of precipitation sensors in the area of the UYRW
+Start by preparing some data for a plot of precipitation sensors in the
+area of the UYRW
 
+``` r
 # make a copy of the points datasets, omitting stations with only temperature data
 idx.onlytemp = is.na(ghcnd.sf$PRCP) & is.na(ghcnd.sf$SNWD) & is.na(ghcnd.sf$SNOW)
 precip.sf = ghcnd.sf[!idx.onlytemp,]
@@ -284,9 +317,11 @@ precip.sf$endyear[precip.sf$endyear == 2020] = NA
 
 # add a dummy column (containing a plot label) for indicating SNOTEL stations
 precip.sf$constant = 'SNOTEL station'
+```
 
-#' build the plot and write to disk
+build the plot and write to disk
 
+``` r
 # plot precipitation sensor station locations as a png file
 if(!file.exists(here(my_metadata('get_weatherstations')['img_weatherstation', 'file'])))
 {
@@ -316,19 +351,14 @@ if(!file.exists(here(my_metadata('get_weatherstations')['img_weatherstation', 'f
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+```
 
-#' ![weather stations in the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/weatherstation_sites.png)
+![weather stations in the
+UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/weatherstation_sites.png)
 
+Data downloads look like this:
 
-#+ include=FALSE
-# Development code
-
-#' Data downloads look like this:
-#' 
+``` r
 # xx = meteo_pull_monitors('US1MTPK0001')
 # yy = snotel_download(site_id = 363, internal=TRUE)
-
-
-#+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_weatherstations', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_weatherstations', '.md'))))
+```
