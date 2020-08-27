@@ -184,4 +184,15 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
     
   }
 }
+
+
+# convert start/end year columns from GHCN data to a single (string) column for each "element"
+my.ghcnd.reshape = function(idval, elemval)
+{
+  # query this combination of station id and element string in the full GHCND table
+  idx.row = (ghcnd.df$id == idval) & (ghcnd.df$element == elemval)
+  
+  # if it exists, return a string of form "start-end", otherwise NA
+  return(ifelse(!any(idx.row), NA, paste(ghcnd.df[idx.row, c('first_year', 'last_year')], collapse='-')))
+}
 ```

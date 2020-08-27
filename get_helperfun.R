@@ -178,6 +178,16 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
 }
 
 
+# convert start/end year columns from GHCN data to a single (string) column for each "element"
+my.ghcnd.reshape = function(idval, elemval)
+{
+  # query this combination of station id and element string in the full GHCND table
+  idx.row = (ghcnd.df$id == idval) & (ghcnd.df$element == elemval)
+  
+  # if it exists, return a string of form "start-end", otherwise NA
+  return(ifelse(!any(idx.row), NA, paste(ghcnd.df[idx.row, c('first_year', 'last_year')], collapse='-')))
+}
+
 #+ include=FALSE
 # render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
 #rmarkdown::render(here(paste0('get_helperfun', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_helperfun', '.md'))))

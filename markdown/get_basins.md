@@ -20,10 +20,6 @@ some basic info on the hydrology of the UYRW upstream of Big Timber,
 Montana, transforming that data into a more convenient format, and
 producing some plots giving an overview of the watershed.
 
-``` r
-script.name = 'get_basins'
-```
-
 ## libraries
 
 The `here` package defines working directories in a way that makes the
@@ -143,7 +139,7 @@ files.towrite = list(
      description='image of some 2000 drainage basins in the UYRW'))
 
 # write this information to disk
-my_metadata(script.name, files.towrite, overwrite=TRUE)
+my_metadata('get_basins', files.towrite, overwrite=TRUE)
 ```
 
     ## [1] "writing to data/get_basins_metadata.csv"
@@ -184,7 +180,7 @@ things all over again.
 
 ``` r
 # define a file containing points-of-interest, their comids, and plotting labels
-if(!file.exists(here(my_metadata(script.name)['poi', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['poi', 'file'])))
 {
   # define some points of interest in the watershed
   poi.name = c(cartersbridge = "Carter's Bridge, MT",
@@ -202,12 +198,12 @@ if(!file.exists(here(my_metadata(script.name)['poi', 'file'])))
   
   # compile into a list and save to disk
   poi.list = list(name = poi.name, pt = poi.pt, comid = poi.comid)
-  saveRDS(poi.list, here(my_metadata(script.name)['poi', 'file']))
+  saveRDS(poi.list, here(my_metadata('get_basins')['poi', 'file']))
   
 } else {
   
   # load from disk 
-  poi.list = readRDS(here(my_metadata(script.name)['poi', 'file']))
+  poi.list = readRDS(here(my_metadata('get_basins')['poi', 'file']))
 }
 ```
 
@@ -220,7 +216,7 @@ data. These next few lines use the first entry of `poi.list$comid`
 relevant watershed geometries.
 
 ``` r
-if(!file.exists(here(my_metadata(script.name)['nhd', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
   uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid[1]), mode='upstreamTributaries', data_source = '')
@@ -229,7 +225,7 @@ if(!file.exists(here(my_metadata(script.name)['nhd', 'file'])))
   print(uyrw.flowlines$nhdplus_comid)
   
   # download geometries defining catchements, water bodies, and the full flowline network
-  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(my_metadata(script.name)['nhd', 'file']), nhdplus_data='download')
+  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(my_metadata('get_basins')['nhd', 'file']), nhdplus_data='download')
 }
 ```
 
@@ -241,10 +237,10 @@ a reference system more appropriate for hydrology modeling, then
 computes the bounding box extent.
 
 ``` r
-if(any(!file.exists(here(my_metadata(script.name)[c('boundary','crs'), 'file']))))
+if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file']))))
 {
   # load the watershed catchments. There are several thousand
-  uyrw.catchment = read_sf(here(my_metadata(script.name)['nhd', 'file']), 'CatchmentSP')
+  uyrw.catchment = read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
   
   # Their union delineates the entire UYR watershed as a single polygon
@@ -277,14 +273,14 @@ if(any(!file.exists(here(my_metadata(script.name)[c('boundary','crs'), 'file']))
                   dims = list(xlim=uyrw.xlim, ylim=uyrw.ylim))
   
   # save to disk
-  saveRDS(crs.list, here(my_metadata(script.name)['crs', 'file']))
-  saveRDS(uyrw.poly, here(my_metadata(script.name)['boundary', 'file']))
+  saveRDS(crs.list, here(my_metadata('get_basins')['crs', 'file']))
+  saveRDS(uyrw.poly, here(my_metadata('get_basins')['boundary', 'file']))
   
 } else {
   
   # load CRS info list and watershed boundary from disk
-  crs.list = readRDS(here(my_metadata(script.name)['crs', 'file']))
-  uyrw.poly = readRDS(here(my_metadata(script.name)['boundary', 'file']))
+  crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
+  uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 }
 ```
 
@@ -302,12 +298,12 @@ outside this watershed, so we clean up the sfc objects before
 continuing.
 
 ``` r
-if(any(!file.exists(here(my_metadata(script.name)[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
+if(any(!file.exists(here(my_metadata('get_basins')[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
-  uyrw.catchment = st_transform(read_sf(here(my_metadata(script.name)['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
-  uyrw.flowline = st_transform(read_sf(here(my_metadata(script.name)['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
-  uyrw.waterbody = st_transform(read_sf(here(my_metadata(script.name)['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
+  uyrw.catchment = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
+  uyrw.flowline = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
+  uyrw.waterbody = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
   
   # fix invalid geometries and mask with watershed boundary
   uyrw.waterbody = st_intersection(st_make_valid(uyrw.waterbody), uyrw.poly)
@@ -319,18 +315,18 @@ if(any(!file.exists(here(my_metadata(script.name)[c('catchment', 'waterbody', 'f
   uyrw.mainstem = st_make_valid(st_union(uyrw.mainstem, by_feature=FALSE))
   
   # save to disk
-  saveRDS(uyrw.catchment, here(my_metadata(script.name)['catchment', 'file']))
-  saveRDS(uyrw.flowline, here(my_metadata(script.name)['flowline', 'file']))
-  saveRDS(uyrw.waterbody, here(my_metadata(script.name)['waterbody', 'file']))
-  saveRDS(uyrw.mainstem, here(my_metadata(script.name)['mainstem', 'file']))
+  saveRDS(uyrw.catchment, here(my_metadata('get_basins')['catchment', 'file']))
+  saveRDS(uyrw.flowline, here(my_metadata('get_basins')['flowline', 'file']))
+  saveRDS(uyrw.waterbody, here(my_metadata('get_basins')['waterbody', 'file']))
+  saveRDS(uyrw.mainstem, here(my_metadata('get_basins')['mainstem', 'file']))
   
 } else {
   
   # load from disk
-  uyrw.catchment = readRDS(here(my_metadata(script.name)['catchment', 'file']))
-  uyrw.flowline = readRDS(here(my_metadata(script.name)['flowline', 'file']))
-  uyrw.waterbody = readRDS(here(my_metadata(script.name)['waterbody', 'file']))
-  uyrw.mainstem = readRDS(here(my_metadata(script.name)['mainstem', 'file']))
+  uyrw.catchment = readRDS(here(my_metadata('get_basins')['catchment', 'file']))
+  uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
+  uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
+  uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
   
 }
 ```
@@ -340,7 +336,7 @@ the Mill Creek, MT watershed. Define this subset of the UYRW and save
 those geometries to disk:
 
 ``` r
-if(!file.exists(here(my_metadata(script.name)['millcreek', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['millcreek', 'file'])))
 {
   # identify "Mill Creek" from pilot study - this query actually returns 5 separate stream reaches
   millcreek.gniscodes = unique(uyrw.flowline$gnis_id[grepl('Mill Creek', uyrw.flowline$gnis_name, fixed=TRUE)])
@@ -361,12 +357,12 @@ if(!file.exists(here(my_metadata(script.name)['millcreek', 'file'])))
   
   # pile everything into a list and save to disk
   millcreek.list = list(boundary=millcreek.poly, flowlines=millcreek.flowlines, catchments=millcreek.catchments)
-  saveRDS(millcreek.list, here(my_metadata(script.name)['millcreek', 'file']))
+  saveRDS(millcreek.list, here(my_metadata('get_basins')['millcreek', 'file']))
   
 } else {
   
   # load from disk
-  millcreek.list = readRDS(here(my_metadata(script.name)['millcreek', 'file']))
+  millcreek.list = readRDS(here(my_metadata('get_basins')['millcreek', 'file']))
 }
 ```
 
@@ -377,7 +373,7 @@ watershed features now loaded into R. First define and save some
 graphical parameters for consistency among plots and tidier code
 
 ``` r
-if(!file.exists(here(my_metadata(script.name)['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
 {
   # parameter values go into a list
   tmap.pars = list(
@@ -398,19 +394,19 @@ if(!file.exists(here(my_metadata(script.name)['tmap.pars', 'file'])))
   )
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata(script.name)['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_basins')['tmap.pars', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata(script.name)['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
 }
 ```
 
 plot the watershed flowlines and water bodies as a png file
 
 ``` r
-if(!file.exists(here(my_metadata(script.name)['img_flowline', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['img_flowline', 'file'])))
 {
   # make the plot grob
   tmap.watercourses = 
@@ -434,7 +430,7 @@ if(!file.exists(here(my_metadata(script.name)['img_flowline', 'file'])))
   
   # render the plot
   tmap_save(tm=tmap.watercourses, 
-            here(my_metadata(script.name)['img_flowline', 'file']), 
+            here(my_metadata('get_basins')['img_flowline', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
@@ -449,7 +445,7 @@ physical width of the stream).
 
 ``` r
 # plot the watershed drainage basins and water bodies as a png file
-if(!file.exists(here(my_metadata(script.name)['img_basins', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
 {
   tmap.basins = 
     tm_shape(uyrw.poly) +
@@ -467,7 +463,7 @@ if(!file.exists(here(my_metadata(script.name)['img_basins', 'file'])))
 
   # render the plot
   tmap_save(tm=tmap.basins, 
-            here(my_metadata(script.name)['img_basins', 'file']), 
+            here(my_metadata('get_basins')['img_basins', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
