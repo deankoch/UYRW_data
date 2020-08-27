@@ -5,8 +5,7 @@ We are a team of mathematicians, statisticians, and ecologists, conducting a mul
 ## R code
 
 The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model:
-
-* [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/get_basins.knit.md)
+* [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using `nhdplusTools`
 * [get_weatherstations.R](https://github.com/deankoch/UYRW_data/blob/master/get_weatherstations.knit.md)
 finds SNOTEL and NOAA climatic sensor station data using `snotelr` and `rnoaa`
