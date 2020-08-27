@@ -25,7 +25,8 @@ script.name = 'get_basins'
 #' The `here` package defines working directories in a way that makes the code portable
 library(here)
 
-#' Start by sourcing the "get_helperfun.R" script, which sets up required libraries, directories, and helper functions
+#' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+#' which sets up required libraries, directories, and defines some utility functions
 source(here('get_helperfun.R'))
 
 #' Some additional packages are needed in this script: `nhdplusTools` fetches data from the USGS, `smoothr` simplifies

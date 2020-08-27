@@ -33,8 +33,10 @@ code portable
 library(here)
 ```
 
-Start by sourcing the “get\_helperfun.R” script, which sets up required
-libraries, directories, and helper functions
+Start by sourcing the [get\_helperfun.R
+script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+which sets up required libraries, directories, and defines some utility
+functions
 
 ``` r
 source(here('get_helperfun.R'))
@@ -52,8 +54,20 @@ github using devtools
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
+```
+
+    ## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
+
+``` r
 library(smoothr)
 ```
+
+    ## 
+    ## Attaching package: 'smoothr'
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     smooth
 
 ## metadata
 
