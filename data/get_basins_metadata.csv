@@ -1,4 +1,5 @@
 "","file","type","description"
+"tmap.pars","data/get_basins_tmap.rds","R list object","parameters for writing png plots using tmap and tm_save"
 "poi","data/uyrw_poi.rds","R list object","points of interest in the watershed"
 "nhd","data/source/uyrw_nhd.gpkg","geopackage","source geometries from NHDPlus"
 "crs","data/uyrw_crs.rds","R list object","details of projection/extent for the project"
