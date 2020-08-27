@@ -1,4 +1,7 @@
 "","file","type","description"
+"tmap.pars","data/get_streamgages_tmap.rds","R list object","parameters for writing png plots using tmap and tm_save"
+"USGS_paramcodes","data/USGS_paramcodes.csv","CSV","description of codes used in parameter_cd column of NWIS dataframe on time-series"
 "USGS_sites.rdb","data/source/USGS_sites.rdb","USGS rdb file","results of USGS Site web service search for sites in UYRW"
 "USGS_sites.sfc","data/prepared/USGS_sites.rds","R sf object","sfc object with USGS sensor locations in UYRW"
 "img_streamgage","graphics/streamgage_sites.png","png graphic","image of stream gage locations in the UYRW"
+"metadata","data/get_streamgages_metadata.csv","CSV","list files of files written by get_streamgages.R"

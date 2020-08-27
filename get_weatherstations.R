@@ -304,7 +304,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['img_weatherstation', 'f
                 tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
                   tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
                 tm_shape(precip.sf) +
-                tmap.pars$dots + 
+                  tmap.pars$dots + 
                 tmap.pars$layout +
                 tm_layout(main.title='GHCN (daily) precipitation records in the UYRW')
   
