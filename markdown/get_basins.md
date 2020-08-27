@@ -54,20 +54,8 @@ github using devtools
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
-```
-
-    ## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
-
-``` r
 library(smoothr)
 ```
-
-    ## 
-    ## Attaching package: 'smoothr'
-
-    ## The following object is masked from 'package:stats':
-    ## 
-    ##     smooth
 
 ## metadata
 
@@ -136,6 +124,12 @@ files.towrite = list(
      type='R list object', 
      description='flowlines, catchments, and boundary polygon for mill creek'),
    
+   # aesthetic parameters for plotting
+   c(name='tmap.pars',
+     file=file.path(data.dir, 'get_basins_tmap.rds'), 
+     type='R list object', 
+     description='parameters for writing png plots using tmap and tm_save'),
+   
    # a graphic showing flowlines in study area
    c(name='img_flowlines',
      file=file.path(graphics.dir, 'uyrw_flowlines.png'),
@@ -155,6 +149,7 @@ my_metadata(script.name, files.towrite, overwrite=TRUE)
     ## [1] "writing to data/get_basins_metadata.csv"
 
     ##                                               file          type                                                      description
+    ## tmap.pars                 data/get_basins_tmap.rds R list object          parameters for writing png plots using tmap and tm_save
     ## poi                              data/uyrw_poi.rds R list object                              points of interest in the watershed
     ## nhd                      data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
     ## crs                              data/uyrw_crs.rds R list object                     details of projection/extent for the project
@@ -382,22 +377,34 @@ watershed features now loaded into R. First define and save some
 graphical parameters for consistency among plots and tidier code
 
 ``` r
-tmap.pars = list(
+if(!file.exists(here(my_metadata(script.name)['tmap.pars', 'file'])))
+{
+  # parameter values go into a list
+  tmap.pars = list(
+    
+    # parameters for the PNG write device
+    png = c(w=1200, h=2000, pt=12),
+    
+    # aesthetics for lat/long gridlines, scalebar, title position
+    layout = tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
+      tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.7) +
+      tm_layout(title.position=c('center', 'top'), 
+                frame=FALSE, 
+                inner.margins=c(0,0,0.1,0)),
+    
+    # parameters for labels
+    label.txt.size = 0.7
+    
+  )
   
-  # parameters for the PNG write device
-  png = c(w=1200, h=2000, pt=12),
+  # save to disk
+  saveRDS(tmap.pars, here(my_metadata(script.name)['tmap.pars', 'file']))
   
-  # aesthetics for lat/long gridlines, scalebar, title position
-  layout = tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
-    tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.7) +
-    tm_layout(title.position=c('center', 'top'), 
-              frame=FALSE, 
-              inner.margins=c(0,0,0.1,0)),
+} else {
   
-  # parameters for labels
-  label.txt.size = 0.7
-  
-)
+  # load from disk
+  tmap.pars = readRDS(here(my_metadata(script.name)['tmap.pars', 'file']))
+}
 ```
 
 plot the watershed flowlines and water bodies as a png file
