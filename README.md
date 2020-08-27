@@ -5,13 +5,13 @@ We are a team of mathematicians, statisticians, and ecologists, conducting a mul
 ## R code
 
 The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model:
-* [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
+* [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using `nhdplusTools`
-* [get_weatherstations.R](https://github.com/deankoch/UYRW_data/blob/master/get_weatherstations.knit.md)
+* [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
 finds SNOTEL and NOAA climatic sensor station data using `snotelr` and `rnoaa`
-* [get_dem.R](https://github.com/deankoch/UYRW_data/blob/master/get_dem.knit.md)
+* [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
 downloads and processes the National Elevation Dataset from USGS using `FedData`
-* [get_streamgages.R](https://github.com/deankoch/UYRW_data/blob/master/get_streamgages.knit.md)
+* [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
 finds streamflow and groundwater sensor data from the USGS NWIS using `dataRetrieval`
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
