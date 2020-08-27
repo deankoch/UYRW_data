@@ -1,50 +1,70 @@
-#' ---
-#' title: "get_basins.R"
-#' author: "Dean Koch"
-#' date: "August 12, 2020"
-#' output: github_document
-#' ---
-#'
-#' **MITACS UYRW project** 
-#' 
-#' **get_basins**: loads watershed geometry data into R
-#' 
-#' This mostly follows the example on the `nhdplusTools` github page with some minor modifications.
-#' A user guide for the NHDPlus dataset is
-#' <a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
-#' <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
-#' 
-#' The `nhdplusTools` package fetches NHDPlus products from the web without having to navigate the USGS
-#' website. This script uses it to assemble some basic info on the hydrology of the UYRW upstream of Big Timber, Montana,
-#' transforming that data into a more convenient format, and producing some plots giving an overview of the watershed.
+get\_basins.R
+================
+Dean Koch
+August 12, 2020
+
+**MITACS UYRW project**
+
+**get\_basins**: loads watershed geometry data into R
+
+This mostly follows the example on the `nhdplusTools` github page with
+some minor modifications. A user guide for the NHDPlus dataset is
+<a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available
+here</a>, and a
+<a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary
+here</a>.
+
+The `nhdplusTools` package fetches NHDPlus products from the web without
+having to navigate the USGS website. This script uses it to assemble
+some basic info on the hydrology of the UYRW upstream of Big Timber,
+Montana, transforming that data into a more convenient format, and
+producing some plots giving an overview of the watershed.
+
+``` r
 script.name = 'get_basins'
+```
 
-#'
-#' ## libraries
+## libraries
 
-#' The `here` package defines working directories in a way that makes the code portable
+The `here` package defines working directories in a way that makes the
+code portable
+
+``` r
 library(here)
+```
 
-#' Start by sourcing the "get_helperfun.R" script, which sets up required libraries, directories, and helper functions
+Start by sourcing the “get\_helperfun.R” script, which sets up required
+libraries, directories, and helper functions
+
+``` r
 source(here('get_helperfun.R'))
+```
 
-#' Some additional packages are needed in this script: `nhdplusTools` fetches data from the USGS, `smoothr` simplifies
-#' complex spatial features, and `AOI` interfaces with OpenStreetMaps (OSM) to get the latitude/longitude pair
-#' corresponding to a placename. `AOI` is not on CRAN, so install it by uncommenting the two lines below to install from
-#' github using devtools
+Some additional packages are needed in this script: `nhdplusTools`
+fetches data from the USGS, `smoothr` simplifies complex spatial
+features, and `AOI` interfaces with OpenStreetMaps (OSM) to get the
+latitude/longitude pair corresponding to a placename. `AOI` is not on
+CRAN, so install it by uncommenting the two lines below to install from
+github using devtools
+
+``` r
 #library(devtools)
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
 library(smoothr)
+```
 
-#'
-#' ## metadata
-#' All of the files written to disk by this script will by listed in a CSV file with a short description. A helper function
-#' handles the addition and updating of its entries. We create the CSV file now, and update it every time a new file is written.
-#' Whenever a script writes files to disk, they will be documented in this way, and the script will begin by defining a list in
-#' the form below:  
+## metadata
 
+All of the files written to disk by this script will by listed in a CSV
+file with a short description. A helper function handles the addition
+and updating of its entries. We create the CSV file now, and update it
+every time a new file is written. Whenever a script writes files to
+disk, they will be documented in this way, and the script will begin by
+defining a list in the form below:
+
+``` r
 # descriptions of all files created by this script:
 files.towrite = list(
   
@@ -116,25 +136,44 @@ files.towrite = list(
 
 # write this information to disk
 my_metadata(script.name, files.towrite, overwrite=TRUE)
+```
 
-#' The list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
-#' in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
-#' shared in this repository (see my 
-#' [.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 
-#' However you can reproduce all of them by running this script.
+    ## [1] "writing to data/get_basins_metadata.csv"
 
+    ##                                               file          type                                                      description
+    ## poi                              data/uyrw_poi.rds R list object                              points of interest in the watershed
+    ## nhd                      data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
+    ## crs                              data/uyrw_crs.rds R list object                     details of projection/extent for the project
+    ## boundary       data/prepared/uyrw_nhd_boundary.rds  R sfc object UYRW watershed boundary polygon derived from NHDPlus catchements
+    ## mainstem       data/prepared/uyrw_nhd_mainstem.rds  R sfc object       UYR main stem line geometry derived from NHDPlus flowlines
+    ## catchment     data/prepared/uyrw_nhd_catchment.rds   R sf object                  reprojected/repaired NHDPlus catchment polygons
+    ## waterbody     data/prepared/uyrw_nhd_waterbody.rds   R sf object                 reprojected/repaired NHDPlus water body polygons
+    ## flowline       data/prepared/uyrw_nhd_flowline.rds   R sf object                 reprojected/repaired NHDPlus flowline geometries
+    ## millcreek          data/prepared/millcreek_nhd.rds R list object       flowlines, catchments, and boundary polygon for mill creek
+    ## img_flowlines          graphics/uyrw_flowlines.png   png graphic                   image of flowlines in the UYRW with placenames
+    ## img_basins                graphics/uyrw_basins.png   png graphic                   image of some 2000 drainage basins in the UYRW
+    ## metadata              data/get_basins_metadata.csv           CSV                      list files of files written by get_basins.R
 
-#'
-#' ## starting location
-#' 
-#' To define the watershed, we need a starting location. In this example, we identify the main outlet of the watershed at Carter's Bridge,
-#' a fishing access bridge near Livinston, MT. The UYRW is then defined to include all catchments upstream. 
-#' 
-#' We locate Carter's Bridge in R using the `AOI` package, then use the `nhdplusTools` to explore upstream. Later on, we can load this
-#' information from disk instead of querying OSM and USGS and computing things all over again.
-#' 
+The list of files and descriptions is now stored as a [.csv
+file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
+in the `/data` directory. Since github is not meant for hosting large
+binaries, some of these files are not shared in this repository (see my
+[.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore)
+file). However you can reproduce all of them by running this script.
 
+## starting location
+
+To define the watershed, we need a starting location. In this example,
+we identify the main outlet of the watershed at Carter’s Bridge, a
+fishing access bridge near Livinston, MT. The UYRW is then defined to
+include all catchments upstream.
+
+We locate Carter’s Bridge in R using the `AOI` package, then use the
+`nhdplusTools` to explore upstream. Later on, we can load this
+information from disk instead of querying OSM and USGS and computing
+things all over again.
+
+``` r
 # define a file containing points-of-interest, their comids, and plotting labels
 if(!file.exists(here(my_metadata(script.name)['poi', 'file'])))
 {
@@ -161,13 +200,17 @@ if(!file.exists(here(my_metadata(script.name)['poi', 'file'])))
   # load from disk 
   poi.list = readRDS(here(my_metadata(script.name)['poi', 'file']))
 }
+```
 
-#'
-#' ## download the data
-#' package `nhdplusTools` uses the NHD's common identifier number (COMID) from Big Timber to delineate the watershed and
-#' download the relevant data. These next few lines use the first entry of `poi.list$comid` (Carter's Bridge) as the outlet
-#' location from which to find and download relevant watershed geometries.
-#' 
+## download the data
+
+package `nhdplusTools` uses the NHD’s common identifier number (COMID)
+from Big Timber to delineate the watershed and download the relevant
+data. These next few lines use the first entry of `poi.list$comid`
+(Carter’s Bridge) as the outlet location from which to find and download
+relevant watershed geometries.
+
+``` r
 if(!file.exists(here(my_metadata(script.name)['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
@@ -179,12 +222,16 @@ if(!file.exists(here(my_metadata(script.name)['nhd', 'file'])))
   # download geometries defining catchements, water bodies, and the full flowline network
   subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(my_metadata(script.name)['nhd', 'file']), nhdplus_data='download')
 }
+```
 
-#'
-#' ## watershed boundary and projection
-#' Once the data are downloaded, we load them into R as sfc objects for processing. This code chunk reprojects the watershed
-#' boundary polygon to a reference system more appropriate for hydrology modeling, then computes the bounding box extent.
-#' 
+## watershed boundary and projection
+
+Once the data are downloaded, we load them into R as sfc objects for
+processing. This code chunk reprojects the watershed boundary polygon to
+a reference system more appropriate for hydrology modeling, then
+computes the bounding box extent.
+
+``` r
 if(any(!file.exists(here(my_metadata(script.name)[c('boundary','crs'), 'file']))))
 {
   # load the watershed catchments. There are several thousand
@@ -230,17 +277,22 @@ if(any(!file.exists(here(my_metadata(script.name)[c('boundary','crs'), 'file']))
   crs.list = readRDS(here(my_metadata(script.name)['crs', 'file']))
   uyrw.poly = readRDS(here(my_metadata(script.name)['boundary', 'file']))
 }
+```
 
-#' Note that holes in this watershed boundary polygon can emerge, when the catchement boundaries don't perfectly align - *eg.* try
-#' plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
+Note that holes in this watershed boundary polygon can emerge, when the
+catchement boundaries don’t perfectly align - *eg.* try plotting
+`st_union(uyrw.catchment)`. These are filled using the *fill\_holes*
+function in the `smoothr`package.
 
+## data prep
 
-#'
-#' ## data prep
-#' 
-#' With the watershed boundaries and projection so defined, we can now transform the rest of the data. Files fetched by `nhdplusTools`
-#' may include some invalid geometries (self-intersections) and features lying outside this watershed, so we clean up the sfc objects
-#' before continuing.
+With the watershed boundaries and projection so defined, we can now
+transform the rest of the data. Files fetched by `nhdplusTools` may
+include some invalid geometries (self-intersections) and features lying
+outside this watershed, so we clean up the sfc objects before
+continuing.
+
+``` r
 if(any(!file.exists(here(my_metadata(script.name)[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
@@ -272,10 +324,13 @@ if(any(!file.exists(here(my_metadata(script.name)[c('catchment', 'waterbody', 'f
   uyrw.mainstem = readRDS(here(my_metadata(script.name)['mainstem', 'file']))
   
 }
+```
 
+In a small pilot study leading up to this project, SWAT+ was fitted to
+the Mill Creek, MT watershed. Define this subset of the UYRW and save
+those geometries to disk:
 
-#' In a small pilot study leading up to this project, SWAT+ was fitted to the Mill Creek, MT watershed.
-#' Define this subset of the UYRW and save those geometries to disk:
+``` r
 if(!file.exists(here(my_metadata(script.name)['millcreek', 'file'])))
 {
   # identify "Mill Creek" from pilot study - this query actually returns 5 separate stream reaches
@@ -304,15 +359,15 @@ if(!file.exists(here(my_metadata(script.name)['millcreek', 'file'])))
   # load from disk
   millcreek.list = readRDS(here(my_metadata(script.name)['millcreek', 'file']))
 }
+```
 
+## visualization
 
+using the `tmap` package, we will make a few plots showing some of the
+watershed features now loaded into R. First define and save some
+graphical parameters for consistency among plots and tidier code
 
-
-#'
-#' ## visualization
-#' using the `tmap` package, we will make a few plots showing some of the watershed features now loaded into R. 
-#' First define and save some graphical parameters for consistency among plots and tidier code
-#' 
+``` r
 tmap.pars = list(
   
   # parameters for the PNG write device
@@ -329,8 +384,11 @@ tmap.pars = list(
   label.txt.size = 0.7
   
 )
+```
 
-#' plot the watershed flowlines and water bodies as a png file
+plot the watershed flowlines and water bodies as a png file
+
+``` r
 if(!file.exists(here(my_metadata(script.name)['img_flowline', 'file'])))
 {
   # make the plot grob
@@ -360,11 +418,15 @@ if(!file.exists(here(my_metadata(script.name)['img_flowline', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+```
 
-#' ![flowlines of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
-#' Line widths are scaled in this plot according to the Strahler method, using the variable 'streamorde' from NHDPlus
-#' (they do not represent physical width of the stream).
+![flowlines of the Upper Yellowstone and
+tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
+Line widths are scaled in this plot according to the Strahler method,
+using the variable ‘streamorde’ from NHDPlus (they do not represent
+physical width of the stream).
 
+``` r
 # plot the watershed drainage basins and water bodies as a png file
 if(!file.exists(here(my_metadata(script.name)['img_basins', 'file'])))
 {
@@ -389,38 +451,7 @@ if(!file.exists(here(my_metadata(script.name)['img_basins', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+```
 
-#' ![Drainage basins of the Upper Yellowstone and tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
-
-
-#+ include=FALSE
-# Development code
-
-# there is another layer here called NHDArea
-st_layers(here(my_metadata(script.name)['nhd', 'file']))
-
-
-#+ include=FALSE
-####
-# testing to make sure we get the same number of catchments if we download everything in pieces (to avoid warning):
-# uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
-# testfiles = sapply(1:10, function(x) here(paste0('data/source/nhd_test', x, '.gpkg')))
-# idx.storage = rep(1:10, each=length(uyrw.flowlines$nhdplus_comid)/10)
-# for(idx in 1:10)
-# {
-#   testcomids = uyrw.flowlines$nhdplus_comid[idx.storage==idx]
-#   subset_nhdplus(comids=testcomids, output_file=testfiles[idx], nhdplus_data='download')
-# }
-# testcatch = vector(mode='list', length=10)
-# for(idx in 1:10)
-# {
-#   testcatch[[idx]] = read_sf(testfiles[idx], 'CatchmentSP')
-# }
-# xx = do.call(rbind, testcatch)
-# nrow(xx)
-# 4162, same as before. A plot of the flowlines also matches with earlier. I think we are good.
-####
-
-#+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0(script.name, '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0(script.name, '.md'))))
+![Drainage basins of the Upper Yellowstone and
+tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
