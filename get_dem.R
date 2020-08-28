@@ -150,7 +150,7 @@ if(!file.exists(here(my_metadata('get_dem')['tmap.pars', 'file'])))
 # plot DEM raster as a png file
 if(!file.exists(here(my_metadata('get_dem')['img_dem', 'file'])))
 {
-  tmap.dem = tm_shape(dem.tif, raster.downsample=T, bbox=st_bbox(uyrw.poly)) +
+  tmap.dem = tm_shape(dem.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
       tm_raster(palette='viridis', title='elevation (m)', style='cont') +
     tm_shape(uyrw.poly) +
       tm_borders(col='white') +
