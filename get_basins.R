@@ -24,7 +24,7 @@
 #' The `here` package defines working directories in a way that makes the code portable
 library(here)
 
-#' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+#' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' which sets up required libraries, directories, and defines some utility functions
 source(here('get_helperfun.R'))
 

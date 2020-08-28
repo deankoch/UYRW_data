@@ -24,7 +24,7 @@ be run before this script.
 ## libraries
 
 `snotelr` and `rnoaa` are used to fetch data. See the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
 ``` r

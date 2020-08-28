@@ -15,7 +15,7 @@ should be run before this script.
 ## libraries
 
 `FedData` is used to fetch the USGS data. See the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
 ``` r

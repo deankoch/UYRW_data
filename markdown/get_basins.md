@@ -30,7 +30,7 @@ library(here)
 ```
 
 Start by sourcing the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 which sets up required libraries, directories, and defines some utility
 functions
 

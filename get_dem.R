@@ -16,7 +16,7 @@
 #'
 #' ## libraries
 #' `FedData` is used to fetch the USGS data. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
 source(here('get_helperfun.R'))
