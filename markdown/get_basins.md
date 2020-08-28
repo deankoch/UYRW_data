@@ -288,10 +288,10 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
 }
 ```
 
-Note that holes in this watershed boundary polygon can emerge, when the
-catchement boundaries don’t perfectly align - *eg.* try plotting
-`st_union(uyrw.catchment)`. These are filled using the *fill\_holes*
-function in the `smoothr`package.
+Note that holes in this watershed boundary polygon can emerge, such as
+when the catchement boundaries don’t perfectly align - see this by
+plotting `st_union(uyrw.catchment)`. These are filled using the
+*fill\_holes* function in the `smoothr`package.
 
 ## data prep
 
