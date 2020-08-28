@@ -1,5 +1,5 @@
 "","file","type","description"
-"tmap.pars","data/get_weatherstations_tmap.rds","R list object","parameters for writing png plots using tmap and tm_save"
+"tmap.pars","data/tmap_get_weatherstations.rds","R list object","parameters for writing png plots using tmap and tm_save"
 "snotel.csv","data/source/snotel_sites.csv","CSV","metadata list for SNOTEL sites (unchanged)"
 "snotel","data/prepared/snotel_sites.rds","R sf object","sfc object with SNOTEL sensor locations in UYRW"
 "ghcnd.csv","data/source/ghcnd_sites.csv","CSV","metadata list for GHCND sites (unchanged)"

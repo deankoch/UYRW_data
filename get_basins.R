@@ -104,7 +104,7 @@ files.towrite = list(
    
    # aesthetic parameters for plotting
    c(name='tmap.pars',
-     file=file.path(data.dir, 'get_basins_tmap.rds'), 
+     file=file.path(data.dir, 'tmap_get_basins.rds'), 
      type='R list object', 
      description='parameters for writing png plots using tmap and tm_save'),
    
@@ -330,9 +330,11 @@ if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
     # aesthetics for lat/long gridlines, scalebar, title position
     layout = tm_grid(n.x=4, n.y=5, projection=crs.list$epsg.geo, alpha=0.5) +
       tm_scale_bar(breaks=c(0, 20, 40), position=c('left', 'bottom'), text.size=0.7) +
-      tm_layout(title.position=c('center', 'top'), 
+      tm_layout(title.position=c('center', 'top'),
+                main.title.size=1,
+                main.title.position='center',
                 frame=FALSE, 
-                inner.margins=c(0,0,0.1,0)),
+                inner.margins=c(0,0,0.05,0)),
     
     # parameters for labels
     label.txt.size = 0.7
@@ -368,10 +370,10 @@ if(!file.exists(here(my_metadata('get_basins')['img_flowline', 'file'])))
     tm_shape(poi.list$pt[['cartersbridge']]) +   
       tm_dots(size=0.2, col='red') +
     tm_text('request', size=tmap.pars$label.txt.size, ymod=0.5) +
-      tm_shape(st_sf(st_centroid(millcreek.poly), data.frame(request='Mill Creek pilot study'))) +   
+      tm_shape(st_sf(st_centroid(millcreek.list$boundary), data.frame(request='Mill Creek pilot study'))) +   
       tm_text('request', size=tmap.pars$label.txt.size, xmod=5) +
     tmap.pars$layout +
-    tm_layout(title='major watercourses in the UYRW') 
+    tm_layout(main.title='major watercourses in the UYRW') 
   
   # render the plot
   tmap_save(tm=tmap.watercourses, 
@@ -400,7 +402,7 @@ if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
     tm_shape(uyrw.waterbody) + 
       tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
     tmap.pars$layout +
-    tm_layout(title=paste(nrow(uyrw.catchment), 'drainage basins identified by USGS NHDPlus'))
+    tm_layout(main.title=paste(nrow(uyrw.catchment), 'drainage basins identified by USGS NHDPlus'))
 
   # render the plot
   tmap_save(tm=tmap.basins, 

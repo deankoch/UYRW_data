@@ -37,13 +37,6 @@ library(rnoaa)
 ## project data
 
 ``` r
-# load metadata csv, CRS info list and watershed geometries from disk
-crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
-uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
-uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-
 # This list describes all of the files created by this script:
 files.towrite = list(
   
@@ -79,7 +72,7 @@ files.towrite = list(
   
   # aesthetic parameters for plotting
   c(name='tmap.pars',
-    file=file.path(data.dir, 'get_weatherstations_tmap.rds'), 
+    file=file.path(data.dir, 'tmap_get_weatherstations.rds'), 
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
   
@@ -98,7 +91,7 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
     ## [1] "writing to data/get_weatherstations_metadata.csv"
 
     ##                                                      file          type                                                            description
-    ## tmap.pars               data/get_weatherstations_tmap.rds R list object                parameters for writing png plots using tmap and tm_save
+    ## tmap.pars               data/tmap_get_weatherstations.rds R list object                parameters for writing png plots using tmap and tm_save
     ## snotel.csv                   data/source/snotel_sites.csv           CSV                             metadata list for SNOTEL sites (unchanged)
     ## snotel                     data/prepared/snotel_sites.rds   R sf object                        sfc object with SNOTEL sensor locations in UYRW
     ## ghcnd.csv                     data/source/ghcnd_sites.csv           CSV                              metadata list for GHCND sites (unchanged)
@@ -109,9 +102,20 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
-in the `/data` directory. Climatic data near the boundaries of the
-watershed will be useful for interpolation. Define a padded boundary
-polygon to search inside for station data
+in the `/data` directory. Load some of the data prepared earlier
+
+``` r
+# load metadata csv, CRS info list and watershed geometries from disk
+crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
+uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
+uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
+```
+
+Climatic data near the boundaries of the watershed will be useful for
+interpolation. Define a padded boundary polygon to search inside for
+station data
 
 ``` r
 if(!file.exists(here(my_metadata('get_weatherstations')['boundary_padded', 'file'])))
@@ -339,7 +343,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['img_weatherstation', 'f
                 tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
                   tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
                 tm_shape(precip.sf) +
-                tmap.pars$dots + 
+                  tmap.pars$dots + 
                 tmap.pars$layout +
                 tm_layout(main.title='GHCN (daily) precipitation records in the UYRW')
   

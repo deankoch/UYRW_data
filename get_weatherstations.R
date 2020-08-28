@@ -35,13 +35,6 @@ library(rnoaa)
 #'
 #' ## project data
 
-# load metadata csv, CRS info list and watershed geometries from disk
-crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
-uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
-uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-
 # This list describes all of the files created by this script:
 files.towrite = list(
   
@@ -77,7 +70,7 @@ files.towrite = list(
   
   # aesthetic parameters for plotting
   c(name='tmap.pars',
-    file=file.path(data.dir, 'get_weatherstations_tmap.rds'), 
+    file=file.path(data.dir, 'tmap_get_weatherstations.rds'), 
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
   
@@ -95,6 +88,14 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 #' This list of files and descriptions is now stored as a
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
 #' in the `/data` directory.
+
+#' Load some of the data prepared earlier 
+# load metadata csv, CRS info list and watershed geometries from disk
+crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
+uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
+uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
 
 #' Climatic data near the boundaries of the watershed will be useful for interpolation.
 #' Define a padded boundary polygon to search inside for station data

@@ -27,19 +27,6 @@ library(dataRetrieval)
 #'
 #' ## project data
 
-#+ results='hide'
-# project directory names
-graphics.dir = 'graphics'
-src.subdir = 'data/source'
-out.subdir = 'data/prepared'
-
-# load metadata csv, CRS info list and watershed geometries from disk
-crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
-uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
-uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-
 # This list describes all of the files created by this script:
 files.towrite = list(
   
@@ -61,12 +48,6 @@ files.towrite = list(
     type='CSV', 
     description='description of codes used in parameter_cd column of NWIS dataframe on time-series'),
   
-  # aesthetic parameters for plotting
-  c(name='tmap.pars',
-    file=file.path(data.dir, 'get_streamgages_tmap.rds'), 
-    type='R list object', 
-    description='parameters for writing png plots using tmap and tm_save'),
-  
   # graphic showing SNOTEL and GHCND site locations on the UYRW
   c(name='img_streamgage',
     file=file.path(graphics.dir, 'streamgage_sites.png'),
@@ -82,6 +63,14 @@ my_metadata('get_streamgages', files.towrite, overwrite=TRUE)
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_streamgage_metadata.csv)
 #' in the `/data` directory.
 
+
+#' Load some of the data prepared earlier 
+# load metadata csv, CRS info list and watershed geometries from disk
+crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
+uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
+uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
 
 #'
 #' ## Find sites
@@ -166,15 +155,6 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_paramcodes', 'file']))
   paramcodes.df = read.csv(here(my_metadata('get_streamgages')['USGS_paramcodes', 'file']), colClasses='character')
 }
 
-# find all intermittent groundwater data
-# find all entries corresponding to groundwater time series
-# paramcode.groundwater = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Height, gage']
-# idx.groundwater = usgs.ts.sf$parm_cd == paramcode.groundwater
-# sum(idx.groundwater)
-#usgs.ts.sf$plotlabel_gw = 'groundwater time series'
-#idx.gw = usgs.sf$data_type_cd == 'gw'
-#sum(idx.gw)
-
 #'
 #' ## visualization
 #' 
@@ -218,24 +198,14 @@ usgs.ts.sf$plotlabel_ss = 'suspended sediment'
 # add columns for duration and end-year of time series for precipitation
 usgs.ts.sf$endyear[usgs.ts.sf$endyear == 2020] = NA
 
-#' Set up the aesthetics to use for these types of plots
-if(!file.exists(here(my_metadata('get_streamgages')['tmap.pars', 'file'])))
-{
-  # load the plotting parameters used in get_weatherstations.R
-  tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
-  
-  # adjust with a better highlight colour for the blue background
-  tmap.pars$dots$tm_symbols$colorNA = 'orange'
-  
-  saveRDS(tmap.pars, here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
-  
-} else {
-  
-  # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
-  
-} 
+#' Set up the aesthetics and make the plot 
 
+# load the plotting parameters used in get_weatherstations.R
+tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
+
+# adjust with a better highlight colour for the blue background
+tmap.pars$dots$tm_symbols$colorNA = 'orange'
+  
 # create the plot grob and write to disk
 if(!file.exists(here(my_metadata('get_streamgages')['img_streamgage', 'file'])))
 {
@@ -259,7 +229,7 @@ if(!file.exists(here(my_metadata('get_streamgages')['img_streamgage', 'file'])))
                     tmap.pars$layout +
                     tm_layout(main.title='NWIS daily discharge records in the UYRW')
   
-  # render/write the plot
+  # render the plot
   tmap_save(tm=tmap.streamgage, 
             here(my_metadata('get_streamgages')['img_streamgage', 'file']), 
             width=tmap.pars$png['w'], 
