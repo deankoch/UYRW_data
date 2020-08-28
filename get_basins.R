@@ -103,7 +103,7 @@ files.towrite = list(
      description='flowlines, catchments, and boundary polygon for mill creek'),
    
    # aesthetic parameters for plotting
-   c(name='tmap.pars',
+   c(name='pars_tmap',
      file=file.path(data.dir, 'tmap_get_basins.rds'), 
      type='R list object', 
      description='parameters for writing png plots using tmap and tm_save'),
@@ -322,7 +322,7 @@ if(!file.exists(here(my_metadata('get_basins')['millcreek', 'file'])))
 #' using the `tmap` package, we will make a few plots showing some of the watershed features now loaded into R. 
 #' First define and save some graphical parameters for consistency among plots and tidier code
 #' 
-if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['pars_tmap', 'file'])))
 {
   # parameter values go into a list
   tmap.pars = list(
@@ -345,12 +345,12 @@ if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
   )
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_basins')['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_basins')['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
 }
 
 

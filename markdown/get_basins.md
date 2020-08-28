@@ -50,8 +50,20 @@ github using devtools
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
+```
+
+    ## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
+
+``` r
 library(smoothr)
 ```
+
+    ## 
+    ## Attaching package: 'smoothr'
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     smooth
 
 ## metadata
 
@@ -120,7 +132,7 @@ files.towrite = list(
      description='flowlines, catchments, and boundary polygon for mill creek'),
    
    # aesthetic parameters for plotting
-   c(name='tmap.pars',
+   c(name='pars_tmap',
      file=file.path(data.dir, 'tmap_get_basins.rds'), 
      type='R list object', 
      description='parameters for writing png plots using tmap and tm_save'),
@@ -144,7 +156,6 @@ my_metadata('get_basins', files.towrite, overwrite=TRUE)
     ## [1] "writing to data/get_basins_metadata.csv"
 
     ##                                               file          type                                                      description
-    ## tmap.pars                 data/tmap_get_basins.rds R list object          parameters for writing png plots using tmap and tm_save
     ## poi                              data/uyrw_poi.rds R list object                              points of interest in the watershed
     ## nhd                      data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
     ## crs                              data/uyrw_crs.rds R list object                     details of projection/extent for the project
@@ -154,6 +165,7 @@ my_metadata('get_basins', files.towrite, overwrite=TRUE)
     ## waterbody     data/prepared/uyrw_nhd_waterbody.rds   R sf object                 reprojected/repaired NHDPlus water body polygons
     ## flowline       data/prepared/uyrw_nhd_flowline.rds   R sf object                 reprojected/repaired NHDPlus flowline geometries
     ## millcreek          data/prepared/millcreek_nhd.rds R list object       flowlines, catchments, and boundary polygon for mill creek
+    ## pars_tmap                 data/tmap_get_basins.rds R list object          parameters for writing png plots using tmap and tm_save
     ## img_flowlines          graphics/uyrw_flowlines.png   png graphic                   image of flowlines in the UYRW with placenames
     ## img_basins                graphics/uyrw_basins.png   png graphic                   image of some 2000 drainage basins in the UYRW
     ## metadata              data/get_basins_metadata.csv           CSV                      list files of files written by get_basins.R
@@ -377,7 +389,7 @@ watershed features now loaded into R. First define and save some
 graphical parameters for consistency among plots and tidier code
 
 ``` r
-if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_basins')['pars_tmap', 'file'])))
 {
   # parameter values go into a list
   tmap.pars = list(
@@ -400,12 +412,12 @@ if(!file.exists(here(my_metadata('get_basins')['tmap.pars', 'file'])))
   )
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_basins')['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_basins')['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
 }
 ```
 

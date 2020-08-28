@@ -1,5 +1,4 @@
 "","file","type","description"
-"tmap.pars","data/tmap_get_basins.rds","R list object","parameters for writing png plots using tmap and tm_save"
 "poi","data/uyrw_poi.rds","R list object","points of interest in the watershed"
 "nhd","data/source/uyrw_nhd.gpkg","geopackage","source geometries from NHDPlus"
 "crs","data/uyrw_crs.rds","R list object","details of projection/extent for the project"
@@ -9,6 +8,7 @@
 "waterbody","data/prepared/uyrw_nhd_waterbody.rds","R sf object","reprojected/repaired NHDPlus water body polygons"
 "flowline","data/prepared/uyrw_nhd_flowline.rds","R sf object","reprojected/repaired NHDPlus flowline geometries"
 "millcreek","data/prepared/millcreek_nhd.rds","R list object","flowlines, catchments, and boundary polygon for mill creek"
+"pars_tmap","data/tmap_get_basins.rds","R list object","parameters for writing png plots using tmap and tm_save"
 "img_flowlines","graphics/uyrw_flowlines.png","png graphic","image of flowlines in the UYRW with placenames"
 "img_basins","graphics/uyrw_basins.png","png graphic","image of some 2000 drainage basins in the UYRW"
 "metadata","data/get_basins_metadata.csv","CSV","list files of files written by get_basins.R"

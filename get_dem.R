@@ -15,8 +15,8 @@
 
 #'
 #' ## libraries
-#' `FedData` is used to fetch the USGS data. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
+#' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the USGS data.
+#' See the[get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
 source(here('get_helperfun.R'))
@@ -43,7 +43,7 @@ files.towrite = list(
     description='digital elevation map of the UYRW and surrounding area'), 
   
   # aesthetic parameters for plotting
-  c(name='tmap.pars',
+  c(name='pars_tmap',
     file=file.path(data.dir, 'tmap_get_dem.rds'), 
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
@@ -123,10 +123,10 @@ if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
 # load the plotting parameters used in get_basins.R, modify for this plot
 
 #' Set up the aesthetics to use for these types of plots
-if(!file.exists(here(my_metadata('get_dem')['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_dem')['pars_tmap', 'file'])))
 {
   # load the plotting parameters used in get_basins.R
-  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
   
   # shrink the vertical length
   tmap.pars$png['h'] = 1800
@@ -138,12 +138,12 @@ if(!file.exists(here(my_metadata('get_dem')['tmap.pars', 'file'])))
               legend.title.color='white')
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_dem')['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_dem')['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_dem')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
   
 } 
 

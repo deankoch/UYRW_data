@@ -31,13 +31,13 @@ library(dataRetrieval)
 files.towrite = list(
   
   # table of site locations from USGS Site web service
-  c(name='USGS_sites.rdb',
+  c(name='USGS_sites_rdb',
     file=file.path(src.subdir, 'USGS_sites.rdb'),
     type='USGS rdb file', 
     description='results of USGS Site web service search for sites in UYRW'),
   
   # site locations with metadata from USGS in sfc format
-  c(name='USGS_sites.sfc',
+  c(name='USGS_sites',
     file=file.path(out.subdir, 'USGS_sites.rds'), 
     type='R sf object', 
     description='sfc object with USGS sensor locations in UYRW'),
@@ -80,7 +80,7 @@ uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
 #' Information about the output format (USGS RDB) is 
 #' [available here](https://waterservices.usgs.gov/rest/Site-Service.html) and, in more detail,
 #' [here](https://pubs.usgs.gov/of/2003/ofr03123/6.4rdb_format.pdf).
-if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites.rdb', 'file'])))
+if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file'])))
 {
   # find a bounding box in geographical coordinates
   bbox.geo = st_bbox(st_transform(uyrw.poly, crs=crs.list$epsg.geo))
@@ -93,15 +93,15 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites.rdb', 'file'])))
                       status = 'siteStatus=all')
   
   # build the URL and query the USGS Site Web Service
-  download.file(paste0(urlargs.domain, paste(urlargs.list, collapse='&')), here(my_metadata('get_streamgages')['USGS_sites.rdb', 'file']))
+  download.file(paste0(urlargs.domain, paste(urlargs.list, collapse='&')), here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file']))
   
 }
 
 #' Load the RDB file, omitting stations not in UYRW, and convert it to a `sf` object
-if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites.sfc', 'file'])))
+if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites', 'file'])))
 {
   # load the RDB file as a tab-delimited data frame, omit first row (which indicates string lengths) 
-  usgs.df = read.csv(here(my_metadata('get_streamgages')['USGS_sites.rdb', 'file']), comment.char='#', sep='\t')
+  usgs.df = read.csv(here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file']), comment.char='#', sep='\t')
   usgs.df = usgs.df[-1,]
   
   # extract coordinates, coercing to numeric
@@ -116,12 +116,12 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites.sfc', 'file'])))
   usgs.sf = st_intersection(usgs.sf, uyrw.poly)
   
   # save to disk
-  saveRDS(usgs.sf, here(my_metadata('get_streamgages')['USGS_sites.sfc', 'file']))
+  saveRDS(usgs.sf, here(my_metadata('get_streamgages')['USGS_sites', 'file']))
 
 } else {
   
   # load from disk 
-  usgs.sf = readRDS(here(my_metadata('get_streamgages')['USGS_sites.sfc', 'file']))
+  usgs.sf = readRDS(here(my_metadata('get_streamgages')['USGS_sites', 'file']))
   
 }
 
@@ -201,7 +201,7 @@ usgs.ts.sf$endyear[usgs.ts.sf$endyear == 2020] = NA
 #' Set up the aesthetics and make the plot 
 
 # load the plotting parameters used in get_weatherstations.R
-tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
+tmap.pars = readRDS(here(my_metadata('get_weatherstations')['pars_tmap', 'file']))
 
 # adjust with a better highlight colour for the blue background
 tmap.pars$dots$tm_symbols$colorNA = 'orange'

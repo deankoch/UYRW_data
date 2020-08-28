@@ -41,7 +41,7 @@ library(rnoaa)
 files.towrite = list(
   
   # metadata table downloaded from SNOTEL website
-  c(name='snotel.csv',
+  c(name='csv_snotel',
     file=file.path(src.subdir, 'snotel_sites.csv'), 
     type='CSV', 
     description='metadata list for SNOTEL sites (unchanged)'), 
@@ -53,7 +53,7 @@ files.towrite = list(
     description='sfc object with SNOTEL sensor locations in UYRW'),
   
   # GHCND metadata table downloaded from NOAA
-  c(name='ghcnd.csv',
+  c(name='csv_ghcnd',
     file=file.path(src.subdir, 'ghcnd_sites.csv'), 
     type='CSV', 
     description='metadata list for GHCND sites (unchanged)'),
@@ -71,7 +71,7 @@ files.towrite = list(
     description='padded watershed boundary polygon for querying nearby weather stations'),
   
   # aesthetic parameters for plotting
-  c(name='tmap.pars',
+  c(name='pars_tmap',
     file=file.path(data.dir, 'tmap_get_weatherstations.rds'), 
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
@@ -91,12 +91,12 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
     ## [1] "writing to data/get_weatherstations_metadata.csv"
 
     ##                                                      file          type                                                            description
-    ## tmap.pars               data/tmap_get_weatherstations.rds R list object                parameters for writing png plots using tmap and tm_save
-    ## snotel.csv                   data/source/snotel_sites.csv           CSV                             metadata list for SNOTEL sites (unchanged)
+    ## csv_snotel                   data/source/snotel_sites.csv           CSV                             metadata list for SNOTEL sites (unchanged)
     ## snotel                     data/prepared/snotel_sites.rds   R sf object                        sfc object with SNOTEL sensor locations in UYRW
-    ## ghcnd.csv                     data/source/ghcnd_sites.csv           CSV                              metadata list for GHCND sites (unchanged)
+    ## csv_ghcnd                     data/source/ghcnd_sites.csv           CSV                              metadata list for GHCND sites (unchanged)
     ## ghcnd                       data/prepared/ghcnd_sites.rds   R sf object                    sfc object with GHCN Daily sensor locations in UYRW
     ## boundary_padded    data/prepared/uyrw_boundary_padded.rds   R sf object padded watershed boundary polygon for querying nearby weather stations
+    ## pars_tmap               data/tmap_get_weatherstations.rds R list object                parameters for writing png plots using tmap and tm_save
     ## img_weatherstation      graphics/weatherstation_sites.png   png graphic                   image of SNOTEL and GHCND site locations in the UYRW
     ## metadata            data/get_weatherstations_metadata.csv           CSV                   list files of files written by get_weatherstations.R
 
@@ -138,13 +138,13 @@ the `snotel_info` function in `snotelr` downloads a CSV containing site
 IDs and coordinates
 
 ``` r
-if(!file.exists(here(my_metadata('get_weatherstations')['snotel.csv', 'file'])))
+if(!file.exists(here(my_metadata('get_weatherstations')['csv_snotel', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
   snotel_info(path=here(src.subdir))
   
   # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
-  file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(my_metadata('get_weatherstations')['snotel.csv', 'file']))
+  file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(my_metadata('get_weatherstations')['csv_snotel', 'file']))
   
 }
 ```
@@ -156,7 +156,7 @@ object, then save to disk
 if(!file.exists(here(my_metadata('get_weatherstations')['snotel', 'file'])))
 {
    # load the site info table into a data frame and extract coordinates
-  snotel.df = read.csv(here(my_metadata('get_weatherstations')['snotel.csv', 'file']), header=TRUE)
+  snotel.df = read.csv(here(my_metadata('get_weatherstations')['csv_snotel', 'file']), header=TRUE)
   sites.coords.matrix = as.matrix(snotel.df[, c('longitude', 'latitude')])
   
   # extract the coordinates and convert to sfc object, adding attribute columns to get sf object
@@ -184,13 +184,13 @@ the `ghcnd_stations` function in `rnoaa` downloads a table of site IDs
 and coordinates
 
 ``` r
-if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd.csv', 'file'])))
+if(!file.exists(here(my_metadata('get_weatherstations')['csv_ghcnd', 'file'])))
 {
   # download the metadata table and load into R (slow, 1-2min)
   ghcnd.df = ghcnd_stations()
 
   # save a copy as csv in the /data/source folder
-  write.csv(ghcnd.df, here(my_metadata('get_weatherstations')['ghcnd.csv', 'file']))
+  write.csv(ghcnd.df, here(my_metadata('get_weatherstations')['csv_ghcnd', 'file']))
 
 }
 ```
@@ -205,7 +205,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd', 'file'])))
 {
 
   # load the site info table into a data frame
-  ghcnd.df = read.csv(here(my_metadata('get_weatherstations')['ghcnd.csv', 'file']), header=TRUE)
+  ghcnd.df = read.csv(here(my_metadata('get_weatherstations')['csv_ghcnd', 'file']), header=TRUE)
   
   # find all unique station IDs, extracting coordinates from the first entry in the table for each station 
   ghcnd.IDs = unique(ghcnd.df$id)
@@ -259,10 +259,10 @@ if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd', 'file'])))
 Set up the aesthetics to use for these types of plots
 
 ``` r
-if(!file.exists(here(my_metadata('get_weatherstations')['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_weatherstations')['pars_tmap', 'file'])))
 {
   # load the plotting parameters used in get_basins.R
-  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
   
   # adjust them to suit these wider plots (with legends)
   tmap.pars$png['w'] = 1800 
@@ -293,12 +293,12 @@ if(!file.exists(here(my_metadata('get_weatherstations')['tmap.pars', 'file'])))
               legend.text.size=tmap.pars$label.txt.size)
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_weatherstations')['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_weatherstations')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_weatherstations')['pars_tmap', 'file']))
   
 } 
 ```

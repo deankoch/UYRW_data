@@ -14,7 +14,8 @@ should be run before this script.
 
 ## libraries
 
-`FedData` is used to fetch the USGS data. See the [get\_helperfun.R
+[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+is used to fetch the USGS data. See the[get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
@@ -45,7 +46,7 @@ files.towrite = list(
     description='digital elevation map of the UYRW and surrounding area'), 
   
   # aesthetic parameters for plotting
-  c(name='tmap.pars',
+  c(name='pars_tmap',
     file=file.path(data.dir, 'tmap_get_dem.rds'), 
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
@@ -65,9 +66,9 @@ my_metadata('get_dem', files.towrite, overwrite=TRUE)
     ## [1] "writing to data/get_dem_metadata.csv"
 
     ##                                 file                type                                             description
-    ## tmap.pars      data/tmap_get_dem.rds       R list object parameters for writing png plots using tmap and tm_save
     ## ned       data/source/UYRW_NED_1.tif GeoTIFF raster file      mosaic of elevation tiles from the NED (unchanged)
     ## dem            data/prepared/dem.tif GeoTIFF raster file  digital elevation map of the UYRW and surrounding area
+    ## pars_tmap      data/tmap_get_dem.rds       R list object parameters for writing png plots using tmap and tm_save
     ## img_dem             graphics/dem.png         png graphic                               image of DEM for the UYRW
     ## metadata   data/get_dem_metadata.csv                 CSV                list files of files written by get_dem.R
 
@@ -145,10 +146,10 @@ if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
 Set up the aesthetics to use for these types of plots
 
 ``` r
-if(!file.exists(here(my_metadata('get_dem')['tmap.pars', 'file'])))
+if(!file.exists(here(my_metadata('get_dem')['pars_tmap', 'file'])))
 {
   # load the plotting parameters used in get_basins.R
-  tmap.pars = readRDS(here(my_metadata('get_basins')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
   
   # shrink the vertical length
   tmap.pars$png['h'] = 1800
@@ -160,12 +161,12 @@ if(!file.exists(here(my_metadata('get_dem')['tmap.pars', 'file'])))
               legend.title.color='white')
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_dem')['tmap.pars', 'file']))
+  saveRDS(tmap.pars, here(my_metadata('get_dem')['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_dem')['tmap.pars', 'file']))
+  tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
   
 } 
 
