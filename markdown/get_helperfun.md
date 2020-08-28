@@ -75,7 +75,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   #
   # `script.name` is a string indicating the filename (without the .R extension) of the R script to document.
   # `entries.list` is a list of character vectors, whose entries are named: 'name', 'file', 'type', and 'description'.
-  # `data.dir` is the subdirectory of the project folder in which to write the CSV file: /data/`script.name_metadata`.csv 
+  # `data.dir` is the subdirectory of the project folder in which to write the CSV file: /data/`script.name`_metadata.csv 
   # `use.file` is a boolean indicating whether to read/write the CSV file
   # `overwrite` allows an existing CSV file to be modified 
   #
@@ -93,7 +93,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   # that row. Elements with names not appearing the CSV are added to the top of the table in the order they appear in `entries.list`.
   #
   # Existing CSV files are never modified, unless `use.file` and `overwrite` are both TRUE, in which case the CSV is overwritten with
-  # the modified data frame. If the CSV file does not already exist on disk, it will be created. The default `entries.list`==NA, 
+  # the modified data frame. If the CSV file does not already exist on disk, it will be created. The default `entries.list==NA`, 
   # combined with `overwrite=TRUE` and `use.file=TRUE` will overwrite the CSV with a default placeholder - a table containing only a
   # single row, which describes the CSV file itself.
   
