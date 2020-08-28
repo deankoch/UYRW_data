@@ -53,9 +53,9 @@ my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE
 # create folders as needed
 lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my_dir)
 
-#' This project will generate many files. To keep track of everything, I create a CSV table documenting every file written
-#' to disk: it's file path, it's type, and a short description of the contents. This function handles the construction of this
-#' table. To call up the table for a specific script, simply use `my_metadata(script.name)`.
+#' This project will generate many files. To keep track of everything, each script gets a CSV table documenting every
+#' file that it creates: its file path, its type, and a short description of the contents. This function handles the construction
+#' of the table. To call up the table for a specific script, simply use `my_metadata(script.name)`.
 #' 
 # creates and/or adds to a data frame of metadata documenting a given script, and (optionally) writes it to disk as a CSV file 
 my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data')
