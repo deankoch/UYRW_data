@@ -152,17 +152,17 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
     # create a second data frame to store any data from the csv on disk
     csv.df = my_metadata(script.name, entries.list=list(entry.default), use.file=FALSE)
     
-    # otherwise look for the file on disk and load it if it exists, creating a second data frame
+    # look for the file on disk and load it if it exists
     if(file.exists(here(csv.relpath)) & !csv.wipe)
     {
       # load the csv data 
       csv.df = read.csv(here(csv.relpath), header=TRUE, row.names=1)
-      
-      # identify any entries with names matched in entries.list, update them, and delete those rows from entries.list
-      names.updating = rownames(csv.df)[rownames(csv.df) %in% rownames(input.df)]
-      csv.df[names.updating,] = input.df[names.updating,]
-      input.df = input.df[!(rownames(input.df) %in% names.updating),]
     }
+    
+    # identify any entries in csv.df with names matched in entries.list, update them, delete those rows from input.df
+    names.updating = rownames(csv.df)[rownames(csv.df) %in% rownames(input.df)]
+    csv.df[names.updating,] = input.df[names.updating,]
+    input.df = input.df[!(rownames(input.df) %in% names.updating),]
     
     # merge the two data frames
     output.df = rbind(input.df, csv.df)
