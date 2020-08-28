@@ -15,7 +15,7 @@
 #' <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
 #' 
 #' The `nhdplusTools` package fetches NHDPlus products from the web without having to navigate the USGS
-#' website. This script uses it to assemble some basic info on the hydrology of the UYRW upstream of Big Timber, Montana,
+#' website. This script uses it to assemble some basic info on the hydrology of the UYRW upstream of Carter's Bridge, Montana,
 #' transforming that data into a more convenient format, and producing some plots giving an overview of the watershed.
 
 #'
@@ -40,10 +40,10 @@ library(smoothr)
 
 #'
 #' ## metadata
-#' All of the files written to disk by this script will by listed in a CSV file with a short description. A helper function
-#' handles the addition and updating of its entries. We create the CSV file now, and update it every time a new file is written.
-#' Whenever a script writes files to disk, they will be documented in this way, and the script will begin by defining a list in
-#' the form below:  
+#' All of the files saved to disk by this script will by listed in a CSV file with a short description. A helper function
+#' handles these files, and any updates to its entries. Any script that writes files to disk will be documented in this way,
+#' and should begin with a section listing all its outputs, as in the example below:
+#' 
 
 # descriptions of all files created by this script:
 files.towrite = list(
@@ -125,17 +125,20 @@ my_metadata('get_basins', files.towrite, overwrite=TRUE)
 
 #' The list of files and descriptions is now stored as a
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
-#' in the `/data` directory. Since github is not meant for hosting large binaries, some of these files are not
+#' in the `/data` directory. These tables (of the form 'get_\*_metadata.csv') will serve as a lookup
+#' table for figuring out what a file does, and where it came from.
+#' 
+#' Since github is not meant for hosting large binaries, most of the output files are not
 #' shared in this repository (see my 
 #' [.gitignore](https://raw.githubusercontent.com/deankoch/UYRW_data/master/.gitignore) file). 
-#' However you can reproduce all of them by running this script.
+#' However you can reproduce all of them by running the corresponding R scripts.
 
 
 #'
 #' ## starting location
 #' 
 #' To define the watershed, we need a starting location. In this example, we identify the main outlet of the watershed at Carter's Bridge,
-#' a fishing access bridge near Livinston, MT. The UYRW is then defined to include all catchments upstream. 
+#' a fishing access bridge just south of Livinston, MT. The UYRW is then defined to include all catchments upstream. 
 #' 
 #' We locate Carter's Bridge in R using the `AOI` package, then use the `nhdplusTools` to explore upstream. Later on, we can load this
 #' information from disk instead of querying OSM and USGS and computing things all over again.
