@@ -38,12 +38,11 @@ files and R object binaries, which are not suitable for git.
 
 The `if(!file.exists(...))` conditionals preceding each code chunk
 indicate which files will be written in that section. If the files are
-detected in the local data storage directory, then code chunk can be
-skipped (to avoid redundant downloads, *etc*), and the files are loaded
-from disk instead.
+detected in the local data storage directory, then that code chunk can
+be skipped (to avoid redundant downloads, *etc*), and the files are
+loaded from disk instead.
 
-We start by defining a project directory tree and a list of files and
-metadata to download
+We start by defining a project directory tree
 
 ``` r
 # 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
@@ -60,8 +59,15 @@ my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE
 
 # create folders as needed
 lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my_dir)
+```
 
+This project will generate many files. To keep track of everything, I
+create a CSV table documenting every file written to disk: it’s file
+path, it’s type, and a short description of the contents. This function
+handles the construction of this table. To call up the table for a
+specific script, simply use `my_metadata(script.name)`.
 
+``` r
 # creates and/or adds to a data frame of metadata documenting a given script, and (optionally) writes it to disk as a CSV file 
 my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data')
 {
@@ -184,8 +190,12 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
     
   }
 }
+```
 
+This function is used in `get_weatherstations` to parse the time series
+dates
 
+``` r
 # convert start/end year columns from GHCN data to a single (string) column for each "element"
 my.ghcnd.reshape = function(idval, elemval)
 {
