@@ -62,12 +62,6 @@ files.towrite = list(
     type='R sf object',
     description='sfc object with GHCN Daily sensor locations in UYRW'),
   
-  # sfc object representing a padded (outer buffer) watershed boundary 
-  c(name='boundary_padded',
-    file=file.path(out.subdir, 'uyrw_boundary_padded.rds'),
-    type='R sf object',
-    description='padded watershed boundary polygon for querying nearby weather stations'),
-  
   # aesthetic parameters for plotting
   c(name='pars_tmap',
     file=file.path(data.dir, 'tmap_get_weatherstations.rds'), 
@@ -93,24 +87,10 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 # load metadata csv, CRS info list and watershed geometries from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+uyrw.poly.padded = readRDS(here(my_metadata('get_basins')['boundary_padded', 'file']))
 uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
 uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
 uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-
-#' Climatic data near the boundaries of the watershed will be useful for interpolation.
-#' Define a padded boundary polygon to search inside for station data
-if(!file.exists(here(my_metadata('get_weatherstations')['boundary_padded', 'file'])))
-{
-  # for now I use a 25km buffer
-  uyrw.padded.poly = st_buffer(uyrw.poly, dist = 25e3)
-  saveRDS(uyrw.padded.poly, here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
-  
-} else {
-  
-  # load from disk 
-  uyrw.padded.poly = readRDS(here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
-  
-}
 
 
 #'
@@ -138,7 +118,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['snotel', 'file'])))
   snotel.sfc = st_sfc(lapply(1:nrow(snotel.df), function(xx) st_point(sites.coords.matrix[xx,])), crs=crs.list$epsg.geo)
   snotel.sf = st_sf(cbind(snotel.df, snotel.sfc))
   
-  # transform to UTM and clip to UYRW area (30 stations identified)
+  # transform to UTM and clip to extended UYRW area (30 stations identified)
   snotel.sf = st_transform(snotel.sf, crs=crs.list$epsg)
   snotel.sf = st_intersection(snotel.sf, uyrw.padded.poly)
   

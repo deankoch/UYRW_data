@@ -71,6 +71,12 @@ files.towrite = list(
      file=file.path(out.subdir, 'uyrw_nhd_boundary.rds'), 
      type='R sfc object', 
      description='UYRW watershed boundary polygon derived from NHDPlus catchements'),
+   
+   # sfc object representing a padded (outer buffer) watershed boundary 
+   c(name='boundary_padded',
+     file=file.path(out.subdir, 'uyrw_boundary_padded.rds'),
+     type='R sf object',
+     description='padded watershed boundary polygon'),
                      
    # main stem polygon
    c(name='mainstem',
@@ -223,6 +229,9 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
   uyrw.xlim = st_bbox(uyrw.poly)[c(1,3)]
   uyrw.ylim = st_bbox(uyrw.poly)[c(2,4)]
   
+  # create extended boundary polygon, with 25km buffer, in case we need info on surrounding area
+  uyrw.padded.poly = st_buffer(uyrw.poly, dist = 25e3)
+  
   # define CRS info list
   crs.list = list(epsg = uyrw.UTM.epsg,
                   epsg.geo = latlong.epsg,
@@ -232,10 +241,11 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
   # save to disk
   saveRDS(crs.list, here(my_metadata('get_basins')['crs', 'file']))
   saveRDS(uyrw.poly, here(my_metadata('get_basins')['boundary', 'file']))
+  saveRDS(uyrw.padded.poly, here(my_metadata('get_basins')['boundary_padded', 'file']))
   
 } else {
   
-  # load CRS info list and watershed boundary from disk
+  # load CRS info list and watershed boundary from disk (padded boundary not needed yet)
   crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
   uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 }

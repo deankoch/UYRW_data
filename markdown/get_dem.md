@@ -8,8 +8,6 @@ August 14, 2020
 **get\_DEM**: download a DEM and warp to our reference coordinate system
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-and
-[get\_weatherstations.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md),
 should be run before this script.
 
 ## libraries
@@ -80,7 +78,7 @@ in the `/data` directory. Load some of the data prepared earlier
 # load metadata csv, CRS info list and watershed polygons from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.padded.poly = readRDS(here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
+uyrw.padded.poly = readRDS(here(my_metadata('get_basins')['boundary_padded', 'file']))
 ```
 
 ## Download the DEM raster

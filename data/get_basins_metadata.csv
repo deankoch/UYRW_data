@@ -3,6 +3,7 @@
 "nhd","data/source/uyrw_nhd.gpkg","geopackage","source geometries from NHDPlus"
 "crs","data/uyrw_crs.rds","R list object","details of projection/extent for the project"
 "boundary","data/prepared/uyrw_nhd_boundary.rds","R sfc object","UYRW watershed boundary polygon derived from NHDPlus catchements"
+"boundary_padded","data/prepared/uyrw_boundary_padded.rds","R sf object","padded watershed boundary polygon"
 "mainstem","data/prepared/uyrw_nhd_mainstem.rds","R sfc object","UYR main stem line geometry derived from NHDPlus flowlines"
 "catchment","data/prepared/uyrw_nhd_catchment.rds","R sf object","reprojected/repaired NHDPlus catchment polygons"
 "waterbody","data/prepared/uyrw_nhd_waterbody.rds","R sf object","reprojected/repaired NHDPlus water body polygons"

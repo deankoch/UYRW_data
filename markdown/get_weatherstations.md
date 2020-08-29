@@ -64,12 +64,6 @@ files.towrite = list(
     type='R sf object',
     description='sfc object with GHCN Daily sensor locations in UYRW'),
   
-  # sfc object representing a padded (outer buffer) watershed boundary 
-  c(name='boundary_padded',
-    file=file.path(out.subdir, 'uyrw_boundary_padded.rds'),
-    type='R sf object',
-    description='padded watershed boundary polygon for querying nearby weather stations'),
-  
   # aesthetic parameters for plotting
   c(name='pars_tmap',
     file=file.path(data.dir, 'tmap_get_weatherstations.rds'), 
@@ -90,15 +84,14 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 
     ## [1] "writing to data/get_weatherstations_metadata.csv"
 
-    ##                                                      file          type                                                            description
-    ## csv_snotel                   data/source/snotel_sites.csv           CSV                             metadata list for SNOTEL sites (unchanged)
-    ## snotel                     data/prepared/snotel_sites.rds   R sf object                        sfc object with SNOTEL sensor locations in UYRW
-    ## csv_ghcnd                     data/source/ghcnd_sites.csv           CSV                              metadata list for GHCND sites (unchanged)
-    ## ghcnd                       data/prepared/ghcnd_sites.rds   R sf object                    sfc object with GHCN Daily sensor locations in UYRW
-    ## boundary_padded    data/prepared/uyrw_boundary_padded.rds   R sf object padded watershed boundary polygon for querying nearby weather stations
-    ## pars_tmap               data/tmap_get_weatherstations.rds R list object                parameters for writing png plots using tmap and tm_save
-    ## img_weatherstation      graphics/weatherstation_sites.png   png graphic                   image of SNOTEL and GHCND site locations in the UYRW
-    ## metadata            data/get_weatherstations_metadata.csv           CSV                   list files of files written by get_weatherstations.R
+    ##                                                     file          type                                             description
+    ## csv_snotel                  data/source/snotel_sites.csv           CSV              metadata list for SNOTEL sites (unchanged)
+    ## snotel                    data/prepared/snotel_sites.rds   R sf object         sfc object with SNOTEL sensor locations in UYRW
+    ## csv_ghcnd                    data/source/ghcnd_sites.csv           CSV               metadata list for GHCND sites (unchanged)
+    ## ghcnd                      data/prepared/ghcnd_sites.rds   R sf object     sfc object with GHCN Daily sensor locations in UYRW
+    ## pars_tmap              data/tmap_get_weatherstations.rds R list object parameters for writing png plots using tmap and tm_save
+    ## img_weatherstation     graphics/weatherstation_sites.png   png graphic    image of SNOTEL and GHCND site locations in the UYRW
+    ## metadata           data/get_weatherstations_metadata.csv           CSV    list files of files written by get_weatherstations.R
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
@@ -108,28 +101,10 @@ in the `/data` directory. Load some of the data prepared earlier
 # load metadata csv, CRS info list and watershed geometries from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+uyrw.poly.padded = readRDS(here(my_metadata('get_basins')['boundary_padded', 'file']))
 uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
 uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
 uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-```
-
-Climatic data near the boundaries of the watershed will be useful for
-interpolation. Define a padded boundary polygon to search inside for
-station data
-
-``` r
-if(!file.exists(here(my_metadata('get_weatherstations')['boundary_padded', 'file'])))
-{
-  # for now I use a 25km buffer
-  uyrw.padded.poly = st_buffer(uyrw.poly, dist = 25e3)
-  saveRDS(uyrw.padded.poly, here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
-  
-} else {
-  
-  # load from disk 
-  uyrw.padded.poly = readRDS(here(my_metadata('get_weatherstations')['boundary_padded', 'file']))
-  
-}
 ```
 
 ## Find SNOTEL sites
@@ -163,7 +138,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['snotel', 'file'])))
   snotel.sfc = st_sfc(lapply(1:nrow(snotel.df), function(xx) st_point(sites.coords.matrix[xx,])), crs=crs.list$epsg.geo)
   snotel.sf = st_sf(cbind(snotel.df, snotel.sfc))
   
-  # transform to UTM and clip to UYRW area (30 stations identified)
+  # transform to UTM and clip to extended UYRW area (30 stations identified)
   snotel.sf = st_transform(snotel.sf, crs=crs.list$epsg)
   snotel.sf = st_intersection(snotel.sf, uyrw.padded.poly)
   

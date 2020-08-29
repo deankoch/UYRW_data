@@ -50,20 +50,8 @@ github using devtools
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
-```
-
-    ## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
-
-``` r
 library(smoothr)
 ```
-
-    ## 
-    ## Attaching package: 'smoothr'
-
-    ## The following object is masked from 'package:stats':
-    ## 
-    ##     smooth
 
 ## metadata
 
@@ -100,6 +88,12 @@ files.towrite = list(
      file=file.path(out.subdir, 'uyrw_nhd_boundary.rds'), 
      type='R sfc object', 
      description='UYRW watershed boundary polygon derived from NHDPlus catchements'),
+   
+   # sfc object representing a padded (outer buffer) watershed boundary 
+   c(name='boundary_padded',
+     file=file.path(out.subdir, 'uyrw_boundary_padded.rds'),
+     type='R sf object',
+     description='padded watershed boundary polygon'),
                      
    # main stem polygon
    c(name='mainstem',
@@ -155,20 +149,21 @@ my_metadata('get_basins', files.towrite, overwrite=TRUE)
 
     ## [1] "writing to data/get_basins_metadata.csv"
 
-    ##                                               file          type                                                      description
-    ## poi                              data/uyrw_poi.rds R list object                              points of interest in the watershed
-    ## nhd                      data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
-    ## crs                              data/uyrw_crs.rds R list object                     details of projection/extent for the project
-    ## boundary       data/prepared/uyrw_nhd_boundary.rds  R sfc object UYRW watershed boundary polygon derived from NHDPlus catchements
-    ## mainstem       data/prepared/uyrw_nhd_mainstem.rds  R sfc object       UYR main stem line geometry derived from NHDPlus flowlines
-    ## catchment     data/prepared/uyrw_nhd_catchment.rds   R sf object                  reprojected/repaired NHDPlus catchment polygons
-    ## waterbody     data/prepared/uyrw_nhd_waterbody.rds   R sf object                 reprojected/repaired NHDPlus water body polygons
-    ## flowline       data/prepared/uyrw_nhd_flowline.rds   R sf object                 reprojected/repaired NHDPlus flowline geometries
-    ## millcreek          data/prepared/millcreek_nhd.rds R list object       flowlines, catchments, and boundary polygon for mill creek
-    ## pars_tmap                 data/tmap_get_basins.rds R list object          parameters for writing png plots using tmap and tm_save
-    ## img_flowlines          graphics/uyrw_flowlines.png   png graphic                   image of flowlines in the UYRW with placenames
-    ## img_basins                graphics/uyrw_basins.png   png graphic                   image of some 2000 drainage basins in the UYRW
-    ## metadata              data/get_basins_metadata.csv           CSV                      list files of files written by get_basins.R
+    ##                                                   file          type                                                      description
+    ## poi                                  data/uyrw_poi.rds R list object                              points of interest in the watershed
+    ## nhd                          data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
+    ## crs                                  data/uyrw_crs.rds R list object                     details of projection/extent for the project
+    ## boundary           data/prepared/uyrw_nhd_boundary.rds  R sfc object UYRW watershed boundary polygon derived from NHDPlus catchements
+    ## boundary_padded data/prepared/uyrw_boundary_padded.rds   R sf object                                padded watershed boundary polygon
+    ## mainstem           data/prepared/uyrw_nhd_mainstem.rds  R sfc object       UYR main stem line geometry derived from NHDPlus flowlines
+    ## catchment         data/prepared/uyrw_nhd_catchment.rds   R sf object                  reprojected/repaired NHDPlus catchment polygons
+    ## waterbody         data/prepared/uyrw_nhd_waterbody.rds   R sf object                 reprojected/repaired NHDPlus water body polygons
+    ## flowline           data/prepared/uyrw_nhd_flowline.rds   R sf object                 reprojected/repaired NHDPlus flowline geometries
+    ## millcreek              data/prepared/millcreek_nhd.rds R list object       flowlines, catchments, and boundary polygon for mill creek
+    ## pars_tmap                     data/tmap_get_basins.rds R list object          parameters for writing png plots using tmap and tm_save
+    ## img_flowlines              graphics/uyrw_flowlines.png   png graphic                   image of flowlines in the UYRW with placenames
+    ## img_basins                    graphics/uyrw_basins.png   png graphic                   image of some 2000 drainage basins in the UYRW
+    ## metadata                  data/get_basins_metadata.csv           CSV                      list files of files written by get_basins.R
 
 The list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
@@ -282,6 +277,9 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
   uyrw.xlim = st_bbox(uyrw.poly)[c(1,3)]
   uyrw.ylim = st_bbox(uyrw.poly)[c(2,4)]
   
+  # create extended boundary polygon, with 25km buffer, in case we need info on surrounding area
+  uyrw.padded.poly = st_buffer(uyrw.poly, dist = 25e3)
+  
   # define CRS info list
   crs.list = list(epsg = uyrw.UTM.epsg,
                   epsg.geo = latlong.epsg,
@@ -291,10 +289,11 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
   # save to disk
   saveRDS(crs.list, here(my_metadata('get_basins')['crs', 'file']))
   saveRDS(uyrw.poly, here(my_metadata('get_basins')['boundary', 'file']))
+  saveRDS(uyrw.padded.poly, here(my_metadata('get_basins')['boundary_padded', 'file']))
   
 } else {
   
-  # load CRS info list and watershed boundary from disk
+  # load CRS info list and watershed boundary from disk (padded boundary not needed yet)
   crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
   uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 }
