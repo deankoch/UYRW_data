@@ -7,7 +7,7 @@
 #'
 #' **MITACS UYRW project**
 #' 
-#' **get_soils**: download NRCS SSURGO data and warp to our reference coordinate system 
+#' **get_soils**: download, process NRCS SSURGO (and gSSURGO) soils data (work in progress)
 #' 
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md) and
 #' [get_dem.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
@@ -258,7 +258,6 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
   
   # define a title and subtitle
   tmap.tstr = paste0('SSURGO map units in the UYRW (n=', nrow(sdm.sf), ')')
-  tmap.tstr.sub ='(dark colours indicate partial/incomplete coverage)'
   tmap.tstr.sub ='(dark colours indicate incomplete coverage)'
   
   # prepare the plot grob
