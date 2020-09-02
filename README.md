@@ -13,6 +13,8 @@ finds SNOTEL and NOAA climatic sensor station data using `snotelr` and `rnoaa`
 downloads and processes the National Elevation Dataset from USGS using `FedData`
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
 finds streamflow and groundwater sensor data from the USGS NWIS using `dataRetrieval`
+* [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
+fetches SSURGO data from the Soil Data Mart using `FedData`
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
 
