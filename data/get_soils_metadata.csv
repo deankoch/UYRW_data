@@ -1,0 +1,7 @@
+"","file","type","description"
+"soils_acodes","data/prepared/nrcs_acodes.rds","R sf object","survey area polygons in the UYRW area corresponding to NRCS Soil Data Mart products"
+"soils_sdm","data/source/nrcs_sdm","directory","NRCS Soil Data Mart products (subfolders correspond to FedData calls using soils_acodes)"
+"soils_sfc","data/prepared/nrcs_sf.rds","R sf object","SSURGO soils mapping units for UYRW, derived from soils_sdm"
+"soils_tab","data/prepared/nrcs_tab.rds","R list object","SSURGO tabular data for the UYRW area (a list of data frames), derived from soils_sdm"
+"img_soils","graphics/soils.png","png graphic","image of soils for the UYRW"
+"metadata","data/get_soils_metadata.csv","CSV","list files of files written by get_soils.R"
