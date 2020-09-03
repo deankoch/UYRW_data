@@ -182,7 +182,7 @@ if(!file.exists(here(my_metadata('get_weatherstations')['ghcnd', 'file'])))
   length(ghcnd.elem)
   
   # double sapply call to this function builds a table indicating which elements are available in which year
-  ghcnd.elem.df = t(sapply(ghcnd.sf$id, function(idval) sapply(ghcnd.elem, function(elemval) my.ghcnd.reshape(idval, elemval))))
+  ghcnd.elem.df = t(sapply(ghcnd.sf$id, function(idval) sapply(ghcnd.elem, function(elemval) my_ghcnd_reshape(idval, elemval))))
   
   # join this data to the sfc object (reordering to emphasize most populated fields)
   ghcnd.sf = cbind(ghcnd.sf, ghcnd.elem.df[,order(apply(ghcnd.elem.df, 2, function(xx) sum(!is.na(xx))), decreasing=TRUE)])
