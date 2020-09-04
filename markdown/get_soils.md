@@ -19,9 +19,9 @@ should be run first.
 is used to fetch the [NRCS
 SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 soils data,
-[’dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) is
+[`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) is
 used for omitting duplicate rows from the tabular data, and
-[`rvest\`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is
+[`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is
 used to parse the NRCS website for links to STATSGO2 data archives. See
 the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
@@ -483,57 +483,56 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
 # I follow the guide at https://r-forge.r-project.org/scm/viewvc.php/*checkout*/docs/soilDB/gSSURGO-SDA.html?revision=705&root=aqp
 # but run queries with base R instead of using SQL
 
-# pull some data on water profile
-cp.vars = c('mukey', 'compname')
-hz.vars = c('cokey', 'comppct.r', 'hzdept.r', 'hzdepb.r', 'hzname', 'awc.r')
-hz.df = left_join(sdm.tab[['component']], sdm.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
-hz.statsgo.df = left_join(statsgo.tab[['component']], statsgo.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
-hz.df = rbind(hz.df, hz.statsgo.df)
-
-# define a total water storage (aggregate) calculator and a general mukey-level aggregator
-wstor.fun = function(hz) { data.frame(pct=hz$comppct.r[1], size=sum(hz$awc.r * (hz$hzdepb.r - hz$hzdept.r), na.rm=TRUE)) }
-wstor.agg = function(hz) { data.frame(wstor = weighted.mean(hz$size, hz$pct))}
-
-# use dplyr to perform the split-apply-merge then reorder to match the mukey order in polygons sf
-wstor.uyrw = hz.df %>% group_by(mukey, cokey) %>% do(wstor.fun(.)) %>% group_by(mukey) %>% do(wstor.agg(.))
-wstor.uyrw = wstor.uyrw[match(as.integer(sdm.merged.sf$MUKEY), wstor.uyrw$mukey),]
-
-# copy the polygons sf and append the water storage totals
-wstor.sf = cbind(sdm.merged.sf, wstor.uyrw)
-
-tmap.pars$layout = tmap.pars$layout + 
-  tm_layout(legend.text.color='black',
-            legend.title.color='black')
-
-tmap.tstr = 'profile-total water storage (mean over map units)'
-
-# prepare the plot grob
-tmap.wstor = tm_shape(wstor.sf) +
-  tm_polygons(col='wstor', palette='YlGn', border.alpha=0, style='cont') +
-    tm_shape(uyrw.poly) +
-  tm_borders(col='black') +
-    tm_shape(uyrw.mainstem) +
-  tm_lines(col='dodgerblue4', lwd=2) +
-    tm_shape(uyrw.waterbody) + 
-  tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
-    tmap.pars$layout +
-  tm_layout(main.title=paste(tmap.tstr, sep='\n'))
-
-# render the plot
-tmap_save(tm=tmap.wstor, 
-          here(my_metadata('get_soils')['img_soils_wstor', 'file']), 
-          width=tmap.pars$png['w'], 
-          height=tmap.pars$png['h'], 
-          pointsize=tmap.pars$png['pt'])
-```
-
-    ## Map saved to H:\UYRW_data\graphics\soils_wstor.png
-
-    ## Resolution: 1200 by 1800 pixels
-
-    ## Size: 4 by 6 inches (300 dpi)
-
-``` r
+# plot available survey coverage from SSURGO
+if(!file.exists(here(my_metadata('get_soils')['img_soils_wstor', 'file'])))
+{
+  # load DEM plotting parameters from disk
+  tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
+  sdm.merged.sf = rbind(st_difference(sdm.sf, poly.partial), st_intersection(statsgo.sf, poly.partial))
+  
+  # pull some data on water profile
+  cp.vars = c('mukey', 'compname')
+  hz.vars = c('cokey', 'comppct.r', 'hzdept.r', 'hzdepb.r', 'hzname', 'awc.r')
+  hz.df = left_join(sdm.tab[['component']], sdm.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
+  hz.statsgo.df = left_join(statsgo.tab[['component']], statsgo.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
+  hz.df = rbind(hz.df, hz.statsgo.df)
+  
+  # define a total water storage (aggregate) calculator and a general mukey-level aggregator
+  wstor.fun = function(hz) { data.frame(pct=hz$comppct.r[1], size=sum(hz$awc.r * (hz$hzdepb.r - hz$hzdept.r), na.rm=TRUE)) }
+  wstor.agg = function(hz) { data.frame(wstor = weighted.mean(hz$size, hz$pct))}
+  
+  # use dplyr to perform the split-apply-merge then reorder to match the mukey order in polygons sf
+  wstor.uyrw = hz.df %>% group_by(mukey, cokey) %>% do(wstor.fun(.)) %>% group_by(mukey) %>% do(wstor.agg(.))
+  wstor.uyrw = wstor.uyrw[match(as.integer(sdm.merged.sf$MUKEY), wstor.uyrw$mukey),]
+  
+  # copy the polygons sf and append the water storage totals
+  wstor.sf = cbind(sdm.merged.sf, wstor.uyrw)
+  
+  tmap.pars$layout = tmap.pars$layout + 
+    tm_layout(legend.text.color='black',
+              legend.title.color='black')
+  
+  tmap.tstr = 'profile-total water storage (mean over map units)'
+  
+  # prepare the plot grob
+  tmap.wstor = tm_shape(wstor.sf) +
+    tm_polygons(col='wstor', palette='YlGn', border.alpha=0, style='cont') +
+      tm_shape(uyrw.poly) +
+    tm_borders(col='black') +
+      tm_shape(uyrw.mainstem) +
+    tm_lines(col='dodgerblue4', lwd=2) +
+      tm_shape(uyrw.waterbody) + 
+    tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+      tmap.pars$layout +
+    tm_layout(main.title=paste(tmap.tstr, sep='\n'))
+  
+  # render the plot
+  tmap_save(tm=tmap.wstor, 
+            here(my_metadata('get_soils')['img_soils_wstor', 'file']), 
+            width=tmap.pars$png['w'], 
+            height=tmap.pars$png['h'], 
+            pointsize=tmap.pars$png['pt'])
+}
 # 
 ```
 
