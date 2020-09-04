@@ -197,12 +197,76 @@ dates
 
 ``` r
 # convert start/end year columns from GHCN data to a single (string) column for each "element"
-my.ghcnd.reshape = function(idval, elemval)
+my_ghcnd_reshape = function(idval, elemval)
 {
   # query this combination of station id and element string in the full GHCND table
   idx.row = (ghcnd.df$id == idval) & (ghcnd.df$element == elemval)
   
   # if it exists, return a string of form "start-end", otherwise NA
   return(ifelse(!any(idx.row), NA, paste(ghcnd.df[idx.row, c('first_year', 'last_year')], collapse='-')))
+}
+```
+
+This is a kludge combining various `FedData` functions with some of my
+own code, in order to import STATSGO2 data and produce output similar to
+FedData::get\_ssurgo. It uses data from
+[NRCS](https://nrcs.app.box.com/v/soils), which is aggregated at the
+state level. Instead of a `template` or SSA code argument, it takes a
+state code, such as ‘mt’. Note that not all states are available at this
+time (see here for the list)
+
+``` r
+my_get_statsgo = function(raw.dir, state, extraction.dir, label='UYRW')
+{
+  # raw.dir = path of the files extracted from the NRCS zip (this dir should have subdirs 'tabular', 'spatial') 
+  # state = 2-letter state code, eg. 'MT' for Montana (case insensitive)
+  # extraction.dir = absolute path of destination folder for CSV and shapefile data
+  
+  # get tables headers (these are not exported to user namespace!)
+  tablesHeaders = getFromNamespace('tablesHeaders', 'FedData')
+  
+  # this call adjusted to use STATSGO2 syntax for filenames
+  mapunits <- sf::read_sf(paste0(raw.dir, "/spatial"), layer = paste0("gsmsoilmu_a_", tolower(state))) %>%
+    sf::st_make_valid() %>%
+    dplyr::group_by(AREASYMBOL, SPATIALVER, MUSYM, MUKEY) %>%
+    dplyr::summarise()
+
+  # same here
+    if (.Platform$OS.type == "windows") 
+    {
+      files <- list.files(paste0(raw.dir, "/tabular"),full.names = T)
+      tablesData <- lapply(files, function(file) {tryCatch(return(utils::read.delim(file, header = F, sep = "|", stringsAsFactors = F)), error = function(e) {return(NULL)})})
+      names(tablesData) <- basename(files)
+      tablesData <- tablesData[!sapply(tablesData, is.null)]
+      
+    } else {
+      
+      files <- list.files(paste0(raw.dir, "/tabular"), full.names = T)
+      tablesData <- lapply(files, function(file) { tryCatch(return(utils::read.delim(file, header = F, sep = "|", stringsAsFactors = F)), error = function(e) {return(NULL)})})
+      names(tablesData) <- basename(files)
+      tablesData <- tablesData[!sapply(tablesData, is.null)]
+    }
+  
+  # below is just copy pasted from 'FedData::get_ssurgo_study_area' (v2.5.7)
+    SSURGOTableMapping <- tablesData[["mstab.txt"]][, c(1,5)]
+    names(SSURGOTableMapping) <- c("TABLE", "FILE")
+    SSURGOTableMapping[, "FILE"] <- paste(SSURGOTableMapping[,"FILE"], ".txt", sep = "")
+    tablesData <- tablesData[as.character(SSURGOTableMapping[,"FILE"])]
+    tablesHeads <- tablesHeaders[as.character(SSURGOTableMapping[,"TABLE"])]
+    notNull <- (!sapply(tablesData, is.null) & !sapply(tablesHeads,is.null))
+    tablesData <- tablesData[notNull]
+    tablesHeads <- tablesHeads[notNull]
+    tables <- mapply(tablesData, tablesHeads, FUN = function(theData,theHeader) {
+      names(theData) <- names(theHeader)
+      return(theData)
+    })
+    names(tables) <- names(tablesHeads)
+    tables <- extract_ssurgo_data(tables = tables, mapunits = as.character(unique(mapunits$MUKEY)))
+    
+    # save results as ESRI shapefile and csv (adapted from FedData::get_ssurgo v2.5.7)
+    suppressWarnings(rgdal::writeOGR(as(mapunits, 'Spatial'), dsn = normalizePath(paste0(extraction.dir,"/.")), layer = paste0(label, "_SSURGO_Mapunits"), driver = "ESRI Shapefile", overwrite_layer = TRUE))
+    junk <- lapply(names(tables), function(tab) {readr::write_csv(tables[[tab]], path = paste(extraction.dir, "/", label, "_SSURGO_", tab, ".csv", sep = "")) })
+
+    return(list(spatial = mapunits, tabular = tables))
 }
 ```
