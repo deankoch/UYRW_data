@@ -14,7 +14,7 @@ downloads and processes the National Elevation Dataset from USGS using `FedData`
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
 finds streamflow and groundwater sensor data from the USGS NWIS using `dataRetrieval`
 * [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
-fetches SSURGO data from the Soil Data Mart using `FedData`
+fetches SSURGO/STATSGO2 data from the Soil Data Mart using `FedData`
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
 
@@ -31,4 +31,5 @@ R is a powerful data-retrieval, GIS, and visualization tool. These figures are g
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png" width="45%"></img> <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png" width="45%"></img> <img 
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/weatherstation_sites.png" width="45%"></img> <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/streamgage_sites.png" width="45%"> <img
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png" width="45%"> <img
-src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils.png" width="45%"> </img> 
+src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils.png" width="45%"> <img
+src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils_wstor.png" width="45%"> </img> 
