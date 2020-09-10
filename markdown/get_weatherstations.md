@@ -98,7 +98,7 @@ my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
     ## metadata           data/get_weatherstations_metadata.csv           CSV    list files of files written by get_weatherstations.R
 
 This list of files and descriptions is now stored as a [.csv
-file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
+file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstations_metadata.csv)
 in the `/data` directory. Load some of the data prepared earlier
 
 ``` r

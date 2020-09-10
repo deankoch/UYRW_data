@@ -80,7 +80,7 @@ files.towrite = list(
 my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstation_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstations_metadata.csv)
 #' in the `/data` directory.
 
 #' Load some of the data prepared earlier 
