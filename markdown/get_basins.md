@@ -35,7 +35,7 @@ which sets up required libraries, directories, and defines some utility
 functions
 
 ``` r
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 ```
 
 Some additional packages are needed in this script: `nhdplusTools`
@@ -50,8 +50,20 @@ github using devtools
 #install_github('mikejohnson51/AOI')
 library(AOI)
 library(nhdplusTools)
+```
+
+    ## USGS Support Package: https://owi.usgs.gov/R/packages.html#support
+
+``` r
 library(smoothr)
 ```
+
+    ## 
+    ## Attaching package: 'smoothr'
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     smooth
 
 ## metadata
 

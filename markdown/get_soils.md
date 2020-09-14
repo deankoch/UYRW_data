@@ -29,13 +29,48 @@ for other required libraries
 
 ``` r
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(FedData)
+```
+
+    ## Loading required package: sp
+
+``` r
 library(raster)
 library(gdalUtils)
+```
+
+    ## 
+    ## Attaching package: 'gdalUtils'
+
+    ## The following object is masked from 'package:sf':
+    ## 
+    ##     gdal_rasterize
+
+``` r
 library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:raster':
+    ## 
+    ##     intersect, select, union
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
 library(rvest)
 ```
+
+    ## Loading required package: xml2
 
 ## project data
 

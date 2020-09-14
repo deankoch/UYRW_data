@@ -19,7 +19,7 @@ for other required libraries
 
 ``` r
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(FedData)
 library(raster)
 library(gdalUtils)

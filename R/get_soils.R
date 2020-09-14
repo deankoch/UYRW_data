@@ -22,7 +22,7 @@
 #' data archives. See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(FedData)
 library(raster)
 library(gdalUtils)
@@ -688,3 +688,4 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils_wstor', 'file'])))
 # render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
 #rmarkdown::render(here(paste0('get_soils', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_soils', '.md'))))
 
+#my_markdown('get_soils')

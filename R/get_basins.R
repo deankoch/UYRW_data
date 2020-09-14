@@ -26,7 +26,7 @@ library(here)
 
 #' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' which sets up required libraries, directories, and defines some utility functions
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 
 #' Some additional packages are needed in this script: `nhdplusTools` fetches data from the USGS, `smoothr` simplifies
 #' complex spatial features, and `AOI` interfaces with OpenStreetMaps (OSM) to get the latitude/longitude pair
@@ -432,7 +432,7 @@ if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
 # Development code
 
 # there is another layer here called NHDArea
-st_layers(here(my_metadata('get_basins')['nhd', 'file']))
+#st_layers(here(my_metadata('get_basins')['nhd', 'file']))
 
 
 #+ include=FALSE
@@ -459,3 +459,4 @@ st_layers(here(my_metadata('get_basins')['nhd', 'file']))
 #+ include=FALSE
 # render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
 #rmarkdown::render(here(paste0('get_basins', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_basins', '.md'))))
+#my_markdown('get_basins')

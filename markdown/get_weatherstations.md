@@ -29,7 +29,7 @@ for other required libraries
 
 ``` r
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(snotelr)
 library(rnoaa)
 ```
@@ -344,4 +344,6 @@ Data downloads look like this:
 ``` r
 # xx = meteo_pull_monitors('US1MTPK0001')
 # yy = snotel_download(site_id = 363, internal=TRUE)
+
+#my_markdown('get_weatherstations')
 ```

@@ -180,6 +180,33 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   }
 }
 
+#' My R scripts are commented using a roxygen2 syntax that is interpretable by `rmarkdown`. This convenience function
+#' renders the markdown file for a given R script and writes to a file of the same name (but with a .md extension).
+my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
+{
+  # ARGUMENTS:
+  #
+  # `script.name` is a string indicating the filename (without the .R extension) of the R script to document.
+  # `script.dir` is a string indicating which folder in the project directory contains the R script.
+  # `markdown.dir` is a string indicating a folder in the project directory to write the output file.
+  #
+  # RETURN VALUE:
+  #
+  # (null)
+  #
+  # BEHAVIOUR: 
+  #
+  # Writes the file <project directory>/<script.dir>/<script.name>.R, overwriting without warning
+  
+  # set up in/out files
+  path.input = here(script.dir, paste0(script.name, '.R'))
+  path.output = here(file.path(markdown.dir, paste0(script.name, '.md')))
+  
+  # note: run_pandoc=FALSE appears to cause output_dir to be ignored. So this call also generates an html file
+  paste('rendering markdown file', path.output, 'from the R script', path.input)
+  rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+}
+
 #' This function is used in `get_weatherstations` to parse the time series dates
 # convert start/end year columns from GHCN data to a single (string) column for each "element"
 my_ghcnd_reshape = function(idval, elemval)
@@ -250,5 +277,4 @@ my_get_statsgo = function(raw.dir, state, extraction.dir, label='UYRW')
 }
 
 #+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_helperfun', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_helperfun', '.md'))))
+#my_markdown('get_helperfun')

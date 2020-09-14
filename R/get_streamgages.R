@@ -19,7 +19,7 @@
 #' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(dataRetrieval)
 #?library(waterData)
 
@@ -242,7 +242,4 @@ if(!file.exists(here(my_metadata('get_streamgages')['img_streamgage', 'file'])))
 
 #+ include=FALSE
 # Development code
-
-#+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_streamgages', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_streamgages', '.md'))))
+#my_markdown('get_streamgages')

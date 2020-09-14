@@ -18,7 +18,7 @@
 #' See the[get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
-source(here('get_helperfun.R'))
+source(here('R/get_helperfun.R'))
 library(FedData)
 library(raster)
 library(gdalUtils)
@@ -169,9 +169,4 @@ if(!file.exists(here(my_metadata('get_dem')['img_dem', 'file'])))
 
 #+ include=FALSE
 # Development code
-
-
-#+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_dem', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_dem', '.md'))))
-
+#my_markdown('get_dem')
