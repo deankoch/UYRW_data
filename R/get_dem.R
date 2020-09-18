@@ -21,7 +21,10 @@ library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
 library(raster)
+
+# this library is needed for the gdalwarp (wrapper) function
 library(gdalUtils)
+# I may migrate to a new package, `gdalUtilities`, which has better incorporation of R objects as inputs
 
 #'
 #' ## project data

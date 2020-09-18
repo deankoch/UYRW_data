@@ -206,7 +206,6 @@ my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
   paste('rendering markdown file', path.output, 'from the R script', path.input)
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
 }
-
 #' This function is used in `get_weatherstations` to parse the time series dates
 # convert start/end year columns from GHCN data to a single (string) column for each "element"
 my_ghcnd_reshape = function(idval, elemval)
@@ -230,6 +229,7 @@ my_get_statsgo = function(raw.dir, state, extraction.dir, label='UYRW')
   
   # get tables headers (these are not exported to user namespace!)
   tablesHeaders = getFromNamespace('tablesHeaders', 'FedData')
+  tablesHeaders$component
   
   # this call adjusted to use STATSGO2 syntax for filenames
   mapunits <- sf::read_sf(paste0(raw.dir, "/spatial"), layer = paste0("gsmsoilmu_a_", tolower(state))) %>%

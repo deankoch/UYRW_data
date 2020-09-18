@@ -25,7 +25,7 @@ library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
 library(raster)
-library(gdalUtils)
+#library(gdalUtils)
 library(dplyr)
 library(rvest)
 
@@ -48,7 +48,7 @@ files.towrite = list(
     description='NRCS Soil Data Mart products (subfolders correspond to FedData calls using soils_acodes)'), 
   
   # SSURGO map unit polygons with some associated data, projected and clipped to UYRW boundary
-  c(name='soils_sfc',
+  c(name='soils_sf',
     file=file.path(out.subdir, 'nrcs_sf.rds'), 
     type='R sf object',
     description='SSURGO soils mapping units for UYRW, derived from soils_sdm'), 
@@ -60,7 +60,7 @@ files.towrite = list(
     description='SSURGO tabular data for the UYRW area (a list of data frames), derived from soils_sdm'),
   
   # STATSGO2 map unit polygons with some associated data, projected and clipped to UYRW boundary
-  c(name='soils_statsgo_sfc',
+  c(name='soils_statsgo_sf',
     file=file.path(out.subdir, 'nrcs_statsgo_sf.rds'), 
     type='R sf object',
     description='STATSGO2 soils mapping units for UYRW, derived from soils_sdm'), 
@@ -69,7 +69,19 @@ files.towrite = list(
   c(name='soils_statsgo_tab',
     file=file.path(out.subdir, 'nrcs_statsgo_tab.rds'), 
     type='R list object',
-    description='STATSGO2 tabular data for the UYRW area (a list of data frames), derived from soils_sdm'), 
+    description='STATSGO2 tabular data for the UYRW area (a list of data frames), derived from soils_sdm'),
+  
+  # multipolygon representing areas in URYW with incomplete coverage in SSURGO
+  c(name='ssurgo_incomplete_sfc',
+    file=file.path(out.subdir, 'nrcs_incomplete_sfc.rds'), 
+    type='R sfc object',
+    description='areas in URYW with incomplete SSURGO coverage, derived from soils_sf and soils_tab'), 
+  
+  # combined set of SSURGO and STATSGO2 map unit polygons, covering the UYRW area
+  c(name='soils_merged_sf',
+    file=file.path(out.subdir, 'nrcs_merged_sf.rds'), 
+    type='R sf object',
+    description='merged STATSGO2/SSURGO soil mapping units for UYRW'), 
   
   # # aesthetic parameters for plotting
   # c(name='pars_tmap',
@@ -186,9 +198,9 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_acodes', 'soils_sdm')
 #' 
 #' Note: a large number of files not listed explicitly in "get_soils_metadata.csv" are written to the subdirectory
 #' "data/source/nrcs_sdm" by this chunk. Their data are simplified and consolidated into two output files, listed as
-#' `soils_sfc` and `soils_tab`
+#' `soils_sf` and `soils_tab`
 #'  
-if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sfc', 'soils_tab'), 'file']))))
+if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sf', 'soils_tab'), 'file']))))
 {
   # identify the survey area codes and create a list of destination subdirectories
   uyrw.acodes = sdm.acodes$areasymbol
@@ -202,22 +214,17 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sfc', 'soils_tab'), '
   pb = txtProgressBar(min=0, max=length(uyrw.acodes), style=3)
   for(idx.acode in 1:length(uyrw.acodes))
   {
+    # note that force.redo=FALSE leads to parsing errors if the data have already been extracted
     setTxtProgressBar(pb, idx.acode)
     sdm.data.list[[idx.acode]] = get_ssurgo(template=uyrw.acodes[idx.acode], 
                                             label='UYRW', 
                                             raw.dir=here(my_metadata('get_soils')['soils_sdm', 'file']),
-                                            extraction.dir=acodes.dest[[idx.acode]])
+                                            extraction.dir=acodes.dest[[idx.acode]],
+                                            force.redo=TRUE)
   }
   close(pb)
   
-  # merge spatial data from all survey areas, transform to our projection
-  sdm.sf = do.call(rbind, lapply(sdm.data.list, function(acode) st_transform(st_as_sf(acode$spatial), crs.list$epsg)))
-  
-  # fix broken geometries and clip to UYRW boundary
-  sdm.sf = st_intersection(st_make_valid(sdm.sf), uyrw.poly)
-  
-  # save the polygons file to disk, then start processing tabular data
-  saveRDS(sdm.sf, here(my_metadata('get_soils')['soils_sfc', 'file']))
+  ## start processing tabular data...
 
   # identify all (61) different unique tabular data names and note that SSAs vary in the number of associated tables
   names(sdm.data.list) = uyrw.acodes
@@ -249,17 +256,23 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sfc', 'soils_tab'), '
   }
   close(pb)
   
-  # omit data not pertinent to the selected mapunits, and delete any empty tables 
-  sdm.tab = extract_ssurgo_data(sdm.tab, sdm.sf$MUKEY)
+  # save the list of tables to disk, omitting any empty ones
   sdm.tab = sdm.tab[sapply(sdm.tab, nrow) > 0]
-
-  # save tabular data to disk
   saveRDS(sdm.tab, here(my_metadata('get_soils')['soils_tab', 'file']))
+  
+  # merge spatial data from all survey areas, transform to our projection
+  sdm.sf = do.call(rbind, lapply(sdm.data.list, function(acode) st_transform(st_as_sf(acode$spatial), crs.list$epsg)))
+  
+  # fix broken geometries and clip to UYRW boundary
+  sdm.sf = st_intersection(st_make_valid(sdm.sf), uyrw.poly)
+  
+  # save the polygons file to disk
+  saveRDS(sdm.sf, here(my_metadata('get_soils')['soils_sf', 'file']))
   
 } else {
   
   # load the sf object from disk
-  sdm.sf = readRDS(here(my_metadata('get_soils')['soils_sfc', 'file']))
+  sdm.sf = readRDS(here(my_metadata('get_soils')['soils_sf', 'file']))
   sdm.tab = readRDS(here(my_metadata('get_soils')['soils_tab', 'file']))
 }
 
@@ -267,8 +280,8 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sfc', 'soils_tab'), '
 #' ## Download STATSGO2 data
 #' Looking at the distribution of
 #' [map unit keys](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053631)
-#' (mukeys) across the landscape, we find some areas of incomplete coverage around the Absaroka-Beartooth
-#' Wilderness Area
+#' (mukeys) across the landscape, we find a large area of incomplete coverage around the Absaroka-Beartooth
+#' Wilderness Area, and many smaller ones scattered throughout the watershed
 #' 
 
 #' ![SSURGO coverage map of the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils.png)
@@ -279,10 +292,10 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_sfc', 'soils_tab'), '
 #' [at this link](https://nrcs.app.box.com/v/soils).
 #' 
 #' We will save the STATSGO data for Wyoming and Montana, creating two new output files:
-#' `soils_statsgo_sfc` and `soils_statsgo_tab`. Note: a large number of files not listed explicitly in
+#' `soils_statsgo_sf` and `soils_statsgo_tab`. Note: a large number of files not listed explicitly in
 #' "get_soils_metadata.csv" are written to the subdirectory "data/source/nrcs_sdm" by this chunk. 
 #'  
-if(any(!file.exists(here(my_metadata('get_soils')[c('soils_statsgo_sfc', 'soils_statsgo_tab'), 'file']))))
+if(any(!file.exists(here(my_metadata('get_soils')[c('soils_statsgo_sf', 'soils_statsgo_tab'), 'file']))))
 {
   # define the website url and read in the javascript as text
   nrcs.domain = 'https://nrcs.app.box.com/v/soils/folder/18247487156'
@@ -335,7 +348,7 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_statsgo_sfc', 'soils_
   statsgo.sf = st_intersection(st_make_valid(statsgo.sf), uyrw.poly)
   
   # save the polygons file to disk (30 features), then start processing tabular data
-  saveRDS(statsgo.sf, here(my_metadata('get_soils')['soils_statsgo_sfc', 'file']))
+  saveRDS(statsgo.sf, here(my_metadata('get_soils')['soils_statsgo_sf', 'file']))
   
   # identify all (54) different unique tabular data names
   names(statsgo.data.list) = names(idx.todownload)
@@ -377,20 +390,52 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('soils_statsgo_sfc', 'soils_
 } else {
   
   # load the sf object from disk
-  statsgo.sf = readRDS(here(my_metadata('get_soils')['soils_statsgo_sfc', 'file']))
+  statsgo.sf = readRDS(here(my_metadata('get_soils')['soils_statsgo_sf', 'file']))
   statsgo.tab = readRDS(here(my_metadata('get_soils')['soils_statsgo_tab', 'file']))
 
 }
   
+#'
+#' ## SSURGO vs STATSGO coverage
+#' Looking at the mapunits only, the SSURGO database appears to cover most of the UYRW apart from a large
+#' in the northeast. However, in many other small areas, we are missing information on soil horizons needed
+#' by SWAT+. The dataset is completed in these areas using STATSGO2
+
+if(any(!file.exists(here(my_metadata('get_soils')[c('ssurgo_incomplete_sfc', 'soils_merged_sf'), 'file']))))
+{
+  # identify mapunits in SSURGO for which we have layers data (chorizon) on the dominant soil component...
+  cokey.dominant = sdm.tab$component %>% group_by(mukey) %>% slice(which.max(comppct.r)) %>% select(mukey, cokey)
+  mukey.tokeep = cokey.dominant$mukey[cokey.dominant$cokey %in% sdm.tab$chorizon$cokey]
+  
+  # ...and keep only those SSURGO mapunit polygons, discarding the incomplete ones
+  sdm.sf = sdm.sf[as.integer(sdm.sf$MUKEY) %in% mukey.tokeep, ]
+  
+  # dissolve all remaining SSURGO mapunit polygons into a single multipolygon
+  ssurgo.coverage.poly = st_make_valid(st_union(st_geometry(sdm.sf)))
+  
+  # take difference with watershed boundary polygon to get map of incomplete SSURGO areas, save to disk
+  ssurgo.incomplete.poly = st_make_valid(st_difference(uyrw.poly, ssurgo.coverage.poly))
+  saveRDS(ssurgo.incomplete.poly, here(my_metadata('get_soils')['ssurgo_incomplete_sfc', 'file']))
+  
+  # clip all STATSGO2 mapunits to keep only those areas needed to complete the SSURGO dataset
+  statsgo.tokeep.sf = st_make_valid(st_intersection(statsgo.sf, ssurgo.incomplete.poly))
+  
+  # merge the SSURGO and STATSGO2 mapunit shapefiles, with preference for SSURGO, save to disk
+  soils.merged.sf = st_make_valid(rbind(sdm.sf, statsgo.tokeep.sf))
+  saveRDS(soils.merged.sf, here(my_metadata('get_soils')['soils_merged_sf', 'file']))
+
+} else {
+  
+  # load the sf object from disk
+  ssurgo.incomplete.poly = readRDS(here(my_metadata('get_soils')['ssurgo_incomplete_sfc', 'file']))
+  soils.merged.sf = readRDS(here(my_metadata('get_soils')['soils_merged_sf', 'file']))
+  
+}
 
 #'
 #' ## visualization
 #' 
 
-# identify area codes for areas of incomplete coverage and create a polygon
-acodes.partial = sdm.tab$legend$areasymbol[!(sdm.tab$legend$legenddesc %in% c('Detailed Soil Map Legend', 'Partial Join Legend'))]
-anames.partial = sdm.acodes$areaname[sdm.acodes$areasymbol %in% acodes.partial]
-poly.partial = st_make_valid(st_union(st_geometry(sdm.acodes[sdm.acodes$areasymbol %in% acodes.partial,])))
 
 # plot available survey coverage from SSURGO
 if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
@@ -398,15 +443,12 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
   # load DEM plotting parameters from disk
   tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
   
-  # merge the STATSGO2 spatial data to fill in the incomplete areas
-  sdm.merged.sf = rbind(st_difference(sdm.sf, poly.partial), st_intersection(statsgo.sf, poly.partial))
-  
   # define a title and subtitle
-  tmap.tstr = paste0('SSURGO map units in the UYRW (n=', nrow(sdm.merged.sf), ')')
-  tmap.tstr.sub ='(darkened areas indicate STATSGO2 data)'
+  tmap.tstr = paste0('soil survey map units in the UYRW (n=', nrow(soils.merged.sf), ')')
+  tmap.tstr.sub ='(SSURGO=light, STATSGO2=dark)'
   
   # prepare the plot grob
-  tmap.soils = tm_shape(sdm.merged.sf) +
+  tmap.soils = tm_shape(soils.merged.sf) +
       tm_polygons(col='MAP_COLORS', border.alpha=0) +
     tm_shape(uyrw.poly) +
       tm_borders(col='black') +
@@ -414,8 +456,8 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
       tm_lines(col='dodgerblue4', lwd=2) +
     tm_shape(uyrw.waterbody) + 
       tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
-    tm_shape(poly.partial) +
-      tm_polygons(col='black', border.alpha=0, alpha=0.3) +
+    tm_shape(ssurgo.incomplete.poly) +
+      tm_polygons(col='black', border.alpha=0, alpha=0.7) +
     tmap.pars$layout +
     tm_layout(main.title=paste(tmap.tstr, tmap.tstr.sub, sep='\n'))
   
@@ -434,46 +476,49 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))
 # I follow the guide at https://r-forge.r-project.org/scm/viewvc.php/*checkout*/docs/soilDB/gSSURGO-SDA.html?revision=705&root=aqp
 # but run queries with base R instead of using SQL
 
-# plot available survey coverage from SSURGO
+# plot water storage
 if(!file.exists(here(my_metadata('get_soils')['img_soils_wstor', 'file'])))
 {
   # load DEM plotting parameters from disk
   tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
-  sdm.merged.sf = rbind(st_difference(sdm.sf, poly.partial), st_intersection(statsgo.sf, poly.partial))
   
-  # pull some data on water profile
-  cp.vars = c('mukey', 'compname')
-  hz.vars = c('cokey', 'comppct.r', 'hzdept.r', 'hzdepb.r', 'hzname', 'awc.r')
-  hz.df = left_join(sdm.tab[['component']], sdm.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
-  hz.statsgo.df = left_join(statsgo.tab[['component']], statsgo.tab[['chorizon']], by='cokey')[, c(cp.vars, hz.vars)]
-  hz.df = rbind(hz.df, hz.statsgo.df)
+  # merge the required tables from SSURGO and STATSGO2, coercing one of the STATSGO2 columns to character type
+  relevant.tables = setNames(nm=c('component', 'chorizon'))
+  statsgo.tab$component$constreeshrubgrp = as.character(statsgo.tab$component$constreeshrubgrp)
+  soils.tab = lapply(relevant.tables, function(tname) bind_rows(sdm.tab[[tname]], statsgo.tab[[tname]]) )
   
-  # define a total water storage (aggregate) calculator and a general mukey-level aggregator
-  wstor.fun = function(hz) { data.frame(pct=hz$comppct.r[1], size=sum(hz$awc.r * (hz$hzdepb.r - hz$hzdept.r), na.rm=TRUE)) }
-  wstor.agg = function(hz) { data.frame(wstor = weighted.mean(hz$size, hz$pct))}
+  # compute a total water storage estimate, combining all horizons and aggregating over map units
+  awc.df = soils.tab$chorizon %>% 
+    mutate(lyr_awc = awc.r*(hzdepb.r - hzdept.r)) %>%
+    group_by(cokey) %>%
+    summarize(component_awc = sum(lyr_awc, na.rm=TRUE)) %>%
+    filter(!is.na(component_awc)) %>%
+    left_join(soils.tab$component, by='cokey') %>%
+    group_by(mukey) %>%
+    summarize(total_awc = weighted.mean(component_awc, comppct.r)) %>%
+    as.data.frame
   
-  # use dplyr to perform the split-apply-merge then reorder to match the mukey order in polygons sf
-  wstor.uyrw = hz.df %>% group_by(mukey, cokey) %>% do(wstor.fun(.)) %>% group_by(mukey) %>% do(wstor.agg(.))
-  wstor.uyrw = wstor.uyrw[match(as.integer(sdm.merged.sf$MUKEY), wstor.uyrw$mukey),]
-  
-  # copy the polygons sf and append the water storage totals
-  wstor.sf = cbind(sdm.merged.sf, wstor.uyrw)
+  # pull the subset corresponding to the URYW study area
+  awc.uyrw = awc.df$total_awc[match(as.integer(soils.merged.sf$MUKEY), awc.df$mukey)]
+
+  # copy the polygons sf and append the water storage totals, omitting NA values
+  wstor.sf = cbind(soils.merged.sf, awc.uyrw)
   
   tmap.pars$layout = tmap.pars$layout + 
     tm_layout(legend.text.color='black',
               legend.title.color='black')
   
-  tmap.tstr = 'profile-total water storage (mean over map units)'
+  tmap.tstr = 'soil water storage available to plants'
   
   # prepare the plot grob
   tmap.wstor = tm_shape(wstor.sf) +
-    tm_polygons(col='wstor', palette='YlGn', border.alpha=0, style='cont') +
+    tm_polygons(col='awc.uyrw', palette='YlGnBu', border.alpha=0, style='cont', title='cm', colorNA='red') +
       tm_shape(uyrw.poly) +
     tm_borders(col='black') +
       tm_shape(uyrw.mainstem) +
-    tm_lines(col='dodgerblue4', lwd=2) +
+    tm_lines(col='black', lwd=2) +
       tm_shape(uyrw.waterbody) + 
-    tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+    tm_polygons(col='black', border.alpha=0) +
       tmap.pars$layout +
     tm_layout(main.title=paste(tmap.tstr, sep='\n'))
   
@@ -681,11 +726,5 @@ if(!file.exists(here(my_metadata('get_soils')['img_soils_wstor', 'file'])))
 #   sdm.merged.tab[[name]] = bind_rows(sdm.merged.tab[[name]][, names(tab.to.ssurgo)], tab.to.ssurgo)
 # }
 
-
-
-
 #+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_soils', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_soils', '.md'))))
-
 #my_markdown('get_soils')
