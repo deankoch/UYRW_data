@@ -8,6 +8,12 @@ August 13, 2020
 **get\_weatherstations**: finds climatic sensor stations located in the
 UYRW
 
+[get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
+which creates some required directories and project config files, should
+be run before this script.
+
+## libraries
+
 The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package
 fetches [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from
 the USDA; and the [`rnoaa`](https://github.com/ropensci/rnoaa) package
@@ -15,15 +21,7 @@ fetches [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description)
 data (see documentation
 [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)). We
 use them to build a map of climatic sensor stations in the UYRW, and to
-query historical data for model training.
-
-[get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-which creates some required directories and project config files, should
-be run before this script.
-
-## libraries
-
-`snotelr` and `rnoaa` are used to fetch data. See the [get\_helperfun.R
+query historical data for model training. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 

@@ -9,29 +9,37 @@
 #' 
 #' **get_basins**: loads watershed geometry data into R
 #' 
-#' This mostly follows the example on the `nhdplusTools` github page with some minor modifications.
-#' A user guide for the NHDPlus dataset is
-#' <a href="https://pubs.er.usgs.gov/publication/ofr20191096" target="_blank">available here</a>, and a 
-#' <a href="https://tinyurl.com/y54rlqja" target="_blank">data dictionary here</a>.
+#' This code is based on the
+#' [`nhdplusTools` vignette](https://usgs-r.github.io/nhdplusTools/articles/nhdplusTools.html). It downloads
+#' watershed geometry features from the USGS NHDPlus database (see the 
+#' [user guide](https://pubs.er.usgs.gov/publication/ofr20191096) and 
+#' [data dictionary](https://tinyurl.com/y54rlqja)), and establishes the coordinate reference system and watershed
+#' boundary which are used extensively to define SWAT+ inputs. This is the first step in the project workflow.
 #' 
-#' The `nhdplusTools` package fetches NHDPlus products from the web without having to navigate the USGS
-#' website. This script uses it to assemble some basic info on the hydrology of the UYRW upstream of Carter's Bridge, Montana,
+#' The `nhdplusTools` package fetches [NHDPlus products](https://pubs.er.usgs.gov/publication/fs20203033)
+#' from the web without having to navigate the
+#' [USGS website](https://www.usgs.gov/core-science-systems/ngp/national-hydrography/access-national-hydrography-products).
+#' This script uses it to assemble some basic info on the hydrology of the UYRW upstream of
+#' [Carter's Bridge, Montana](https://myfwp.mt.gov/fwpPub/landsMgmt/siteDetail.action?lmsId=39753508),
 #' transforming that data into a more convenient format, and producing some plots giving an overview of the watershed.
 
 #'
 #' ## libraries
 
-#' The `here` package defines working directories in a way that makes the code portable
+#' The `here` package defines working directories in a way that makes R code portable
 library(here)
 
 #' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' which sets up required libraries, directories, and defines some utility functions
 source(here('R/get_helperfun.R'))
 
-#' Some additional packages are needed in this script: `nhdplusTools` fetches data from the USGS, `smoothr` simplifies
-#' complex spatial features, and `AOI` interfaces with OpenStreetMaps (OSM) to get the latitude/longitude pair
-#' corresponding to a placename. `AOI` is not on CRAN, so install it by uncommenting the two lines below to install from
-#' github using devtools
+#' Some additional packages are needed in this script:
+#' [`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/) fetches data from the USGS, 
+#' [`smoothr`](https://cran.r-project.org/web/packages/smoothr/vignettes/smoothr.html) simplifies complex spatial features,
+#' and [`AOI`](https://github.com/mikejohnson51/AOI) interfaces with OpenStreetMaps (OSM) to get the latitude/longitude pair
+#' corresponding to a placename. 
+#' 
+#' `AOI` is not on CRAN, so install it by uncommenting the two lines below to install from github using devtools
 #library(devtools)
 #install_github('mikejohnson51/AOI')
 library(AOI)
@@ -457,6 +465,4 @@ if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
 ####
 
 #+ include=FALSE
-# render as markdown by uncommenting the following line (note: run_pandoc=FALSE causes output_dir to be ignored)
-#rmarkdown::render(here(paste0('get_basins', '.R')), clean=TRUE, output_file=here(file.path(markdown.dir, paste0('get_basins', '.md'))))
 #my_markdown('get_basins')

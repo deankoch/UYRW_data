@@ -13,7 +13,12 @@ should be run before this script.
 ## libraries
 
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
-is used to fetch the USGS data. See the[get\_helperfun.R
+is used to fetch the USGS data,
+[`rgdal`](https://r-forge.r-project.org/projects/rgdal/) is used to load
+an EPSG lookup table, and
+[`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
+provides a wrapper for GDAL calls to warp the DEM. See the
+[get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
@@ -21,8 +26,8 @@ for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
-library(raster)
-library(gdalUtils)
+library(rgdal)
+library(gdalUtilities)
 ```
 
 ## project data
@@ -111,16 +116,19 @@ and study area
 ``` r
 if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
 {
+  # look up the EPSG code for the source DEM CRS string
+  make_EPSG() %>% filter(grepl(st_crs(dem.original.tif)[['input']], prj4, fixed=TRUE)) %>% pull(code)
+  
+  
   # define a temporary file
-  temp.tif = tempfile()
+  temp.tif = paste0(tempfile(), '.tif')
   
   # package 'gdalUtils' performs these kinds of operations much faster than `raster`
   gdalwarp(srcfile=here(my_metadata('get_dem')['ned', 'file']), 
            dstfile=temp.tif,
-           s_srs=crs(dem.original.tif), 
+           s_srs='EPSG:4269',
            t_srs=paste0('EPSG:', crs.list$epsg),
-           overwrite=TRUE,
-           verbose=TRUE)
+           overwrite=TRUE)
   
   # load the transformed raster (resolution is approx 30m x 30m)
   dem.tif = raster(temp.tif)

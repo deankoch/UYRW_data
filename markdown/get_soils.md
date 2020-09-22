@@ -21,9 +21,7 @@ provides a wrapper for GDAL calls to rasterize the mapunit polygons,
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
 is used to fetch the [NRCS
 SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
-soils data,
-[`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) is
-used for manipulating the tabular data, and
+soils data, and
 [`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is
 used to parse the NRCS website for links to STATSGO2 data archives. See
 the [get\_helperfun.R
@@ -33,13 +31,12 @@ for other required libraries
 ``` r
 library(here)
 source(here('R/get_helperfun.R'))
-library(raster)
-
-library(gdalUtilities) # for writing soils.csv raster
+library(gdalUtilities)
 library(FedData)
-library(dplyr)
 library(rvest)
 ```
+
+    ## Loading required package: xml2
 
 ## project data
 

@@ -5,7 +5,8 @@ August 22, 2020
 
 **MITACS UYRW project**
 
-**get\_streamgages**: finds stream sensor stations located in the UYRW
+**get\_streamgages**: finds USGS stream sensor stations located in the
+UYRW
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 which creates some required directories and project config files, should
@@ -13,8 +14,8 @@ be run before this script.
 
 ## libraries
 
-`dataRetrieval` is used to fetch the USGS data. See the
-[get\_helperfun.R
+[`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
+is used to fetch the USGS data. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
