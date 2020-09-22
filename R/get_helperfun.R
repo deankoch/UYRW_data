@@ -15,14 +15,17 @@
 
 #'
 #' ## libraries
-#' These CRAN packages are quite useful, and are required by most of the scripts in the repository, so I load them by default.
+#' These CRAN packages are quite useful, and are required by most of the scripts in the repository.
 #' If any of these are not already installed on your machine, run `install.packages(...)` to get them:
 
-#' `sf` handles GIS data such as shapefiles
+#' [`sf`](https://r-spatial.github.io/sf/) handles GIS data such as shapefiles
 library(sf)
 
-#' `tmap` constructs nice ggplot2-based thematic map graphics.
+#' [`tmap`](https://github.com/mtennekes/tmap) constructs nice ggplot2-based thematic map graphics.
 library(tmap)
+
+#' [`dplyr`](https://dplyr.tidyverse.org/R) is used for manipulating tabular data,
+library(dplyr)
 
 
 #'
@@ -290,6 +293,7 @@ my_get_statsgo = function(raw.dir, state, extraction.dir, label='UYRW')
 #' [this post](https://hydrologicou.wordpress.com/r-script-to-generate-missing-records-in-acrswat-ssurgo-database/),
 #' which in turn is based on snippets from
 #' [this example](https://r-forge.r-project.org/scm/viewvc.php/*checkout*/docs/soilDB/gSSURGO-SDA.html?root=aqp).
+#' 
 #' 
 my_usersoil = function(soils.tab, my.mukeys=NA)
 {

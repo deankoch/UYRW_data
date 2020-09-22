@@ -16,18 +16,27 @@ detected in the data directory.
 ## libraries
 
 These CRAN packages are quite useful, and are required by most of the
-scripts in the repository, so I load them by default. If any of these
-are not already installed on your machine, run `install.packages(...)`
-to get them: `sf` handles GIS data such as shapefiles
+scripts in the repository. If any of these are not already installed on
+your machine, run `install.packages(...)` to get them:
+[`sf`](https://r-spatial.github.io/sf/) handles GIS data such as
+shapefiles
 
 ``` r
 library(sf)
 ```
 
-`tmap` constructs nice ggplot2-based thematic map graphics.
+[`tmap`](https://github.com/mtennekes/tmap) constructs nice
+ggplot2-based thematic map graphics.
 
 ``` r
 library(tmap)
+```
+
+[`dplyr`](https://dplyr.tidyverse.org/R) is used for manipulating
+tabular data,
+
+``` r
+library(dplyr)
 ```
 
 ## project data
