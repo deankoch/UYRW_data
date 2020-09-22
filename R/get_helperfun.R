@@ -47,11 +47,10 @@ data.dir = 'data'
 src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 
-# a helper function for creating folders
+#' Define a helper function for creating folders then create project folders as needed
 my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE)} }
-
-# create folders as needed
 lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my_dir)
+
 
 #' This project will generate many files. To keep track of everything, each script gets a CSV table documenting every
 #' file that it creates: its file path, its type, and a short description of the contents. This function handles the construction
@@ -180,6 +179,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   }
 }
 
+
 #' My R scripts are commented using a roxygen2 syntax that is interpretable by `rmarkdown`. This convenience function
 #' renders the markdown file for a given R script and writes to a file of the same name (but with a .md extension).
 my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
@@ -206,6 +206,8 @@ my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
   paste('rendering markdown file', path.output, 'from the R script', path.input)
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
 }
+
+
 #' This function is used in `get_weatherstations` to parse the time series dates
 # convert start/end year columns from GHCN data to a single (string) column for each "element"
 my_ghcnd_reshape = function(idval, elemval)
@@ -216,6 +218,7 @@ my_ghcnd_reshape = function(idval, elemval)
   # if it exists, return a string of form "start-end", otherwise NA
   return(ifelse(!any(idx.row), NA, paste(ghcnd.df[idx.row, c('first_year', 'last_year')], collapse='-')))
 }
+
 
 #' This is a kludge combining various `FedData` functions with some of my own code, in order to import STATSGO2 data and produce
 #' output similar to FedData::get_ssurgo. It uses data from [NRCS](https://nrcs.app.box.com/v/soils), which is aggregated
@@ -274,6 +277,199 @@ my_get_statsgo = function(raw.dir, state, extraction.dir, label='UYRW')
     junk <- lapply(names(tables), function(tab) {readr::write_csv(tables[[tab]], path = paste(extraction.dir, "/", label, "_SSURGO_", tab, ".csv", sep = "")) })
 
     return(list(spatial = mapunits, tabular = tables))
+}
+
+
+#' This function parses a SSURGO/STATSGO2 style list of tables to extract the soil data needed for SWAT+. These data
+#' are reshaped into a single table `usersoil` (the return value) that maps mukeys to the relevant information on the 
+#' dominant soil component (ie the component with maximal comppct_r). The output table is formatted in the style
+#' expected for the CSV file "usersoil.csv" in SWAT+ AW, with an additional column, `pmiss` indicating for each 
+#' mukey the percent of soil variables which are missing (NA).
+#' 
+#' The code for this function is adapted from the missing data filler script in
+#' [this post](https://hydrologicou.wordpress.com/r-script-to-generate-missing-records-in-acrswat-ssurgo-database/),
+#' which in turn is based on snippets from
+#' [this example](https://r-forge.r-project.org/scm/viewvc.php/*checkout*/docs/soilDB/gSSURGO-SDA.html?root=aqp).
+#' 
+my_usersoil = function(soils.tab, my.mukeys=NA)
+{
+  # ARGUMENTS:
+  #
+  # `soils.tab` a named list of STATSGO2/SSURGO dataframes (containing `component`, `chorizon`, and `chtexturegrp`)
+  # `my.mukeys` an (optional) vector of integer-valued mapunit keys to process and include in the output
+  #
+  # RETURN VALUE:
+  #
+  # a data.frame in the format of "usersoil.csv" (with columns `MUID`, `SEQN`, `SNAM`, etc)
+  
+  ## define some magic numbers
+   
+  # number of horizons to write for each soil component
+  n.hz = 10
+  
+  # assume albedo is reduced to 60% for moist soil vs dry soil (as it is reported in SSURGO/STATSGO2)
+  albedo.const = 0.6
+  
+  # van Bemmelen factor for converting organic matter weight to organic carbon content
+  cbn.const = (1/0.58)
+  
+  # suppress overly verbose friendly warnings about grouping variables from dplyr
+  options(dplyr.summarise.inform=FALSE) 
+  
+  ## prepare the source data tables
+
+  # check for incomplete/missing `mukey` argument
+  if(any(is.na(my.mukeys)))
+  {
+    print('NA(s) detected in `my.mukeys` argument, processing all mukeys in input dataset...')
+    my.mukeys = sort(soils.tab$component$mukey)
+  }
+  
+  # eliminate any duplicate mukey entries and count number of unique keys
+  my.mukeys = unique(my.mukeys)
+  n.mukeys = length(my.mukeys)
+  
+  # prepare components table by assigning (to each mukey) the soil component with max coverage 
+  my.comp = data.frame(mukey=my.mukeys) %>%
+    left_join(soils.tab$component, by='mukey') %>%  
+    group_by(mukey) %>% 
+    slice(which.max(comppct.r)) %>% 
+    arrange(cokey) %>%
+    as.data.frame()
+  
+  # prepare soil layer (horizon) data for the dominant components. Most components have multiple horizons
+  my.chrz = my.comp %>%
+    left_join(soils.tab$chorizon, by='cokey') %>%
+    group_by(cokey)
+  
+  # prepare soil texture group data 
+  my.chtx = soils.tab$chtexturegrp %>%
+    filter(chkey %in% my.chrz$chkey) %>%
+    arrange(chkey)
+
+  ## prepare the left half of the table
+  # all unnumbered parameters (ie those not specific to a single horizon) are stored here
+  my.df.left = data.frame(
+    
+    # map unit key (mukey)
+    MUID = my.comp$mukey,
+    
+    # soil sequence (component) key (cokey) for the dominant component
+    SEQN = my.comp$cokey,
+    
+    # soil name (character code that serves as key to soils.csv lookup table for raster integer codes)
+    SNAM = rep(NA, n.mukeys),
+    
+    # soil interpretation record (SIR, Soils-5, SOI-5, or S-5, a decommissioned/archived database)
+    S5ID = rep(NA, n.mukeys),
+    
+    # percentage of the mapunit occupied by this component
+    CMPPCT = my.comp$comppct.r,
+    
+    # number of soil layers in this component
+    NLAYERS = my.chrz %>% 
+      summarize(n = n()) %>%
+      pull(n), 
+    
+    # USDA Soil Survey hydrological group (A, B, C, D) 
+    HYDGRP = my.comp$hydgrp,
+    
+    # max rooting depth of soil profile (in mm = 10*cm)
+    SOL_ZMX = my.chrz %>% 
+      summarize(depth = 10*max(hzdepb.r)) %>% 
+      pull(depth),
+    
+    # unavailable in SSURGO
+    ANION_EXCL = rep(NA, nrow(my.comp)),
+    
+    # unavailable in SSURGO
+    SOL_CRK = rep(NA, nrow(my.comp)),
+    
+    # texture description (not processed by the model)
+    TEXTURE = my.chrz %>%
+      summarize(texture = my.chtx$texture[match(chkey, my.chtx$chkey)]) %>%
+      summarize(texture_code = paste0(texture, collapse='-')) %>%
+      as.data.frame() %>%
+      pull(texture_code)
+    
+  )
+  
+  ##  compile (as list) all parameters specific to a single horizon, later reshaped to form right half of table
+  # lapply call iterates over horizon numbers, building a table (spanning all mukeys) for each one
+  my.list.right = lapply(1:n.hz, function(hz.idx) my.chrz  %>% summarize(
+    
+    # depth from soil surface to bottom of layer (in mm = 10*cm)
+    SOL_Z = 10*hzdepb.r[hz.idx],
+    
+    # moist bulk density (Mg/m3)
+    SOL_BD = dbovendry.r[hz.idx],
+    
+    # available water capacity (H20/soil)
+    SOL_AWC = awc.r[hz.idx],
+    
+    # saturated hydraulic conductivity (in mm/hr = 3600 s/hr / 1000 micrometers/mm)
+    SOL_K = 3.6*ksat.r[hz.idx],
+    
+    # organic carbon content (% of soil weight) estimated from organic matter via van Bemmelen factor
+    SOL_CBN = cbn.const*om.r[hz.idx],
+    
+    # clay content (% of soil weight)
+    CLAY = claytotal.r[hz.idx],
+    
+    # silt content (% of soil weight)
+    SILT = silttotal.r[hz.idx],
+    
+    # sand content (% of soil weight)
+    SAND = sandtotal.r[hz.idx],
+    
+    # rock fragment content (% of total weight)
+    ROCK = 100 - sieveno10.r[hz.idx],
+    
+    # USLE equation soil erodibility (K) factor 
+    USLE_K = kwfact[hz.idx],
+    
+    # electrical conductivity (dS/m)
+    SOL_EC = ec.r[hz.idx],
+    
+    # soil CaCo3 (% of soil weight)
+    CAL = caco3.r[hz.idx],
+    
+    # soil pH
+    PH = ph1to1h2o.r[hz.idx]
+    
+  ) %>% 
+    
+    # for this next parameter, we re-use the single SSURGO value on all horizons
+    # moist soil albedo (ratio of reflected/incident)
+    mutate(SOL_ALB = albedo.const*my.comp$albedodry.r) %>% 
+    
+    # omit the cokeys (they are included as SEQN in my.df.left, above)
+    select(-cokey) %>% 
+    
+    # and, finally, you've reached the end of this really long lapply call
+    as.data.frame)
+  
+  # append horizon number to each column name in preparation for list -> table reshape
+  for(idx.hz in 1:n.hz) { names(my.list.right[[idx.hz]]) = paste0(names(my.list.right[[idx.hz]]), idx.hz) }
+  
+  # reshape into a single table
+  my.df.right = do.call(cbind, my.list.right)
+  
+  # bind the left and right sides of the table and reorder to match input `my.mukeys`
+  usersoil.df = cbind(my.df.left, my.df.right)[match(my.mukeys, my.df.left$MUID),]
+  
+  # number of variables expected in the left table (omit SNAM, S5ID, ANION_EXCL, SOL_CRK)
+  nvars.left = ncol(my.df.left) - 4
+  
+  # number of variables expected in the right table (depends on the number of horizons)
+  nvars.right = usersoil.df$NLAYERS * ncol(my.list.right[[1]])
+  nvars.all = nvars.left + nvars.right
+
+  # add a column indicating the percent of expected variables which were NA
+  usersoil.df$pmiss = sapply(1:n.mukeys, function(idx.r) sum(is.na(usersoil.df[idx.r, 1:nvars.all[idx.r]]))/nvars.all[idx.r])
+
+  # add OBJECTID column and return the data frame
+  return(cbind(data.frame(OBJECTID=1:n.mukeys), usersoil.df))
 }
 
 #+ include=FALSE
