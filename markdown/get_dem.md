@@ -119,7 +119,6 @@ if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
   # look up the EPSG code for the source DEM CRS string
   make_EPSG() %>% filter(grepl(st_crs(dem.original.tif)[['input']], prj4, fixed=TRUE)) %>% pull(code)
   
-  
   # define a temporary file
   temp.tif = paste0(tempfile(), '.tif')
   
