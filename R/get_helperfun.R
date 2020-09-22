@@ -16,15 +16,18 @@
 #'
 #' ## libraries
 #' These CRAN packages are quite useful, and are required by most of the scripts in the repository.
-#' If any of these are not already installed on your machine, run `install.packages(...)` to get them:
+#' If any of these are not already installed on your machine, run `install.packages(...)` to get them.
 
-#' [`sf`](https://r-spatial.github.io/sf/) handles GIS data such as shapefiles
+#' [`raster`](https://rspatial.org/raster/) handles raster data such as GeoTIFFs
+library(raster)
+
+#' [`sf`](https://r-spatial.github.io/sf/) handles GIS data such as ESRI shapefiles
 library(sf)
 
-#' [`tmap`](https://github.com/mtennekes/tmap) constructs nice ggplot2-based thematic map graphics.
+#' [`tmap`](https://github.com/mtennekes/tmap) constructs pretty ggplot2-based thematic map graphics
 library(tmap)
 
-#' [`dplyr`](https://dplyr.tidyverse.org/R) is used for manipulating tabular data,
+#' [`dplyr`](https://dplyr.tidyverse.org/R) tidyverse-style manipulation of tabular data
 library(dplyr)
 
 
