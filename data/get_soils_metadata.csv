@@ -9,7 +9,7 @@
 "soils_merged_sf","data/prepared/soils_merged_sf.rds","R sf object","merged STATSGO2/SSURGO soil mapping units for UYRW"
 "soils_merged_tab","data/prepared/soils_merged_tab.rds","R list object","merged STATSGO2/SSURGO tabular data for the UYRW area (a list of data frames)"
 "swat_usersoil","data/prepared/swat_usersoil.csv","CSV","soil data input CSV for SWAT+, derived from soils_merged_tab"
-"swat_lookup","data/prepared/swat_soil.csv","CSV","integer code to mukey (MUID) table for SWAT+, connects swat_tif to swat_usersoil"
+"swat_lookup","data/prepared/swat_soil_lookup.csv","CSV","integer code to mukey (MUID) table for SWAT+, connects swat_tif to swat_usersoil"
 "swat_tif","data/prepared/swat_soil.tif","GeoTIFF","map unit (mukey) raster for SWAT+, connected to swat_usersoil by swat_lookup"
 "img_soils","graphics/soils.png","png graphic","image of map units with SSURGO/STATSGO2 data in the UYRW"
 "img_soils_wstor","graphics/soils_wstor.png","png graphic","image of soil water storage for the UYRW"

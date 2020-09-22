@@ -96,7 +96,7 @@ files.towrite = list(
   
   # lookup table for integer codes in the SWAT+ soils raster
   c(name='swat_lookup',
-    file=file.path(out.subdir, 'swat_soil.csv'), 
+    file=file.path(out.subdir, 'swat_soil_lookup.csv'), 
     type='CSV',
     description='integer code to mukey (MUID) table for SWAT+, connects swat_tif to swat_usersoil'), 
   
@@ -541,6 +541,10 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('swat_usersoil', 'swat_looku
 
 #'
 #' ## visualization
+#' Create two plots: The first shows the complete set of SSURGO map units by a tiling of the 
+#' UYRW area in different colours, with darkened areas indicating map units with data filled
+#' in by (lower definition) STATSGO surveys data. The second illustrates the type of data 
+#' contained in the soils database, by estimating soil water content.
 #' 
 # plot available survey coverage from SSURGO
 if(!file.exists(here(my_metadata('get_soils')['img_soils', 'file'])))

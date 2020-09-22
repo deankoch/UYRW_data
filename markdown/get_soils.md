@@ -36,8 +36,6 @@ library(FedData)
 library(rvest)
 ```
 
-    ## Loading required package: xml2
-
 ## project data
 
 ``` r
@@ -106,7 +104,7 @@ files.towrite = list(
   
   # lookup table for integer codes in the SWAT+ soils raster
   c(name='swat_lookup',
-    file=file.path(out.subdir, 'swat_soil.csv'), 
+    file=file.path(out.subdir, 'swat_soil_lookup.csv'), 
     type='CSV',
     description='integer code to mukey (MUID) table for SWAT+, connects swat_tif to swat_usersoil'), 
   
@@ -159,7 +157,7 @@ my_metadata('get_soils', files.towrite, overwrite=TRUE)
     ## soils_merged_sf             data/prepared/soils_merged_sf.rds   R sf object
     ## soils_merged_tab           data/prepared/soils_merged_tab.rds R list object
     ## swat_usersoil                 data/prepared/swat_usersoil.csv           CSV
-    ## swat_lookup                       data/prepared/swat_soil.csv           CSV
+    ## swat_lookup                data/prepared/swat_soil_lookup.csv           CSV
     ## swat_tif                          data/prepared/swat_soil.tif       GeoTIFF
     ## img_soils                                  graphics/soils.png   png graphic
     ## img_soils_wstor                      graphics/soils_wstor.png   png graphic
@@ -613,6 +611,12 @@ if(any(!file.exists(here(my_metadata('get_soils')[c('swat_usersoil', 'swat_looku
 ```
 
 ## visualization
+
+Create two plots: The first shows the complete set of SSURGO map units
+by a tiling of the UYRW area in different colours, with darkened areas
+indicating map units with data filled in by (lower definition) STATSGO
+surveys data. The second illustrates the type of data contained in the
+soils database, by estimating soil water content.
 
 ``` r
 # plot available survey coverage from SSURGO
