@@ -73,10 +73,10 @@ This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_soils_metadata.csv)
 in the `/data` directory.
 
-`soils_sdm` points to a subdirectory, “data/source/nrsc\_sdm”,
-containing a large number of files (too many to list individually). The
-most important of these are the “ssa\_chunk\_\*.gml” files, which
-delineate Soil Survey Areas (SSA) in our region of interest, and the
+`soils_sdm` points to a subdirectory (“data/source/nrsc”) containing a
+large number of files (too many to list individually). The most
+important of these are the “ssa\_chunk\_\*.gml” files, which delineate
+Soil Survey Areas (SSA) in our region of interest, and the
 “wss\_SSA\_\*.zip” archives, which contain the raw data for each SSA.
 
 We use the SSA data to find “area code” strings to query on the Soil
@@ -175,7 +175,7 @@ the download/extraction of the zip files.
 
 Note: a large number of files not listed explicitly in
 “get\_soils\_metadata.csv” are written to the subdirectory
-“data/source/nrcs\_sdm” by this chunk. Their data are simplified and
+“data/source/nrcs” by this chunk. Their data are simplified and
 consolidated into two output files, listed as `ssurgo_sf` and
 `ssurgo_tab`
 

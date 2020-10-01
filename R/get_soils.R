@@ -129,7 +129,7 @@ print(soils.meta[, c('file', 'type')])
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_soils_metadata.csv)
 #' in the `/data` directory.
 #' 
-#' `soils_sdm` points to a subdirectory, "data/source/nrsc_sdm", containing a large number of files
+#' `soils_sdm` points to a subdirectory ("data/source/nrsc") containing a large number of files
 #' (too many to list individually). The most important of these are the "ssa_chunk_\*.gml" files, which
 #' delineate Soil Survey Areas (SSA) in our region of interest, and the "wss_SSA_\*.zip" archives, which
 #' contain the raw data for each SSA. 
@@ -218,7 +218,7 @@ if(any(!file.exists(here(soils.meta[c('soils_acodes', 'soils_sdm'), 'file']))))
 #' the tabular data to properly labeled CSV files. It also handles the download/extraction of the zip files.
 #' 
 #' Note: a large number of files not listed explicitly in "get_soils_metadata.csv" are written to the subdirectory
-#' "data/source/nrcs_sdm" by this chunk. Their data are simplified and consolidated into two output files, listed as
+#' "data/source/nrcs" by this chunk. Their data are simplified and consolidated into two output files, listed as
 #' `ssurgo_sf` and `ssurgo_tab`
 #'  
 if(any(!file.exists(here(soils.meta[c('ssurgo_sf', 'ssurgo_tab'), 'file']))))
