@@ -44,11 +44,10 @@ library(colorspace)
 
 ## project data
 
-A list object definition here (`files.towrite`) is hidden from markdown
-output…
-
-…Write this information to disk and print the list of files to be
-written
+A list object definition here (`files.towrite`) has been hidden from the
+markdown output for brevity. The list itemizes all files written by the
+script along with a short description. We use a helper function to write
+this information to disk:
 
 ``` r
 landuse.meta = my_metadata('get_landuse', files.towrite, overwrite=TRUE)
