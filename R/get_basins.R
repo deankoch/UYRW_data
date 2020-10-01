@@ -1,7 +1,7 @@
 #' ---
 #' title: "get_basins.R"
 #' author: "Dean Koch"
-#' date: '`r format(Sys.Date(), "%B %d, %Y")`'
+#' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
 #'

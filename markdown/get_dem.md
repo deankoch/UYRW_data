@@ -1,9 +1,9 @@
 get\_dem.R
 ================
 Dean Koch
-August 14, 2020
+2020-10-01
 
-**MITACS UYRW project**
+**Mitacs UYRW project**
 
 **get\_DEM**: download a DEM and warp to our reference coordinate system
 
@@ -29,67 +29,47 @@ library(gdalUtilities)
 
 ## project data
 
+A list object definition here (`files.towrite`) has been hidden from the
+markdown output for brevity. The list itemizes all files written by the
+script along with a short description. We use a helper function to write
+this information to disk:
+
 ``` r
-# This list describes all of the files created by this script:
-files.towrite = list(
-  
-  # DEM downloaded from the USGS website
-  c(name='ned',
-    file=file.path(src.subdir, 'UYRW_NED_1.tif'), 
-    type='GeoTIFF raster file',
-    description='mosaic of elevation tiles from the NED (unchanged)'), 
-  
-  # DEM after warp and crop
-  c(name='dem',
-    file=file.path(out.subdir, 'dem.tif'), 
-    type='GeoTIFF raster file',
-    description='digital elevation map of the UYRW and surrounding area'), 
-  
-  # aesthetic parameters for plotting
-  c(name='pars_tmap',
-    file=file.path(data.dir, 'tmap_get_dem.rds'), 
-    type='R list object', 
-    description='parameters for writing png plots using tmap and tm_save'),
-  
-  # graphic showing DEM for the UYRW
-  c(name='img_dem',
-    file=file.path(graphics.dir, 'dem.png'),
-    type='png graphic',
-    description='image of DEM for the UYRW')
-
-)
-
-# write this information to disk
-my_metadata('get_dem', files.towrite, overwrite=TRUE)
+dem.meta = my_metadata('get_dem', files.towrite, overwrite=TRUE)
 ```
 
     ## [1] "writing to data/get_dem_metadata.csv"
 
-    ##                                 file                type                                             description
-    ## ned       data/source/UYRW_NED_1.tif GeoTIFF raster file      mosaic of elevation tiles from the NED (unchanged)
-    ## dem            data/prepared/dem.tif GeoTIFF raster file  digital elevation map of the UYRW and surrounding area
-    ## pars_tmap      data/tmap_get_dem.rds       R list object parameters for writing png plots using tmap and tm_save
-    ## img_dem             graphics/dem.png         png graphic                               image of DEM for the UYRW
-    ## metadata   data/get_dem_metadata.csv                 CSV                list files of files written by get_dem.R
+``` r
+print(dem.meta[, c('file', 'type')])
+```
+
+    ##                                 file                type
+    ## ned       data/source/UYRW_NED_1.tif GeoTIFF raster file
+    ## dem            data/prepared/dem.tif GeoTIFF raster file
+    ## pars_tmap      data/tmap_get_dem.rds       R list object
+    ## img_dem             graphics/dem.png         png graphic
+    ## metadata   data/get_dem_metadata.csv                 CSV
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_dem_metadata.csv)
-in the `/data` directory. Load some of the data prepared earlier
+in the `/data` directory.
+
+Load some of the data prepared earlier
 
 ``` r
-# load metadata csv, CRS info list and watershed polygons from disk
+# load CRS info list and watershed polygon from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.padded.poly = readRDS(here(my_metadata('get_basins')['boundary_padded', 'file']))
 ```
 
 ## Download the DEM raster
 
-The *get\_ned* function from `FedData` retrieves and merge all (12)
+The `get_ned` function from `FedData` retrieves and merge all (12)
 required elevation tiles from the USGS NED
 
 ``` r
-if(!file.exists(here(my_metadata('get_dem')['ned', 'file'])))
+if(!file.exists(here(dem.meta['ned', 'file'])))
 {
   # We will downloaded the DEM for an extended UYRW boundary, to allow modeling of nearby weather records 
   boundary.padded.sp = as_Spatial(uyrw.padded.poly)
@@ -103,7 +83,7 @@ if(!file.exists(here(my_metadata('get_dem')['ned', 'file'])))
 } else {
   
   # load the NED raster from disk
-  dem.original.tif = raster(here(my_metadata('get_dem')['ned', 'file']))
+  dem.original.tif = raster(here(dem.meta['ned', 'file']))
 }
 ```
 
@@ -111,13 +91,13 @@ Warp (gridded CRS transform) and clip the raster to our reference system
 and study area
 
 ``` r
-if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
+if(!file.exists(here(dem.meta['dem', 'file'])))
 {
   # define a temporary file
   temp.tif = paste0(tempfile(), '.tif')
   
   # package 'gdalUtils' performs these kinds of operations much faster than `raster`
-  gdalwarp(srcfile=here(my_metadata('get_dem')['ned', 'file']), 
+  gdalwarp(srcfile=here(dem.meta['ned', 'file']), 
            dstfile=temp.tif,
            t_srs=paste0('EPSG:', crs.list$epsg),
            overwrite=TRUE)
@@ -126,25 +106,21 @@ if(!file.exists(here(my_metadata('get_dem')['dem', 'file'])))
   dem.tif = raster(temp.tif)
   
   # write to output directory
-  writeRaster(dem.tif, here(my_metadata('get_dem')['dem', 'file']), overwrite=TRUE)
+  writeRaster(dem.tif, here(dem.meta['dem', 'file']), overwrite=TRUE)
 
 } else {
   
   # load from disk 
-  dem.tif = raster(here(my_metadata('get_dem')['dem', 'file']))
+  dem.tif = raster(here(dem.meta['dem', 'file']))
 }
 ```
 
 ## visualization
 
-``` r
-# load the plotting parameters used in get_basins.R, modify for this plot
-```
-
 Set up the aesthetics to use for these types of plots
 
 ``` r
-if(!file.exists(here(my_metadata('get_dem')['pars_tmap', 'file'])))
+if(!file.exists(here(dem.meta['pars_tmap', 'file'])))
 {
   # load the plotting parameters used in get_basins.R
   tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
@@ -159,17 +135,21 @@ if(!file.exists(here(my_metadata('get_dem')['pars_tmap', 'file'])))
               legend.title.color='white')
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_dem')['pars_tmap', 'file']))
+  saveRDS(tmap.pars, here(dem.meta['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
+  tmap.pars = readRDS(here(dem.meta['pars_tmap', 'file']))
   
 } 
+```
 
-# plot DEM raster as a png file
-if(!file.exists(here(my_metadata('get_dem')['img_dem', 'file'])))
+plot the DEM raster ![elevation map of the
+UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png)
+
+``` r
+if(!file.exists(here(dem.meta['img_dem', 'file'])))
 {
   tmap.dem = tm_shape(dem.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
       tm_raster(palette='viridis', title='elevation (m)', style='cont') +
@@ -180,12 +160,9 @@ if(!file.exists(here(my_metadata('get_dem')['img_dem', 'file'])))
               
   # render the plot
   tmap_save(tm=tmap.dem, 
-            here(my_metadata('get_dem')['img_dem', 'file']), 
+            here(dem.meta['img_dem', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
 ```
-
-![elevation map of the
-UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png)

@@ -77,7 +77,7 @@ in the `/data` directory.
 Load some of the data prepared earlier
 
 ``` r
-# load CRS info list and watershed polygons from disk
+# load CRS info list and watershed polygon from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 ```

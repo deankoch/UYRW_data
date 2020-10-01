@@ -1,9 +1,9 @@
 get\_helperfun.R
 ================
 Dean Koch
-August 26, 2020
+2020-10-01
 
-**MITACS UYRW project**
+**Mitacs UYRW project**
 
 **get\_helperfun**: helper functions for the scripts in the UYRW\_data
 repository

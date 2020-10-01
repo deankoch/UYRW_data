@@ -1,11 +1,11 @@
 #' ---
 #' title: "get_streamgages.R"
 #' author: "Dean Koch"
-#' date: "August 22, 2020"
+#' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
 #'
-#' **MITACS UYRW project**
+#' **Mitacs UYRW project**
 #' 
 #' **get_streamgages**: finds USGS stream sensor stations located in the UYRW
 #' 
@@ -26,8 +26,7 @@ library(dataRetrieval)
 
 #'
 #' ## project data
-
-# This list describes all of the files created by this script:
+#+ echo=FALSE
 files.towrite = list(
   
   # table of site locations from USGS Site web service
@@ -56,21 +55,25 @@ files.towrite = list(
   
 )
 
-# write this information to disk
-my_metadata('get_streamgages', files.towrite, overwrite=TRUE)
+#' A list object definition here (`files.towrite`) has been hidden from the markdown output for
+#' brevity. The list itemizes all files written by the script along with a short description.
+#' We use a helper function to write this information to disk:
+streamgages.meta = my_metadata('get_streamgages', files.towrite, overwrite=TRUE)
+print(streamgages.meta[, c('file', 'type')])
+
 
 #' This list of files and descriptions is now stored as a
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_streamgage_metadata.csv)
 #' in the `/data` directory.
-
-
+#' 
 #' Load some of the data prepared earlier 
-# load metadata csv, CRS info list and watershed geometries from disk
-crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
-uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
-uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
-uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
-uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
+# load CRS info list and watershed geometries from disk
+basins.meta = my_metadata('get_basins')
+crs.list = readRDS(here(basins.meta['crs', 'file']))
+uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
+uyrw.waterbody = readRDS(here(basins.meta['waterbody', 'file']))
+uyrw.mainstem = readRDS(here(basins.meta['mainstem', 'file']))
+uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
 
 #'
 #' ## Find sites
@@ -80,7 +83,7 @@ uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
 #' Information about the output format (USGS RDB) is 
 #' [available here](https://waterservices.usgs.gov/rest/Site-Service.html) and, in more detail,
 #' [here](https://pubs.usgs.gov/of/2003/ofr03123/6.4rdb_format.pdf).
-if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file'])))
+if(!file.exists(here(streamgages.meta['USGS_sites_rdb', 'file'])))
 {
   # find a bounding box in geographical coordinates
   bbox.geo = st_bbox(st_transform(uyrw.poly, crs=crs.list$epsg.geo))
@@ -93,15 +96,15 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file'])))
                       status = 'siteStatus=all')
   
   # build the URL and query the USGS Site Web Service
-  download.file(paste0(urlargs.domain, paste(urlargs.list, collapse='&')), here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file']))
+  download.file(paste0(urlargs.domain, paste(urlargs.list, collapse='&')), here(streamgages.meta['USGS_sites_rdb', 'file']))
   
 }
 
 #' Load the RDB file, omitting stations not in UYRW, and convert it to a `sf` object
-if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites', 'file'])))
+if(!file.exists(here(streamgages.meta['USGS_sites', 'file'])))
 {
   # load the RDB file as a tab-delimited data frame, omit first row (which indicates string lengths) 
-  usgs.df = read.csv(here(my_metadata('get_streamgages')['USGS_sites_rdb', 'file']), comment.char='#', sep='\t')
+  usgs.df = read.csv(here(streamgages.meta['USGS_sites_rdb', 'file']), comment.char='#', sep='\t')
   usgs.df = usgs.df[-1,]
   
   # extract coordinates, coercing to numeric
@@ -116,12 +119,12 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_sites', 'file'])))
   usgs.sf = st_intersection(usgs.sf, uyrw.poly)
   
   # save to disk
-  saveRDS(usgs.sf, here(my_metadata('get_streamgages')['USGS_sites', 'file']))
+  saveRDS(usgs.sf, here(streamgages.meta['USGS_sites', 'file']))
 
 } else {
   
   # load from disk 
-  usgs.sf = readRDS(here(my_metadata('get_streamgages')['USGS_sites', 'file']))
+  usgs.sf = readRDS(here(streamgages.meta['USGS_sites', 'file']))
   
 }
 
@@ -137,7 +140,7 @@ sum(idx.ts)
 #' 
 
 #' Information on parameter codes can also be downloaded using the Water Services REST interface
-if(!file.exists(here(my_metadata('get_streamgages')['USGS_paramcodes', 'file'])))
+if(!file.exists(here(streamgages.meta['USGS_paramcodes', 'file'])))
 {
   # query the meaning of the parameter column codes corresponding to time series in our area
   uyrw.paramcodes = unique(usgs.sf[idx.ts,]$parm_cd)
@@ -147,19 +150,20 @@ if(!file.exists(here(my_metadata('get_streamgages')['USGS_paramcodes', 'file']))
   paramcodes.df = do.call(rbind, paramcodes.list)
   
   # save to disk
-  write.csv(paramcodes.df, here(my_metadata('get_streamgages')['USGS_paramcodes', 'file']), row.names=FALSE)
+  write.csv(paramcodes.df, here(streamgages.meta['USGS_paramcodes', 'file']), row.names=FALSE)
   
 } else {
   
   # load from disk 
-  paramcodes.df = read.csv(here(my_metadata('get_streamgages')['USGS_paramcodes', 'file']), colClasses='character')
+  paramcodes.df = read.csv(here(streamgages.meta['USGS_paramcodes', 'file']), colClasses='character')
 }
 
 #'
 #' ## visualization
 #' 
 
-#' plot the locations of stream gage locations as a png file
+#' Some data-preparation work will allow us to plot information about both the locations and the time
+#' periods associated with each station dataset
 #' 
 # make a copy of the time-series data
 usgs.ts.sf = usgs.sf[idx.ts,]
@@ -190,6 +194,9 @@ usgs.ts.sf$endyear = as.integer(sapply(strsplit(usgs.ts.sf$end_date,'-'), functi
 usgs.ts.startyear = as.integer(sapply(strsplit(usgs.ts.sf$begin_date,'-'), function(xx) xx[1]))
 usgs.ts.sf$duration = usgs.ts.sf$endyear - usgs.ts.startyear
 
+#' Set up aesthetic parameters
+#' 
+
 # add dummy columns for indicating the variable recorded
 usgs.ts.sf$plotlabel_sf = 'streamflow'
 usgs.ts.sf$plotlabel_tb = 'turbidity'
@@ -198,16 +205,16 @@ usgs.ts.sf$plotlabel_ss = 'suspended sediment'
 # add columns for duration and end-year of time series for precipitation
 usgs.ts.sf$endyear[usgs.ts.sf$endyear == 2020] = NA
 
-#' Set up the aesthetics and make the plot 
-
 # load the plotting parameters used in get_weatherstations.R
 tmap.pars = readRDS(here(my_metadata('get_weatherstations')['pars_tmap', 'file']))
 
 # adjust with a better highlight colour for the blue background
 tmap.pars$dots$tm_symbols$colorNA = 'orange'
-  
-# create the plot grob and write to disk
-if(!file.exists(here(my_metadata('get_streamgages')['img_streamgage', 'file'])))
+
+#' Plot the streamgage data, using shapes to indicate the variable type, sizes to indicate
+#' duration of the time series, and colours to indicate their end-dates:
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/streamgage_sites.png)
+if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
 {
   # build the tmap plot object
   tmap.streamgage = tm_shape(uyrw.poly) +
@@ -231,14 +238,11 @@ if(!file.exists(here(my_metadata('get_streamgages')['img_streamgage', 'file'])))
   
   # render the plot
   tmap_save(tm=tmap.streamgage, 
-            here(my_metadata('get_streamgages')['img_streamgage', 'file']), 
+            here(streamgages.meta['img_streamgage', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
-
-#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/streamgage_sites.png)
-
 
 #+ include=FALSE
 # Development code

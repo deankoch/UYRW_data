@@ -1,11 +1,11 @@
 #' ---
 #' title: "get_helperfun.R"
 #' author: "Dean Koch"
-#' date: "August 26, 2020"
+#' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
 #'
-#' **MITACS UYRW project** 
+#' **Mitacs UYRW project** 
 #' 
 #' **get_helperfun**: helper functions for the scripts in the UYRW_data repository 
 #' 
