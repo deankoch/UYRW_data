@@ -9,24 +9,19 @@ The UYRW_data repository is a staging area for R code that can be used to fetch 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using
 [`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/)
-
 * [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
 finds climatic sensor station data using
 [`snotelr`](https://github.com/bluegreen-labs/snotelr) and
 [`rnoaa`](https://github.com/ropensci/rnoaa)
-
 * [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
 fetches the National Elevation Dataset from USGS using
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
-
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
 fetches sensor data from the USGS NWIS using
 [`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
-
 * [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
 fetches SSURGO/STATSGO2 data from the Soil Data Mart using
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
-
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
 fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 
