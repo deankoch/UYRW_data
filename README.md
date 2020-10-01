@@ -8,11 +8,11 @@ The UYRW_data repository is a staging area for R code that can be used to fetch 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using `nhdplusTools`
 * [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
-finds SNOTEL and NOAA climatic sensor station data using `snotelr` and `rnoaa`
+finds climatic sensor station data using `snotelr` and `rnoaa`
 * [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
-downloads and processes the National Elevation Dataset from USGS using `FedData`
+fetches the National Elevation Dataset from USGS using `FedData`
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
-finds streamflow and groundwater sensor data from the USGS NWIS using `dataRetrieval`
+fetches sensor data from the USGS NWIS using `dataRetrieval`
 * [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
 fetches SSURGO/STATSGO2 data from the Soil Data Mart using `FedData`
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
