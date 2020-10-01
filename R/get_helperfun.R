@@ -479,5 +479,206 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
   return(cbind(data.frame(OBJECTID=1:n.mukeys), usersoil.df))
 }
 
+
+#' This function returns a (case-insensitive) expression-matching lookup table for 
+#' matching NVC plant community classifications to SWAT+ plant codes. The former are documented
+#' [here](http://usnvc.org/data-standard/natural-vegetation-classification), and the latter can
+#' be found in the `plants_plt` table of the SWAT+ 'datasets' SQLite file.
+#' 
+my_plants_plt = function(nvc.df)
+{
+  # ARGUMENTS:
+  #
+  # `nvc.df`: a dataframe with columns `NVC_DIV`, `NVC_MACRO`, and `NVC_GROUP`
+  #
+  # RETURN VALUE:
+  #
+  # the `nvc.df` dataframe with two appended columns, `swatcode` and `swatdesc`, containing
+  # the matching SWAT+ plant code and its description 
+  # 
+  # DETAILS:
+  #
+  # The lookup table is specified below, in a list of 1-row dataframes, each containing the fields `swatdesc`
+  # and `swatcode`. These strings should match the `description` and `name` fields in a row of `plants_plt`.
+  # The other 3 fields -- `kwdiv`, `kwmacro`, and `kwgroup` -- are keywords to filter the NCV divisions, macros,
+  # and groups (a nested hierarchical classification), where the pipe operator `|` functions as a logical OR.
+  #
+  # Note that order matters in this list, as earlier entries are superceded by later ones whenever
+  # there is any overlap in the subset of NVC classifications specified by the `kw*` arguments.
+  
+  plt.list = list(
+    
+    # generic for sparsely vegetated or barren land
+    data.frame(swatdesc='barren',
+               swatcode='barr',
+               kwdiv='barren|urban|mines'),
+    
+    # generic for sparsely vegetated land
+    data.frame(swatdesc='barren_or_sparsley_vegetated',
+               swatcode='bsvg',
+               kwgroup='scree|badland'),
+    
+    # generic for cropland
+    data.frame(swatdesc='agricultural_land_generic', 
+               swatcode='agrl',
+               kwdiv='agricultural'),
+    
+    # generic for hay and pasture (see Appendix A) and introduced grassland/forbland
+    data.frame(swatdesc ='tall_fescue', 
+               swatcode='fesc',
+               kwdiv='hay|introduced'),
+    
+    # generic for shrublands (notice one instance is misspelled!)
+    data.frame(swatdesc ='range_brush_temperate_mountain_systems', 
+               swatcode='rngb_tems', 
+               kwgroup='shrubland|shubland|scrub'),
+    
+    # generic for warmer/drier shrublands 
+    data.frame(swatdesc ='range_brush_temperate_steppe', 
+               swatcode='rngb_test', 
+               kwgroup='deciduous shrubland|sagebrush scrub'),
+    
+    # generic for shrublands (notice one instance is misspelled!)
+    data.frame(swatdesc ='mixed_grassland/shrubland', 
+               swatcode='migs', 
+               kwgroup='sagebrush stepp'),
+    
+    # generic for grasslands
+    data.frame(swatdesc ='range_grasses_temperate_mountain_systems', 
+               swatcode='rnge_tems', 
+               kwgroup='prairie|grassland'),
+    
+    # generic for semi-arid grasslands
+    data.frame(swatdesc ='range_grasses_temperate_steppe', 
+               swatcode='rnge_test', 
+               kwgroup='semi-desert grassland'),
+    
+    # generic for pine-dominated forests, which I assign to recently-disturbed areas (harvest/fire) 
+    data.frame(swatdesc='pine',  
+               swatcode='pine',
+               kwdiv='forest|woodland|disturbed', 
+               kwgroup='pine|disturbed'),
+    
+    # generic mixed-wood class
+    data.frame(swatdesc='forest_mixed_temperate_mountain_systems', 
+               swatcode='frst_tems', 
+               kwdiv='forest|woodland',
+               kwgroup='mountain-mahogany|swamp|riparian'),
+    
+    # generic for evergreen temperate steppe forests
+    data.frame(swatdesc='forest_evergreen_temperate_steppe', 
+               swatcode='frse_test', 
+               kwdiv='forest|woodland', 
+               kwgroup='plains|open woodland'),
+    
+    # I interpret `poplar` as a generic Populus class
+    data.frame(swatdesc='poplar',  
+               swatcode='popl',
+               kwdiv='forest|woodland', 
+               kwgroup='aspen|cottonwood'),
+    
+    # generic for non-pine evergreen temperate mountainous forests
+    data.frame(swatdesc='forest_evergreen_temperate_mountain_systems', 
+               swatcode='frse_tems', 
+               kwdiv='forest|woodland', 
+               kwgroup='fir|juniper'),
+    
+    # a specific class for lodgepole pine forests
+    data.frame(swatdesc='lodge_pole_pine', 
+               swatcode='ldgp', 
+               kwdiv='forest|woodland',
+               kwgroup='lodgepole'),
+    
+    # a more specific class for white-spruce forests
+    data.frame(swatdesc='white_spruce',  
+               swatcode='wspr',
+               kwdiv='forest|woodland', 
+               kwgroup='dry-mesic spruce'),
+    
+    # generic for forested wetlands
+    data.frame(swatdesc ='wetlands_forested',  
+               swatcode='wetf',
+               kwgroup='swamp forest'),
+    
+    # generic for wet shrublands
+    data.frame(swatdesc ='herbaceous_wetland', 
+               swatcode='wehb', 
+               kwgroup='fen|marsh|wet meadow|vernal pool'),
+    
+    # herbaceous alpine tundra 
+    data.frame(swatdesc='herbaceous_tundra',  
+               swatcode='tuhb',
+               kwdiv='tundra'),
+    
+    # barren alpine tundra 
+    data.frame(swatdesc='bare_ground_tundra', 
+               swatcode='tubg', 
+               kwdiv='tundra', 
+               kwgroup='scree')
+    
+  ) 
+
+  # combine rows from all dataframes, filling missing kw fields with empty character ('') 
+  plt = plt.list %>% bind_rows %>% mutate_all(~replace(., is.na(.), ''))
+  
+  # copy the input dataframe, appending two new (empty) columns
+  nvc.out.df = nvc.df %>% mutate(swatcode=NA, swatdesc=NA)
+
+  # fill in SWAT+ codes: note that later entries of `plt` overwrite earlier ones 
+  for(idx.plt in 1:nrow(plt))
+  {
+    # grep for keywords in the NCV classifications
+    idx.div = grepl(plt[idx.plt, 'kwdiv'], nvc.df$NVC_DIV, ignore.case=TRUE)
+    idx.group = grepl(plt[idx.plt, 'kwgroup'], nvc.df$NVC_GROUP, ignore.case=TRUE)
+    
+    # write SWAT+ code to each matching entry 
+    nvc.out.df[idx.div & idx.group, 'swatcode'] = plt[idx.plt, 'swatcode']
+    nvc.out.df[idx.div & idx.group, 'swatdesc'] = plt[idx.plt, 'swatdesc']
+  }
+  
+  return(nvc.out.df)
+}
+
+#' It took a bit of work to construct the function above: The following may be helpful for improving
+#' the lookup table, or when extending it to new areas, and/or new releases of SWAT+ and the NCV.
+#'  
+#' To begin cross-referencing SWAT+ plant codes with the NVC classifications, we start with
+#' packages [`DBI`](https://cran.r-project.org/web/packages/DBI/vignettes/DBI-1.html) and
+#' [`RSQLite`](https://github.com/r-dbi/RSQLite) to interface with SWAT+ SQLite databases
+#' For example, to load the `plants.plt` in "swatplus_datasets.sqlite", do:
+# library(DBI) 
+# library(RSQLite)
+# swat.ds.conn = dbConnect(SQLite(), 'H:/UYRW_SWAT/SWATPlus/Databases/swatplus_datasets.sqlite')
+# plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
+# dbDisconnect(swat.ds.conn)
+
+#' Some (now incomplete) reference information on the `plants_plt` data can be found in
+#' [Appendix A of the SWAT IO file docs (2012)](https://swat.tamu.edu/media/69419/Appendix-A.pdf).
+#' Since SWAT+ is fairly new, and under active development, I would expect this document to be
+#' updated in the near future. For now, some guesswork was need to match the `description`
+#' field to each [NVC group category](http://usnvc.org/explore-classification/) in the UYRW.
+#' 
+#' [`data.tree`](https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html) can 
+#' be very helpful for parsing this kind of data, with clean printouts of nested lists of strings.
+#' 
+# # print all available SWAT+ plant codes containing the following keywords
+# kw = 'forest|woodland|pine'
+# plants_plt %>% filter(grepl(kw, description, ignore.case=TRUE)) %>% pull(description)
+# 
+# # define some keywords to parse the NVC categories ('' means show all results at this level)
+# kwdiv = 'forest|woodland'
+# kwmacro = ''
+# kwgroup = 'pine'
+# 
+# # build a copy of the land use table with explicit tree structure in column `pathString`
+# landuse.tree = landuse.tab %>%
+#   filter(grepl(kwdiv, NVC_DIV, ignore.case=TRUE)) %>%
+#   filter(grepl(kwmacro, NVC_MACRO, ignore.case=TRUE)) %>%
+#   filter(grepl(kwgroup, NVC_GROUP, ignore.case=TRUE)) %>%
+#   mutate(pathString=paste('NVC', NVC_DIV, NVC_MACRO, NVC_GROUP, sep='/'))
+# 
+# # print tree structure, displaying the number of pixels and any existing assignments to SWAT+ plant codes
+# print(as.Node(landuse.tree), 'n_uyrw', 'swatdesc', limit=125)
+
 #+ include=FALSE
 #my_markdown('get_helperfun')
