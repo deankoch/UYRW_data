@@ -1,17 +1,20 @@
 #' ---
 #' title: "get_landuse.R"
 #' author: "Dean Koch"
-#' date: "September 22, 2020"
+#' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
 #'
-#' **MITACS UYRW project**
+#' **Mitacs UYRW project**
 #' 
 #' **get_landuse**: downloads the USGS
 #' [GAP/LANDFIRE](https://www.usgs.gov/core-science-systems/science-analytics-and-synthesis/gap/science/land-cover-data-overview)
 #' National Terrestrial Ecosystems dataset, an approximately 30m x 30m gridded land cover map of the US (see metadata 
-#' [here](https://www.sciencebase.gov/catalog/file/get/573cc51be4b0dae0d5e4b0c5?f=__disk__5d/11/f4/5d11f4366a3402f7e0d23ffa77258a4e12f04809&transform=1)),
-#' warps to our reference coordinate system, and prepares SWAT+ AW input files (work in progress).
+#' [here](https://www.sciencebase.gov/catalog/file/get/573cc51be4b0dae0d5e4b0c5?f=__disk__5d/11/f4/5d11f4366a3402f7e0d23ffa77258a4e12f04809&transform=1)).
+#' Each pixel is mapped to a US National Vegetation Classification (NVC) code, providing an inventory of typical plant assemblages
+#' that we can use to assign SWAT+ plant growth paramaters. 
+#' 
+#' This code fetches the data, warps to our reference coordinate system, and prepares SWAT+ AW input files.
 #' 
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 #' should be run before this script.
@@ -21,7 +24,9 @@
 #' [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html) provides a wrapper
 #' for GDAL calls to warp the land use raster, and the base package
 #' [`grid`](https://stat.ethz.ch/R-manual/R-devel/library/grid/html/grid-package.html) allows more control
-#' over plot layouts. 
+#' over plot layouts.
+#' [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
+#' provides some predefined color palettes for plotting.
 #' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries 
 library(here)
@@ -34,8 +39,8 @@ library(colorspace)
 
 #'
 #' ## project data
-
-# This list describes all of the files created by this script:
+#' A list object definition here (`files.towrite`) is hidden from markdown output...
+#+ echo=FALSE
 files.towrite = list(
   
   # land use zip file contents downloaded from the USGS website
@@ -87,13 +92,14 @@ files.towrite = list(
     description='image of SWAT+ land use values in the UYRW')
 )
 
-# write this information to disk
-my_metadata('get_landuse', files.towrite, overwrite=TRUE)
- 
-#' This list of files and descriptions is now stored as a
+#' ...Write this information to disk and print the list of files to be written
+landuse.meta = my_metadata('get_landuse', files.towrite, overwrite=TRUE)
+print(landuse.meta[, c('file', 'type')])
+
+#' Filenames (with descriptions) are now stored as a
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/get_landuse_metadata.csv)
 #' in the `/data` directory.
-
+#' 
 #' Load some of the data prepared earlier 
 # load CRS info list and watershed polygons from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
@@ -112,11 +118,11 @@ landuse.prefix = '?f=__disk__ea%2F46%2F58%2Fea4658ba4c31bdcce62574dac174616cb612
 landuse.url = paste0(landuse.domain, landuse.prefix)
 
 # skip download if zip contents are already in the expected data subdirectory
-if(!file.exists(here(my_metadata('get_landuse')['landuse_source', 'file'])))
+if(!file.exists(here(landuse.meta['landuse_source', 'file'])))
 {
   # define a temporary file for the zip and an output directory for zip contents
   temp.path = paste0(normalizePath(tempdir(), winslash='/'), '.zip')
-  landuse.out.path = here(my_metadata('get_landuse')['landuse_source', 'file'])
+  landuse.out.path = here(landuse.meta['landuse_source', 'file'])
   
   # download/extract the zip archive
   download.file(landuse.url, temp.path, mode='wb')
@@ -132,14 +138,14 @@ if(!file.exists(here(my_metadata('get_landuse')['landuse_source', 'file'])))
 #' [available here](http://usnvc.org/data-standard/natural-vegetation-classification/)
 #' 
 #' Warp/crop the land use raster, load integer lookup codes and attributes, and save to disk
-if(any(!file.exists(here(my_metadata('get_landuse')[c('landuse_tif', 'landuse_csv'), 'file']))))
+if(any(!file.exists(here(landuse.meta[c('landuse_tif', 'landuse_csv'), 'file']))))
 {
   # define paths for temporary and output geotiff files
   temp.tif = paste0(tempfile(), '.tif')
-  landuse.tif.path = here(my_metadata('get_landuse')['landuse_tif', 'file'])
+  landuse.tif.path = here(landuse.meta['landuse_tif', 'file'])
   
   # identify the land-use raster on disk (it is the only geotiff in the zip)
-  landuse.src.dir = here(my_metadata('get_landuse')['landuse_source', 'file'])
+  landuse.src.dir = here(landuse.meta['landuse_source', 'file'])
   landuse.src.fname = list.files(landuse.src.dir)[endsWith(list.files(landuse.src.dir), '.tif')]
   landuse.src.path = file.path(landuse.src.dir, landuse.src.fname)
   
@@ -176,32 +182,31 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('landuse_tif', 'landuse_cs
   landuse.tab = landuse.tab %>% filter(!is.na(n_uyrw))
   
   # write to disk
-  landuse.csv.path = here(my_metadata('get_landuse')['landuse_csv', 'file'])
+  landuse.csv.path = here(landuse.meta['landuse_csv', 'file'])
   write.csv(landuse.tab, landuse.csv.path, row.names=FALSE)
   
 } else {
   
   # load from disk 
-  landuse.tif = raster(here(my_metadata('get_landuse')['landuse_tif', 'file']))
-  landuse.tab = read.csv(here(my_metadata('get_landuse')['landuse_csv', 'file']))
+  landuse.tif = raster(here(landuse.meta['landuse_tif', 'file']))
+  landuse.tab = read.csv(here(landuse.meta['landuse_csv', 'file']))
 }
 
 #'
 #' ## SWAT input files
 #' 
 #' 
-#' SWAT+ comes packaged with a plant growth database (table `plants_plt` in "swatplus_datasets.sqlite"
-#' which includes a large number of parameter sets for agricultural crops (eg. `alfalfa`), and a smaller
-#' collection of generic classes for wild plant assemblages (eg. `deciduous_broadleaf_forest`). These are
-#' used to parametrize HRUs based on information about land use, such as the classifications found in the
-#' LANDFIRE/GAP dataset.
+#' SWAT+ comes packaged with a plant growth database table, `plants_plt` in "swatplus_datasets.sqlite".
+#' This includes a large number of growth parameter sets for agricultural crops (eg. `alfalfa`), and a
+#' collection of generic classes for wild plant assemblages (eg. `deciduous_broadleaf_forest`). 
 #' 
-#' In this section, we map the
+#' We use these to parametrize HRUs based on BVC information about land use derived from the LANDFIRE/GAP
+#' dataset. This section maps
 #' [NVC biogeography classifications](http://usnvc.org/data-standard/natural-vegetation-classification/)
 #' to entries of the SWAT plant growth database, generating the landuse GeoTIFF raster and lookup table
 #' required by SWAT+ AW.
 
-if(any(!file.exists(here(my_metadata('get_landuse')[c('swat_landuse_tif', 'swat_landuse_lookup'), 'file']))))
+if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup'), 'file']))))
 {
   # copy relevant fields of land use table, omitting 'Open Water' which is dealt with separately by SWAT+
   nvc.df = landuse.tab %>% filter(NVC_DIV != 'Open Water') %>% select(Value, NVC_DIV, NVC_MACRO, NVC_GROUP)
@@ -212,7 +217,7 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('swat_landuse_tif', 'swat_
   # build and write the output CSV
   swatcodes.unique = unique(nvc.df$swatcode)
   swat.lookup = data.frame(Value=1:length(swatcodes.unique), Landuse=swatcodes.unique)
-  swat.lookup.path = here(my_metadata('get_landuse')['swat_landuse_lookup', 'file'])
+  swat.lookup.path = here(landuse.meta['swat_landuse_lookup', 'file'])
   write.csv(swat.lookup, swat.lookup.path, row.names=FALSE)
   
   # build the reclassification matrix for the raster (mapping open water to NA)
@@ -223,13 +228,13 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('swat_landuse_tif', 'swat_
   # build the raster, crop and mask to UYRW, and write the output GeoTIFF
   swat.landuse.tif = reclassify(landuse.tif, rcl)
   swat.landuse.tif = mask(crop(swat.landuse.tif, as(uyrw.poly, 'Spatial')), as(uyrw.poly, 'Spatial'))
-  writeRaster(swat.landuse.tif, here(my_metadata('get_landuse')['swat_landuse_tif', 'file']), overwrite=TRUE)
+  writeRaster(swat.landuse.tif, here(landuse.meta['swat_landuse_tif', 'file']), overwrite=TRUE)
   
 } else {
   
   # load from disk 
-  swat.landuse.tif = raster(here(my_metadata('get_landuse')['swat_landuse_tif', 'file']))
-  swat.lookup = read.csv(here(my_metadata('get_landuse')['swat_landuse_lookup', 'file']))
+  swat.landuse.tif = raster(here(landuse.meta['swat_landuse_tif', 'file']))
+  swat.lookup = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
 }
 
 #'
@@ -237,7 +242,7 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('swat_landuse_tif', 'swat_
 #' 
 
 #' Set up the aesthetics to use for these types of plots
-if(!file.exists(here(my_metadata('get_landuse')['pars_tmap', 'file'])))
+if(!file.exists(here(landuse.meta['pars_tmap', 'file'])))
 {
   # load the plotting parameters used in get_dem.R, modify for this plot
   tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
@@ -249,18 +254,21 @@ if(!file.exists(here(my_metadata('get_landuse')['pars_tmap', 'file'])))
   tmap.pars$layout = tmap.pars$layout + tm_layout(scale=3)
     
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_landuse')['pars_tmap', 'file']))
+  saveRDS(tmap.pars, here(landuse.meta['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_landuse')['pars_tmap', 'file']))
+  tmap.pars = readRDS(here(landuse.meta['pars_tmap', 'file']))
 } 
 
-# plot NVC classifications raster as a png file
-if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
+#' First we make a plot of the 10 or so NVC physiognomy classes in the UYRW.
+#' In the code (below) we create the raster and legend plot objects separately, then combine them
+#' together using (base) R's `grid` package. This works around a bug in which certain legend labels
+#' for factor levels in a raster plot are scrambled or omitted.
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png)
+if(!file.exists(here(landuse.meta['img_landuse', 'file'])))
 {
-  
   # create a simplified table containing the NVC physiognomy classes in the UYRW area
   nvc.classes = unique(landuse.tab$NVC_CLASS)
   nvc.class.lookup = cbind(landuse.tab$Value, match(landuse.tab$NVC_CLASS, nvc.classes))
@@ -298,7 +306,7 @@ if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
               legend.title.size=6)
               
   # start the png graphics device
-  png(filename=here(my_metadata('get_landuse')['img_landuse', 'file']), 
+  png(filename=here(landuse.meta['img_landuse', 'file']), 
       width=tmap.pars$png['w'], 
       height=tmap.pars$png['h'], 
       pointsize=tmap.pars$png['pt'])
@@ -316,11 +324,11 @@ if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
   dev.off()
 }
 
-#' ![land use of the UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png)
-
-
-# plot the SWAT+ plant codes in the UYRW
-if(!file.exists(here(my_metadata('get_landuse')['img_swat_landuse', 'file'])))
+#' Next plot the assigned SWAT+ plant codes in the UYRW (based on NVC biogeography classes). We use
+#' the `colorspace` package to create palettes for the large number of different land use types. Note
+#' that areas of open water are assigned a no-data value in the SWAT+ land use raster
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_landuse.png)
+if(!file.exists(here(landuse.meta['img_swat_landuse', 'file'])))
 {
   # create lookup table for SWAT+ plant code descriptions with legend labels
   plt = my_plants_plt(landuse.tab) %>% 
@@ -331,32 +339,44 @@ if(!file.exists(here(my_metadata('get_landuse')['img_swat_landuse', 'file'])))
     right_join(swat.lookup, by='Landuse')
   plt.labels = paste0(plt$Value, '. ',  plt$Landuse, ' (', plt$label, ')') 
   
-  # create a palette for these categories
-  nc = nrow(plt)
-  forest.pal = terrain_hcl(15)
-  range.pal = heat_hcl(5)
-  other.pal = rainbow_hcl(10)
-  mypal = setNames(c(rnge_tems=range.pal[4],
-                     frse_test=forest.pal[7],
-                     frse_tems=forest.pal[6],
-                     popl=forest.pal[1],
-                     pine=forest.pal[5],
-                     ldgp=forest.pal[4],
-                     wspr=forest.pal[3],
-                     frst_tems=forest.pal[2],
-                     rngb_tems=range.pal[1],
-                     wetf=other.pal[5],
-                     rngb_test=range.pal[2],
-                     wehb=other.pal[6],
-                     migs=range.pal[3],
-                     rnge_test=range.pal[5],
-                     bsvg=other.pal[9],
-                     tuhb=other.pal[7],
-                     tubg=other.pal[8],
-                     barr=other.pal[10],
-                     agrl='darkorange1',
-                     fesc='gold1'), 1:nc)
+  # build sub-palettes for different vegetation types; try colorspace::hcl_palettes(plot = TRUE)
+  mypal.list = list(
+    
+    #wetlands
+    setNames(sequential_hcl(5, palette='Tealgrn')[4:5], c('wetf', 'wehb')),
+    
+    # mixed/deciduous forest
+    setNames(sequential_hcl(7, palette='Emrld')[6:7], c('frst_tems', 'popl')),
+    
+    # coniferous forest
+    setNames(sequential_hcl(7, palette='Emrld')[1:5], c('frse_tems', 'frse_test', 'pine', 'ldgp', 'wspr')),
+    
+    # brushland
+    setNames(sequential_hcl(6, palette='BurgYl')[1:3], c('rngb_tems', 'rngb_test', 'migs')),
+    
+    # grassland
+    setNames(sequential_hcl(6, palette='Peach')[1:3], c('rnge_tems', 'rnge_test', 'fesc')),
+    
+    # tundra
+    setNames(sequential_hcl(3, palette='Purp')[1:2], c('tubg', 'tuhb')),
+    
+    # sparse/bare
+    setNames(sequential_hcl(5, palette='BrwnYl')[4:5], c('barr', 'bsvg')),
+    
+    # agricultural
+    setNames(sequential_hcl(2, palette='PinkYl')[1], c('agrl'))
+    
+  )
   
+  # compile them into a single custom palette, in correct order
+  nc = nrow(plt)
+  mypal = setNames(unlist(my.pal.list)[match(plt$Landuse, names(unlist(my.pal.list)))], 1:nc)
+  
+  # the following code is useful for building and previewing custom palettes
+  # print(plt)
+  # hcl_palettes(plot = TRUE)
+  # image(1:nc, 1, as.matrix(1:nc), col=mypal, xaxt='n', yaxt='n', xlab='', ylab='')
+  # axis(side=1, at=(1:length(mypal)), labels=names(mypal), las=2)
   
   # build the raster plot, omit legend
   tmap.landuse = tm_shape(swat.landuse.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
@@ -376,7 +396,7 @@ if(!file.exists(here(my_metadata('get_landuse')['img_swat_landuse', 'file'])))
               legend.title.size=6)
   
   # start the png graphics device
-  png(filename=here(my_metadata('get_landuse')['img_swat_landuse', 'file']), 
+  png(filename=here(landuse.meta['img_swat_landuse', 'file']), 
       width=tmap.pars$png['w'], 
       height=tmap.pars$png['h'], 
       pointsize=tmap.pars$png['pt'])
@@ -393,12 +413,6 @@ if(!file.exists(here(my_metadata('get_landuse')['img_swat_landuse', 'file'])))
   # save and close plot device
   dev.off()
 }
-
-#' ![SWAT plant codes](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_landuse.png)
-
-
-
-
 
 #+ include=FALSE
 # Development code
