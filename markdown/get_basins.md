@@ -1,9 +1,9 @@
 get\_basins.R
 ================
 Dean Koch
-August 12, 2020
+October 01, 2020
 
-**MITACS UYRW project**
+**Mitacs UYRW project**
 
 **get\_basins**: loads watershed geometry data into R
 
@@ -64,123 +64,54 @@ library(nhdplusTools)
 library(smoothr)
 ```
 
-## metadata
+## project data
 
-All of the files saved to disk by this script will by listed in a CSV
-file with a short description. A helper function handles these files,
-and any updates to its entries. Any script that writes files to disk
-will be documented in this way, and should begin with a section listing
-all its outputs, as in the example below:
+To keep the project data folder organized, the list `files.towrite` is
+defined at the beginning of each script describing all of the files
+created by that script. This list definition is hidden from the markdown
+output for brevity (see “get\_helperfun.R” source file for details).
+
+A helper function writes this file metadata information to a CSV file
 
 ``` r
-# descriptions of all files created by this script:
-files.towrite = list(
-  
-   # list of points of interest in the watershed
-   c(name='poi',
-     file='data/uyrw_poi.rds',
-     type='R list object', 
-     description='points of interest in the watershed'),
-   
-   # hydrology GeoPackage (gpkg) file from NHD (source)
-   c(name='nhd',
-     file=file.path(src.subdir, 'uyrw_nhd.gpkg'), 
-     type='geopackage', 
-     description='source geometries from NHDPlus'),
-   
-   # coordinate reference system details
-   c(name='crs',
-     file='data/uyrw_crs.rds', 
-     type='R list object', 
-     description='details of projection/extent for the project'),
-   
-   # derived watershed boundary
-   c(name='boundary',
-     file=file.path(out.subdir, 'uyrw_nhd_boundary.rds'), 
-     type='R sfc object', 
-     description='UYRW watershed boundary polygon derived from NHDPlus catchements'),
-   
-   # sfc object representing a padded (outer buffer) watershed boundary 
-   c(name='boundary_padded',
-     file=file.path(out.subdir, 'uyrw_boundary_padded.rds'),
-     type='R sf object',
-     description='padded watershed boundary polygon'),
-                     
-   # main stem polygon
-   c(name='mainstem',
-     file=file.path(out.subdir, 'uyrw_nhd_mainstem.rds'), 
-     type='R sfc object', 
-     description='UYR main stem line geometry derived from NHDPlus flowlines'),
-                     
-   # catchment polygons
-   c(name='catchment',
-     file=file.path(out.subdir, 'uyrw_nhd_catchment.rds'), 
-     type='R sf object', 
-     description='reprojected/repaired NHDPlus catchment polygons'),
-   
-   # water body polygons
-   c(name='waterbody',
-     file=file.path(out.subdir, 'uyrw_nhd_waterbody.rds'), 
-     type='R sf object', 
-     description='reprojected/repaired NHDPlus water body polygons'),
-   
-   # flowlines line geometries
-   c(name='flowline',
-     file=file.path(out.subdir, 'uyrw_nhd_flowline.rds'), 
-     type='R sf object', 
-     description='reprojected/repaired NHDPlus flowline geometries'),
-   
-   # flowlines line geometries
-   c(name='millcreek',
-     file=file.path(out.subdir, 'millcreek_nhd.rds'), 
-     type='R list object', 
-     description='flowlines, catchments, and boundary polygon for mill creek'),
-   
-   # aesthetic parameters for plotting
-   c(name='pars_tmap',
-     file=file.path(data.dir, 'tmap_get_basins.rds'), 
-     type='R list object', 
-     description='parameters for writing png plots using tmap and tm_save'),
-   
-   # a graphic showing flowlines in study area
-   c(name='img_flowlines',
-     file=file.path(graphics.dir, 'uyrw_flowlines.png'),
-     type='png graphic', 
-     description='image of flowlines in the UYRW with placenames'),
-   
-   # a graphic showing drainage subbasins in study area...
-   c(name='img_basins',
-     file=file.path(graphics.dir, 'uyrw_basins.png'),
-     type='png graphic', 
-     description='image of some 2000 drainage basins in the UYRW'))
-
-# write this information to disk
-my_metadata('get_basins', files.towrite, overwrite=TRUE)
+# write metadata information to disk and print list of files to be written
+basins.meta = my_metadata('get_basins', files.towrite, overwrite=TRUE)
 ```
 
     ## [1] "writing to data/get_basins_metadata.csv"
 
-    ##                                                   file          type                                                      description
-    ## poi                                  data/uyrw_poi.rds R list object                              points of interest in the watershed
-    ## nhd                          data/source/uyrw_nhd.gpkg    geopackage                                   source geometries from NHDPlus
-    ## crs                                  data/uyrw_crs.rds R list object                     details of projection/extent for the project
-    ## boundary           data/prepared/uyrw_nhd_boundary.rds  R sfc object UYRW watershed boundary polygon derived from NHDPlus catchements
-    ## boundary_padded data/prepared/uyrw_boundary_padded.rds   R sf object                                padded watershed boundary polygon
-    ## mainstem           data/prepared/uyrw_nhd_mainstem.rds  R sfc object       UYR main stem line geometry derived from NHDPlus flowlines
-    ## catchment         data/prepared/uyrw_nhd_catchment.rds   R sf object                  reprojected/repaired NHDPlus catchment polygons
-    ## waterbody         data/prepared/uyrw_nhd_waterbody.rds   R sf object                 reprojected/repaired NHDPlus water body polygons
-    ## flowline           data/prepared/uyrw_nhd_flowline.rds   R sf object                 reprojected/repaired NHDPlus flowline geometries
-    ## millcreek              data/prepared/millcreek_nhd.rds R list object       flowlines, catchments, and boundary polygon for mill creek
-    ## pars_tmap                     data/tmap_get_basins.rds R list object          parameters for writing png plots using tmap and tm_save
-    ## img_flowlines              graphics/uyrw_flowlines.png   png graphic                   image of flowlines in the UYRW with placenames
-    ## img_basins                    graphics/uyrw_basins.png   png graphic                   image of some 2000 drainage basins in the UYRW
-    ## metadata                  data/get_basins_metadata.csv           CSV                      list files of files written by get_basins.R
+``` r
+print(basins.meta[, c('file', 'type')])
+```
 
-The list of files and descriptions is now stored as a [.csv
+    ##                                                       file          type
+    ## landuse_source                    data/source/GAP_LANDFIRE     directory
+    ## landuse_csv                      data/prepared/landuse.csv           CSV
+    ## landuse_tif                      data/prepared/landuse.tif       GeoTIFF
+    ## swat_landuse_lookup  data/prepared/swat_landuse_lookup.csv           CSV
+    ## swat_landuse_tif            data/prepared/swat_landuse.tif       GeoTIFF
+    ## img_landuse                           graphics/landuse.png   png graphic
+    ## img_swat_landuse                 graphics/swat_landuse.png   png graphic
+    ## poi                                      data/uyrw_poi.rds R list object
+    ## nhd                              data/source/uyrw_nhd.gpkg    geopackage
+    ## crs                                      data/uyrw_crs.rds R list object
+    ## boundary               data/prepared/uyrw_nhd_boundary.rds  R sfc object
+    ## boundary_padded     data/prepared/uyrw_boundary_padded.rds   R sf object
+    ## mainstem               data/prepared/uyrw_nhd_mainstem.rds  R sfc object
+    ## catchment             data/prepared/uyrw_nhd_catchment.rds   R sf object
+    ## waterbody             data/prepared/uyrw_nhd_waterbody.rds   R sf object
+    ## flowline               data/prepared/uyrw_nhd_flowline.rds   R sf object
+    ## millcreek                  data/prepared/millcreek_nhd.rds R list object
+    ## pars_tmap                         data/tmap_get_basins.rds R list object
+    ## img_flowlines                  graphics/uyrw_flowlines.png   png graphic
+    ## img_basins                        graphics/uyrw_basins.png   png graphic
+    ## metadata                      data/get_basins_metadata.csv           CSV
+
+The list of files (and descriptions) is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
-in the `/data` directory. These tables (of the form
-’get\_\*\_metadata.csv’) will serve as a lookup table for figuring out
-what a file does, and where it came from.
+in the `/data` directory. Together, the tables ’get\_\*\_metadata.csv’
+should describe all files created in this project, and where they came
+from.
 
 Since github is not meant for hosting large binaries, most of the output
 files are not shared in this repository (see my
@@ -202,7 +133,7 @@ things all over again.
 
 ``` r
 # define a file containing points-of-interest, their comids, and plotting labels
-if(!file.exists(here(my_metadata('get_basins')['poi', 'file'])))
+if(!file.exists(here(basins.meta['poi', 'file'])))
 {
   # define some points of interest in the watershed
   poi.name = c(cartersbridge = "Carter's Bridge, MT",
@@ -220,12 +151,12 @@ if(!file.exists(here(my_metadata('get_basins')['poi', 'file'])))
   
   # compile into a list and save to disk
   poi.list = list(name = poi.name, pt = poi.pt, comid = poi.comid)
-  saveRDS(poi.list, here(my_metadata('get_basins')['poi', 'file']))
+  saveRDS(poi.list, here(basins.meta['poi', 'file']))
   
 } else {
   
   # load from disk 
-  poi.list = readRDS(here(my_metadata('get_basins')['poi', 'file']))
+  poi.list = readRDS(here(basins.meta['poi', 'file']))
 }
 ```
 
@@ -238,7 +169,7 @@ data. These next few lines use the first entry of `poi.list$comid`
 relevant watershed geometries.
 
 ``` r
-if(!file.exists(here(my_metadata('get_basins')['nhd', 'file'])))
+if(!file.exists(here(basins.meta['nhd', 'file'])))
 {
   # download a line geometry defining flowlines upstream of Big Timber, MT
   uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid[1]), mode='upstreamTributaries', data_source = '')
@@ -247,7 +178,7 @@ if(!file.exists(here(my_metadata('get_basins')['nhd', 'file'])))
   print(uyrw.flowlines$nhdplus_comid)
   
   # download geometries defining catchements, water bodies, and the full flowline network
-  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(my_metadata('get_basins')['nhd', 'file']), nhdplus_data='download')
+  subset_nhdplus(comids=uyrw.flowlines$nhdplus_comid, output_file=here(basins.meta['nhd', 'file']), nhdplus_data='download')
 }
 ```
 
@@ -259,10 +190,10 @@ a reference system more appropriate for hydrology modeling, then
 computes the bounding box extent.
 
 ``` r
-if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file']))))
+if(any(!file.exists(here(basins.meta[c('boundary','crs'), 'file']))))
 {
   # load the watershed catchments. There are several thousand
-  uyrw.catchment = read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'CatchmentSP')
+  uyrw.catchment = read_sf(here(basins.meta['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
   
   # Their union delineates the entire UYR watershed as a single polygon
@@ -298,15 +229,15 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('boundary','crs'), 'file'])
                   dims = list(xlim=uyrw.xlim, ylim=uyrw.ylim))
   
   # save to disk
-  saveRDS(crs.list, here(my_metadata('get_basins')['crs', 'file']))
-  saveRDS(uyrw.poly, here(my_metadata('get_basins')['boundary', 'file']))
-  saveRDS(uyrw.padded.poly, here(my_metadata('get_basins')['boundary_padded', 'file']))
+  saveRDS(crs.list, here(basins.meta['crs', 'file']))
+  saveRDS(uyrw.poly, here(basins.meta['boundary', 'file']))
+  saveRDS(uyrw.padded.poly, here(basins.meta['boundary_padded', 'file']))
   
 } else {
   
   # load CRS info list and watershed boundary from disk (padded boundary not needed yet)
-  crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
-  uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+  crs.list = readRDS(here(basins.meta['crs', 'file']))
+  uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 }
 ```
 
@@ -324,12 +255,12 @@ outside this watershed, so we clean up the sfc objects before
 continuing.
 
 ``` r
-if(any(!file.exists(here(my_metadata('get_basins')[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
+if(any(!file.exists(here(basins.meta[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
-  uyrw.catchment = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
-  uyrw.flowline = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
-  uyrw.waterbody = st_transform(read_sf(here(my_metadata('get_basins')['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
+  uyrw.catchment = st_transform(read_sf(here(basins.meta['nhd', 'file']), 'CatchmentSP'), crs.list$epsg)
+  uyrw.flowline = st_transform(read_sf(here(basins.meta['nhd', 'file']), 'NHDFlowline_Network'), crs.list$epsg)
+  uyrw.waterbody = st_transform(read_sf(here(basins.meta['nhd', 'file']), 'NHDWaterbody'), crs.list$epsg)
   
   # fix invalid geometries and mask with watershed boundary
   uyrw.waterbody = st_intersection(st_make_valid(uyrw.waterbody), uyrw.poly)
@@ -341,18 +272,18 @@ if(any(!file.exists(here(my_metadata('get_basins')[c('catchment', 'waterbody', '
   uyrw.mainstem = st_make_valid(st_union(uyrw.mainstem, by_feature=FALSE))
   
   # save to disk
-  saveRDS(uyrw.catchment, here(my_metadata('get_basins')['catchment', 'file']))
-  saveRDS(uyrw.flowline, here(my_metadata('get_basins')['flowline', 'file']))
-  saveRDS(uyrw.waterbody, here(my_metadata('get_basins')['waterbody', 'file']))
-  saveRDS(uyrw.mainstem, here(my_metadata('get_basins')['mainstem', 'file']))
+  saveRDS(uyrw.catchment, here(basins.meta['catchment', 'file']))
+  saveRDS(uyrw.flowline, here(basins.meta['flowline', 'file']))
+  saveRDS(uyrw.waterbody, here(basins.meta['waterbody', 'file']))
+  saveRDS(uyrw.mainstem, here(basins.meta['mainstem', 'file']))
   
 } else {
   
   # load from disk
-  uyrw.catchment = readRDS(here(my_metadata('get_basins')['catchment', 'file']))
-  uyrw.flowline = readRDS(here(my_metadata('get_basins')['flowline', 'file']))
-  uyrw.waterbody = readRDS(here(my_metadata('get_basins')['waterbody', 'file']))
-  uyrw.mainstem = readRDS(here(my_metadata('get_basins')['mainstem', 'file']))
+  uyrw.catchment = readRDS(here(basins.meta['catchment', 'file']))
+  uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
+  uyrw.waterbody = readRDS(here(basins.meta['waterbody', 'file']))
+  uyrw.mainstem = readRDS(here(basins.meta['mainstem', 'file']))
   
 }
 ```
@@ -362,7 +293,7 @@ the Mill Creek, MT watershed. Define this subset of the UYRW and save
 those geometries to disk:
 
 ``` r
-if(!file.exists(here(my_metadata('get_basins')['millcreek', 'file'])))
+if(!file.exists(here(basins.meta['millcreek', 'file'])))
 {
   # identify "Mill Creek" from pilot study - this query actually returns 5 separate stream reaches
   millcreek.gniscodes = unique(uyrw.flowline$gnis_id[grepl('Mill Creek', uyrw.flowline$gnis_name, fixed=TRUE)])
@@ -383,23 +314,23 @@ if(!file.exists(here(my_metadata('get_basins')['millcreek', 'file'])))
   
   # pile everything into a list and save to disk
   millcreek.list = list(boundary=millcreek.poly, flowlines=millcreek.flowlines, catchments=millcreek.catchments)
-  saveRDS(millcreek.list, here(my_metadata('get_basins')['millcreek', 'file']))
+  saveRDS(millcreek.list, here(basins.meta['millcreek', 'file']))
   
 } else {
   
   # load from disk
-  millcreek.list = readRDS(here(my_metadata('get_basins')['millcreek', 'file']))
+  millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
 }
 ```
 
 ## visualization
 
-using the `tmap` package, we will make a few plots showing some of the
+We make a few plots using the `tmap` package to show some of the
 watershed features now loaded into R. First define and save some
 graphical parameters for consistency among plots and tidier code
 
 ``` r
-if(!file.exists(here(my_metadata('get_basins')['pars_tmap', 'file'])))
+if(!file.exists(here(basins.meta['pars_tmap', 'file'])))
 {
   # parameter values go into a list
   tmap.pars = list(
@@ -422,19 +353,22 @@ if(!file.exists(here(my_metadata('get_basins')['pars_tmap', 'file'])))
   )
   
   # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_basins')['pars_tmap', 'file']))
+  saveRDS(tmap.pars, here(basins.meta['pars_tmap', 'file']))
   
 } else {
   
   # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
+  tmap.pars = readRDS(here(basins.meta['pars_tmap', 'file']))
 }
 ```
 
-plot the watershed flowlines and water bodies as a png file
+Start with the watershed flowlines. Line widths are scaled according to
+the Strahler method, using the variable ‘streamorde’ from NHDPlus (they
+do not represent physical width of the stream).
+![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
 
 ``` r
-if(!file.exists(here(my_metadata('get_basins')['img_flowline', 'file'])))
+if(!file.exists(here(basins.meta['img_flowline', 'file'])))
 {
   # make the plot grob
   tmap.watercourses = 
@@ -458,22 +392,18 @@ if(!file.exists(here(my_metadata('get_basins')['img_flowline', 'file'])))
   
   # render the plot
   tmap_save(tm=tmap.watercourses, 
-            here(my_metadata('get_basins')['img_flowline', 'file']), 
+            here(basins.meta['img_flowline', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
 ```
 
-![flowlines of the Upper Yellowstone and
-tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
-Line widths are scaled in this plot according to the Strahler method,
-using the variable ‘streamorde’ from NHDPlus (they do not represent
-physical width of the stream).
+Now plot the watershed drainage basins and water bodies:
+![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
 
 ``` r
-# plot the watershed drainage basins and water bodies as a png file
-if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
+if(!file.exists(here(basins.meta['img_basins', 'file'])))
 {
   tmap.basins = 
     tm_shape(uyrw.poly) +
@@ -491,12 +421,9 @@ if(!file.exists(here(my_metadata('get_basins')['img_basins', 'file'])))
 
   # render the plot
   tmap_save(tm=tmap.basins, 
-            here(my_metadata('get_basins')['img_basins', 'file']), 
+            here(basins.meta['img_basins', 'file']), 
             width=tmap.pars$png['w'], 
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
 ```
-
-![Drainage basins of the Upper Yellowstone and
-tributaries](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_basins.png)
