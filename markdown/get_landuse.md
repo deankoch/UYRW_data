@@ -32,6 +32,7 @@ source(here('R/get_helperfun.R'))
 library(raster)
 library(gdalUtilities)
 library(grid)
+library(colorspace)
 ```
 
 ## project data
@@ -56,13 +57,19 @@ files.towrite = list(
   c(name='landuse_tif',
     file=file.path(out.subdir, 'landuse.tif'), 
     type='GeoTIFF',
-    description='GAP/LANDFIRE land classification raster, maps to landuse_csv and swat_landuse_lookup'), 
+    description='GAP/LANDFIRE land classification raster, maps to landuse_csv'),
   
   # lookup table for integer codes in the SWAT+ land use raster
   c(name='swat_landuse_lookup',
     file=file.path(out.subdir, 'swat_landuse_lookup.csv'), 
     type='CSV',
-    description='swat_tif integer code lookup table for SWAT+, a much simplified version of landuse_csv'), 
+    description='swat_landuse_tif integer code lookup table, maps to plants_plt SWAT+ dataset'), 
+  
+  # SWAT+ plant codes raster for the watershed, based on NVC biogeography class 
+  c(name='swat_landuse_tif',
+    file=file.path(out.subdir, 'swat_landuse.tif'), 
+    type='GeoTIFF',
+    description='SWAT+ land use classification, maps to swat_landuse_lookup'),
   
   # aesthetic parameters for plotting
   c(name='pars_tmap',
@@ -70,9 +77,15 @@ files.towrite = list(
     type='R list object', 
     description='parameters for writing png plots using tmap and tm_save'),
   
-  # graphic showing SWAT+ land use classifications derived from GAP/LANDFIRE for the UYRW
+  # graphic showing NVC physiognomy classifications derived from GAP/LANDFIRE for the UYRW
   c(name='img_landuse',
     file=file.path(graphics.dir, 'landuse.png'),
+    type='png graphic',
+    description='image of SWAT+ land use values in the UYRW'),
+  
+  # graphic showing SWAT+ land use classifications derived from NVC biogeography classes
+  c(name='img_swat_landuse',
+    file=file.path(graphics.dir, 'swat_landuse.png'),
     type='png graphic',
     description='image of SWAT+ land use values in the UYRW')
 )
@@ -88,17 +101,21 @@ my_metadata('get_landuse', files.towrite, overwrite=TRUE)
     ## landuse_csv                     data/prepared/landuse.csv           CSV
     ## landuse_tif                     data/prepared/landuse.tif       GeoTIFF
     ## swat_landuse_lookup data/prepared/swat_landuse_lookup.csv           CSV
+    ## swat_landuse_tif           data/prepared/swat_landuse.tif       GeoTIFF
     ## pars_tmap                       data/tmap_get_landuse.rds R list object
     ## img_landuse                          graphics/landuse.png   png graphic
+    ## img_swat_landuse                graphics/swat_landuse.png   png graphic
     ## metadata                    data/get_landuse_metadata.csv           CSV
-    ##                                                                                                description
-    ## landuse_source                            contents of GAP/LANDFIRE zip archive for "Great Northern" region
-    ## landuse_csv                                    attributes for each raster land use integer key in the UYRW
-    ## landuse_tif           GAP/LANDFIRE land classification raster, maps to landuse_csv and swat_landuse_lookup
-    ## swat_landuse_lookup swat_tif integer code lookup table for SWAT+, a much simplified version of landuse_csv
-    ## pars_tmap                                          parameters for writing png plots using tmap and tm_save
-    ## img_landuse                                                     image of SWAT+ land use values in the UYRW
-    ## metadata                                                      list files of files written by get_landuse.R
+    ##                                                                                      description
+    ## landuse_source                  contents of GAP/LANDFIRE zip archive for "Great Northern" region
+    ## landuse_csv                          attributes for each raster land use integer key in the UYRW
+    ## landuse_tif                         GAP/LANDFIRE land classification raster, maps to landuse_csv
+    ## swat_landuse_lookup swat_landuse_tif integer code lookup table, maps to plants_plt SWAT+ dataset
+    ## swat_landuse_tif                      SWAT+ land use classification, maps to swat_landuse_lookup
+    ## pars_tmap                                parameters for writing png plots using tmap and tm_save
+    ## img_landuse                                           image of SWAT+ land use values in the UYRW
+    ## img_swat_landuse                                      image of SWAT+ land use values in the UYRW
+    ## metadata                                            list files of files written by get_landuse.R
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_landuse_metadata.csv)
@@ -183,8 +200,17 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('landuse_tif', 'landuse_cs
   landuse.tab.path = file.path(landuse.src.dir, landuse.tab.fname)
   landuse.tab = read.delim(landuse.tab.path, header=TRUE) %>% filter(Value %in% landuse.rat$ID)
   
-  # verify that 'Value' matches raster values in correct order then write to disk
+  # verify that 'Value' matches raster values in correct order
   all(landuse.tab$Value == landuse.rat$ID)
+  
+  # add n_count column, counting number of pixels occupied by each `Value` code
+  landuse.freq = setNames(data.frame(freq(landuse.tif)), c('Value', 'n_uyrw'))
+  landuse.tab = left_join(landuse.tab, landuse.freq, by='Value') 
+  
+  # omit table entries not found on land use raster (after masking to UYRW)
+  landuse.tab = landuse.tab %>% filter(!is.na(n_uyrw))
+  
+  # write to disk
   landuse.csv.path = here(my_metadata('get_landuse')['landuse_csv', 'file'])
   write.csv(landuse.tab, landuse.csv.path, row.names=FALSE)
   
@@ -196,34 +222,94 @@ if(any(!file.exists(here(my_metadata('get_landuse')[c('landuse_tif', 'landuse_cs
 }
 ```
 
-## visualization
+## SWAT input files
 
-create a simplified table, showing only the
+SWAT+ comes packaged with a plant growth database (table `plants_plt` in
+“swatplus\_datasets.sqlite” which includes a large number of parameter
+sets for agricultural crops (eg. `alfalfa`), and a smaller collection of
+generic classes for wild plant assemblages (eg.
+`deciduous_broadleaf_forest`). These are used to parametrize HRUs based
+on information about land use, such as the classifications found in the
+LANDFIRE/GAP dataset.
 
-nvc.vals =
-setNames(1:length(unique(landuse.attr\(NVC_CLASS)), unique(landuse.attr\)NVC\_CLASS))
+In this section, we map the [NVC biogeography
+classifications](http://usnvc.org/data-standard/natural-vegetation-classification/)
+to entries of the SWAT plant growth database, generating the landuse
+GeoTIFF raster and lookup table required by SWAT+ AW.
 
 ``` r
-# create simplified raster showing only the NVC class over the UYRW area
-nvc.classes = unique(landuse.tab$NVC_CLASS)
-nvc.class.lookup = cbind(landuse.tab$Value, match(landuse.tab$NVC_CLASS, nvc.classes))
-nvc.class.tif = mask(reclassify(landuse.tif, nvc.class.lookup), as(uyrw.poly, 'Spatial'))
-
-# load the plotting parameters used in get_dem.R, modify for this plot
-tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
+if(any(!file.exists(here(my_metadata('get_landuse')[c('swat_landuse_tif', 'swat_landuse_lookup'), 'file']))))
+{
+  # copy relevant fields of land use table, omitting 'Open Water' which is dealt with separately by SWAT+
+  nvc.df = landuse.tab %>% filter(NVC_DIV != 'Open Water') %>% select(Value, NVC_DIV, NVC_MACRO, NVC_GROUP)
+  
+  # append SWAT+ plant codes using a helper function
+  nvc.df = my_plants_plt(nvc.df)
+  
+  # build and write the output CSV
+  swatcodes.unique = unique(nvc.df$swatcode)
+  swat.lookup = data.frame(Value=1:length(swatcodes.unique), Landuse=swatcodes.unique)
+  swat.lookup.path = here(my_metadata('get_landuse')['swat_landuse_lookup', 'file'])
+  write.csv(swat.lookup, swat.lookup.path, row.names=FALSE)
+  
+  # build the reclassification matrix for the raster (mapping open water to NA)
+  waterval = landuse.tab$Value[landuse.tab$NVC_DIV=='Open Water']
+  idx.landuse = match(nvc.df$swatcode, swat.lookup$Landuse)
+  rcl = cbind(c(nvc.df$Value, waterval), c(idx.landuse, NA))
+  
+  # build the raster, crop and mask to UYRW, and write the output GeoTIFF
+  swat.landuse.tif = reclassify(landuse.tif, rcl)
+  swat.landuse.tif = mask(crop(swat.landuse.tif, as(uyrw.poly, 'Spatial')), as(uyrw.poly, 'Spatial'))
+  writeRaster(swat.landuse.tif, here(my_metadata('get_landuse')['swat_landuse_tif', 'file']), overwrite=TRUE)
+  
+} else {
+  
+  # load from disk 
+  swat.landuse.tif = raster(here(my_metadata('get_landuse')['swat_landuse_tif', 'file']))
+  swat.lookup = read.csv(here(my_metadata('get_landuse')['swat_landuse_lookup', 'file']))
+}
 ```
+
+## visualization
 
 Set up the aesthetics to use for these types of plots
 
 ``` r
 if(!file.exists(here(my_metadata('get_landuse')['pars_tmap', 'file'])))
 {
+  # load the plotting parameters used in get_dem.R, modify for this plot
+  tmap.pars = readRDS(here(my_metadata('get_dem')['pars_tmap', 'file']))
+  
+  # adjust graphic dimensions
+  tmap.pars$png['h'] = 4800
+  tmap.pars$png['w'] = 2400
+  tmap.pars$png['pt'] = 32
+  tmap.pars$layout = tmap.pars$layout + tm_layout(scale=3)
+    
+  # save to disk
+  saveRDS(tmap.pars, here(my_metadata('get_landuse')['pars_tmap', 'file']))
+  
+} else {
+  
+  # load from disk
+  tmap.pars = readRDS(here(my_metadata('get_landuse')['pars_tmap', 'file']))
+} 
+
+# plot NVC classifications raster as a png file
+if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
+{
+  
+  # create a simplified table containing the NVC physiognomy classes in the UYRW area
+  nvc.classes = unique(landuse.tab$NVC_CLASS)
+  nvc.class.lookup = cbind(landuse.tab$Value, match(landuse.tab$NVC_CLASS, nvc.classes))
+  nvc.class.tif = mask(reclassify(landuse.tif, nvc.class.lookup), as(uyrw.poly, 'Spatial'))
+  
   # define a palette 
-  mypal = setNames(c(forest='darkolivegreen3', 
-                     shrub='darkolivegreen1',
+  nc = length(nvc.classes) 
+  mypal = setNames(c(shrub='darkolivegreen1',
+                     forest='darkolivegreen3', 
                      desert='gold1',
                      polar='turquoise1',
-                     aquatic='seagreen1',
                      rock='tan1',
                      sparse='darkolivegreen4',
                      agriculture='darkorange1',
@@ -232,37 +318,16 @@ if(!file.exists(here(my_metadata('get_landuse')['pars_tmap', 'file'])))
                      water='steelblue1',
                      developed='firebrick1'), 1:nc)
   
-  tmap.pars$png['h'] = 4800
-  tmap.pars$png['w'] = 2400
-  tmap.pars$png['pt'] = 32
-  tmap.pars$layout = tmap.pars$layout + tm_layout(scale=3)
-    
-  
-  # save to disk
-  saveRDS(tmap.pars, here(my_metadata('get_landuse')['pars_tmap', 'file']))
-  
-} else {
-  
-  # load from disk
-  tmap.pars = readRDS(here(my_metadata('get_landuse')['pars_tmap', 'file']))
-  
-} 
-
-
-# plot land use raster as a png file
-if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
-{
   # build the raster plot, omit legend
   tmap.landuse = tm_shape(nvc.class.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
-    tm_raster(title='NVC class', style='cat', palette=mypal) +
+    tm_raster(style='cat', palette=mypal) +
     tm_shape(uyrw.poly, lwd=0.5) +
       tm_borders(col='black') +
     tmap.pars$layout +
     tm_layout(legend.show=FALSE)
   
   # build the legend grob separately, using a dummy raster
-  legend.title = 'LANDFIRE/GAP classifications in the UYRW'
-  nc = length(nvc.classes) 
+  legend.title = 'NVC physiognomy classifications in the UYRW'
   dummy.tif = raster(matrix(1:nc, nc, nc), crs=CRS(paste0('+init=epsg:', crs.list$epsg)))
   legend.tm = tm_shape(dummy.tif) +
     tm_raster('layer', style='cat', labels=nvc.classes, palette=mypal, title=legend.title) +
@@ -292,3 +357,83 @@ if(!file.exists(here(my_metadata('get_landuse')['img_landuse', 'file'])))
 
 ![land use of the
 UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png)
+
+``` r
+# plot the SWAT+ plant codes in the UYRW
+if(!file.exists(here(my_metadata('get_landuse')['img_swat_landuse', 'file'])))
+{
+  # create lookup table for SWAT+ plant code descriptions with legend labels
+  plt = my_plants_plt(landuse.tab) %>% 
+    mutate(Landuse=swatcode) %>% 
+    mutate(label=gsub('_', ' ', swatdesc)) %>% 
+    select(Landuse, label) %>% 
+    distinct %>%
+    right_join(swat.lookup, by='Landuse')
+  plt.labels = paste0(plt$Value, '. ',  plt$Landuse, ' (', plt$label, ')') 
+  
+  # create a palette for these categories
+  nc = nrow(plt)
+  forest.pal = terrain_hcl(15)
+  range.pal = heat_hcl(5)
+  other.pal = rainbow_hcl(10)
+  mypal = setNames(c(rnge_tems=range.pal[4],
+                     frse_test=forest.pal[7],
+                     frse_tems=forest.pal[6],
+                     popl=forest.pal[1],
+                     pine=forest.pal[5],
+                     ldgp=forest.pal[4],
+                     wspr=forest.pal[3],
+                     frst_tems=forest.pal[2],
+                     rngb_tems=range.pal[1],
+                     wetf=other.pal[5],
+                     rngb_test=range.pal[2],
+                     wehb=other.pal[6],
+                     migs=range.pal[3],
+                     rnge_test=range.pal[5],
+                     bsvg=other.pal[9],
+                     tuhb=other.pal[7],
+                     tubg=other.pal[8],
+                     barr=other.pal[10],
+                     agrl='darkorange1',
+                     fesc='gold1'), 1:nc)
+  
+  
+  # build the raster plot, omit legend
+  tmap.landuse = tm_shape(swat.landuse.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
+    tm_raster(style='cat', palette=mypal) +
+    tm_shape(uyrw.poly, lwd=0.5) +
+    tm_borders(col='black') +
+    tmap.pars$layout +
+    tm_layout(legend.show=FALSE)
+  
+  # build the legend grob separately, using a dummy raster
+  legend.title = 'SWAT+ plant codes in the UYRW'
+  dummy.tif = raster(matrix(1:nc, nc, nc), crs=CRS(paste0('+init=epsg:', crs.list$epsg)))
+  legend.tm = tm_shape(dummy.tif) +
+    tm_raster('layer', style='cat', labels=plt.labels, palette=mypal, title=legend.title) +
+    tm_layout(legend.only=TRUE,
+              legend.text.size=4,
+              legend.title.size=6)
+  
+  # start the png graphics device
+  png(filename=here(my_metadata('get_landuse')['img_swat_landuse', 'file']), 
+      width=tmap.pars$png['w'], 
+      height=tmap.pars$png['h'], 
+      pointsize=tmap.pars$png['pt'])
+  
+    # set up a grid layout for the raster and legend panels
+    grid.newpage()
+    page.layout = grid.layout(nrow=2, ncol=1, heights=c(3,1))
+    pushViewport(viewport(layout=page.layout))
+    
+    # print the plot elements
+    print(tmap.landuse, vp=viewport(layout.pos.row=1))
+    print(legend.tm, vp=viewport(layout.pos.row=2))
+  
+  # save and close plot device
+  dev.off()
+}
+```
+
+![SWAT plant
+codes](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_landuse.png)
