@@ -34,5 +34,6 @@ R is a powerful data-retrieval, GIS, and visualization tool. These figures are g
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/weatherstation_sites.png" width="45%"></img> <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/streamgage_sites.png" width="45%"> <img
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils.png" width="45%"> <img
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils_wstor.png" width="45%"> <img
-src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png" width="45%" style="vertical-align:middle"> <img
-src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png" width="45%"> </img> 
+src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png" width="45%"> <img
+src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_landuse.png" width="45%"> <img
+src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png" width="45%"> </img> 
