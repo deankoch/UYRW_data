@@ -5,22 +5,41 @@ We are a team of mathematicians, statisticians, and ecologists, conducting a mul
 ## R code
 
 The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model:
+
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-defines the study area and loads some hydrology info using `nhdplusTools`
+defines the study area and loads some hydrology info using
+[`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/)
+
 * [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
-finds climatic sensor station data using `snotelr` and `rnoaa`
+finds climatic sensor station data using
+[`snotelr`](https://github.com/bluegreen-labs/snotelr) and
+[`rnoaa`](https://github.com/ropensci/rnoaa)
+
 * [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
-fetches the National Elevation Dataset from USGS using `FedData`
+fetches the National Elevation Dataset from USGS using
+[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
-fetches sensor data from the USGS NWIS using `dataRetrieval`
+fetches sensor data from the USGS NWIS using
+[`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
+
 * [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
-fetches SSURGO/STATSGO2 data from the Soil Data Mart using `FedData`
+fetches SSURGO/STATSGO2 data from the Soil Data Mart using
+[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
-fetches GAP/LANDFIRE data from the USGS
+fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 
 Check back for more scripts and figures as we add to this list in the coming weeks. 
 
 Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's [Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
+
+These scripts prepare the data structure needed to run the
+[SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
+python codebase from Celray James and Chris George. SWAT+ AW replaces the QSWAT+ GUI as the
+main tool for setting up a SWAT+ watershed model, as part of an effort towards reproducible
+catchment modelling science
+(see also [this talk](https://scholarsarchive.byu.edu/iemssconference/2018/Stream-A/64/)).
 
 ## funding
 
