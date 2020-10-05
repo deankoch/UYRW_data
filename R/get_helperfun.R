@@ -24,7 +24,10 @@ library(raster)
 #' [`sf`](https://r-spatial.github.io/sf/) handles GIS data such as ESRI shapefiles
 library(sf)
 
-#' [`tmap`](https://github.com/mtennekes/tmap) constructs pretty ggplot2-based thematic map graphics
+#' [`ggplot2`](https://ggplot2.tidyverse.org/) popular graphics package with high-level abstraction
+library(ggplot2)  
+
+#' [`tmap`](https://github.com/mtennekes/tmap) constructs pretty thematic map graphics
 library(tmap)
 
 #' [`dplyr`](https://dplyr.tidyverse.org/R) tidyverse-style manipulation of tabular data
