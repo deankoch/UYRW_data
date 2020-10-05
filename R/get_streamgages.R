@@ -251,6 +251,9 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
             pointsize=tmap.pars$png['pt'])
 }
 
+#+ include=FALSE
+# Development code
+
 
 #' example data  
 #' 
@@ -274,6 +277,4 @@ flow.millcreek = renameNWISColumns(readNWISdv(siteNumber, parameterCd, startDate
 flow.attr = attr(flow.millcreek, 'variableInfo')
 
 
-#+ include=FALSE
-# Development code
 #my_markdown('get_streamgages')
