@@ -1,7 +1,7 @@
 get\_soils.R
 ================
 Dean Koch
-2020-10-01
+2020-10-05
 
 **Mitacs UYRW project**
 
@@ -492,8 +492,12 @@ if(any(!file.exists(here(soils.meta[c('swat_usersoil', 'swat_lookup', 'swat_tif'
   soils.tif.path = here(soils.meta['swat_tif', 'file'])
   soils.tif.prelim = gRasterize(as(soils.merged.sf, 'Spatial'), dem.tif, field='MUKEY', soils.tif.path)
   
+  # crop the geotiff to URYW boundary
+  soils.tif = crop(soils.tif.prelim, as(uyrw.poly, 'Spatial'))
+  writeRaster(soils.tif, soils.tif.path, overwrite=TRUE)
+  
   # store the integer code order for this raster, and add unique "soil name" 
-  soils.rat = levels(soils.tif.prelim)[[1]] %>% mutate(NAME = paste0('UYRW_', MUKEY))
+  soils.rat = levels(soils.tif)[[1]] %>% mutate(NAME = paste0('UYRW_', MUKEY))
   
   # tidy up usersoil table, add soil names in order given, and write to disk 
   idx.usersoil = match(soils.rat$MUKEY, usersoil$MUID)
