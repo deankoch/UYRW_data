@@ -159,6 +159,11 @@ if(!file.exists(here(streamgages.meta['USGS_paramcodes', 'file'])))
 }
 
 #'
+#' ## Download streamflow time series
+#' 
+
+
+#'
 #' ## visualization
 #' 
 
@@ -175,6 +180,8 @@ length(uyrw.sitecodes)
 # find all entries corresponding to streamflow
 paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
 idx.streamflow = usgs.ts.sf$parm_cd == paramcode.streamflow
+
+# TO DO : find temperature time series
 
 # find all entries corresponding to turbidity and suspended sediment
 paramcode.turbidity = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Turbidity']
@@ -243,6 +250,29 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+
+
+#' example data  
+#' 
+
+# grab the mill creek data
+idx.millcreek =grepl('mill creek', usgs.ts.sf$station_nm, ignore.case=TRUE)
+print(usgs.ts.sf[idx.millcreek,])
+
+# inputs to downloader function
+siteNumber = usgs.ts.sf$site_no[idx.millcreek]
+parameterCd = usgs.ts.sf$parm_cd[idx.millcreek]
+startDate = usgs.ts.sf$begin_date[idx.millcreek]
+endDate = usgs.ts.sf$end_date[idx.millcreek]
+
+# see https://help.waterdata.usgs.gov/code/stat_cd_nm_query?stat_nm_cd=%25&fmt=html&inline=true for stats codes
+statCd = paste0('0000', 1:9)
+statCd = paste0('0000', 3)
+
+# download and parse data
+flow.millcreek = renameNWISColumns(readNWISdv(siteNumber, parameterCd, startDate, endDate, statCd))
+flow.attr = attr(flow.millcreek, 'variableInfo')
+
 
 #+ include=FALSE
 # Development code

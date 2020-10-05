@@ -1,7 +1,7 @@
 get\_streamgages.R
 ================
 Dean Koch
-2020-10-01
+2020-10-05
 
 **Mitacs UYRW project**
 
@@ -167,6 +167,8 @@ if(!file.exists(here(streamgages.meta['USGS_paramcodes', 'file'])))
 }
 ```
 
+## Download streamflow time series
+
 ## visualization
 
 Some data-preparation work will allow us to plot information about both
@@ -187,6 +189,8 @@ length(uyrw.sitecodes)
 # find all entries corresponding to streamflow
 paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
 idx.streamflow = usgs.ts.sf$parm_cd == paramcode.streamflow
+
+# TO DO : find temperature time series
 
 # find all entries corresponding to turbidity and suspended sediment
 paramcode.turbidity = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Turbidity']
@@ -279,4 +283,43 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+```
+
+example data
+
+``` r
+# grab the mill creek data
+idx.millcreek =grepl('mill creek', usgs.ts.sf$station_nm, ignore.case=TRUE)
+print(usgs.ts.sf[idx.millcreek,])
+```
+
+    ## Simple feature collection with 1 feature and 29 fields
+    ## geometry type:  POINT
+    ## dimension:      XY
+    ## bbox:           xmin: 529944.5 ymin: 5022954 xmax: 529944.5 ymax: 5022954
+    ## projected CRS:  WGS 84 / UTM zone 12N
+    ##      agency_cd  site_no              station_nm site_tp_cd  dec_lat_va  dec_long_va coord_acy_cd dec_coord_datum_cd alt_va alt_acy_va
+    ## 3595      USGS 06192000 Mill Creek near Pray MT         ST 45.35945556 -110.6176694            1              NAD83   5160         10
+    ##      alt_datum_cd   huc_cd data_type_cd parm_cd stat_cd ts_id loc_web_ds medium_grp_cd parm_grp_cd  srs_id access_cd begin_date   end_date
+    ## 3595       NGVD29 10070002           dv   00060   00003 81452                      wat             1645423         0 1951-03-21 1956-09-29
+    ##      count_nu                 geometry endyear duration plotlabel_sf plotlabel_tb       plotlabel_ss
+    ## 3595     2020 POINT (529944.5 5022954)    1956        5   streamflow    turbidity suspended sediment
+
+``` r
+# inputs to downloader function
+siteNumber = usgs.ts.sf$site_no[idx.millcreek]
+parameterCd = usgs.ts.sf$parm_cd[idx.millcreek]
+startDate = usgs.ts.sf$begin_date[idx.millcreek]
+endDate = usgs.ts.sf$end_date[idx.millcreek]
+
+# see https://help.waterdata.usgs.gov/code/stat_cd_nm_query?stat_nm_cd=%25&fmt=html&inline=true for stats codes
+statCd = paste0('0000', 1:9)
+statCd = paste0('0000', 3)
+
+# download and parse data
+flow.millcreek = renameNWISColumns(readNWISdv(siteNumber, parameterCd, startDate, endDate, statCd))
+flow.attr = attr(flow.millcreek, 'variableInfo')
+
+
+#my_markdown('get_streamgages')
 ```
