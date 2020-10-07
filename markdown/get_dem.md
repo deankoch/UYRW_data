@@ -1,11 +1,12 @@
 get\_dem.R
 ================
 Dean Koch
-2020-10-01
+2020-10-07
 
 **Mitacs UYRW project**
 
-**get\_DEM**: download a DEM and warp to our reference coordinate system
+**get\_DEM**: download a DEM and warp to our reference coordinate
+system, generate a hillshade raster
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 should be run before this script.
@@ -15,8 +16,9 @@ should be run before this script.
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
 is used to fetch the USGS data,
 [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
-provides a wrapper for GDAL calls to warp the DEM. See the
-[get\_helperfun.R
+provides a wrapper for GDAL calls to warp the DEM, and
+[`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
+provides a palette for the terrain map. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
@@ -25,6 +27,7 @@ library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
 library(gdalUtilities)
+library(colorspace)
 ```
 
 ## project data
@@ -44,12 +47,12 @@ dem.meta = my_metadata('get_dem', files.towrite, overwrite=TRUE)
 print(dem.meta[, c('file', 'type')])
 ```
 
-    ##                                 file                type
-    ## ned       data/source/UYRW_NED_1.tif GeoTIFF raster file
-    ## dem            data/prepared/dem.tif GeoTIFF raster file
-    ## pars_tmap      data/tmap_get_dem.rds       R list object
-    ## img_dem             graphics/dem.png         png graphic
-    ## metadata   data/get_dem_metadata.csv                 CSV
+    ##                                  file                type
+    ## ned        data/source/UYRW_NED_1.tif GeoTIFF raster file
+    ## dem             data/prepared/dem.tif GeoTIFF raster file
+    ## hillshade data/prepared/hillshade.tif GeoTIFF raster file
+    ## img_dem              graphics/dem.png         png graphic
+    ## metadata    data/get_dem_metadata.csv                 CSV
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_dem_metadata.csv)
@@ -63,7 +66,7 @@ crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 ```
 
-## Download the DEM raster
+## Download DEM raster
 
 The `get_ned` function from `FedData` retrieves and merge all (12)
 required elevation tiles from the USGS NED
@@ -86,6 +89,8 @@ if(!file.exists(here(dem.meta['ned', 'file'])))
   dem.original.tif = raster(here(dem.meta['ned', 'file']))
 }
 ```
+
+## Processing
 
 Warp (gridded CRS transform) and clip the raster to our reference system
 and study area
@@ -115,35 +120,34 @@ if(!file.exists(here(dem.meta['dem', 'file'])))
 }
 ```
 
-## visualization
-
-Set up the aesthetics to use for these types of plots
+use GDAL to derive hillshade (via slope and aspect) from the DEM
 
 ``` r
-if(!file.exists(here(dem.meta['pars_tmap', 'file'])))
+if(!file.exists(here(dem.meta['hillshade', 'file'])))
 {
-  # load the plotting parameters used in get_basins.R
-  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
+  # define a temporary file
+  temp.tif = paste0(tempfile(), '.tif')
   
-  # shrink the vertical length
-  tmap.pars$png['h'] = 1800
+  # package 'gdalUtils' performs these kinds of operations much faster than `raster`
+  gdaldem(mode='hillshade',
+          input_dem=here(dem.meta['dem', 'file']),
+          output_map=temp.tif,
+          z=30)
   
-  # the background is too dark for black text
-  tmap.pars$layout = tmap.pars$layout + 
-    tm_layout(legend.position=c('right', 'top'),
-              legend.text.color='white',
-              legend.title.color='white')
+  # load the transformed raster
+  hillshade.tif = raster(temp.tif)
   
-  # save to disk
-  saveRDS(tmap.pars, here(dem.meta['pars_tmap', 'file']))
+  # write to output directory
+  writeRaster(hillshade.tif, here(dem.meta['hillshade', 'file']), overwrite=TRUE)
   
 } else {
   
-  # load from disk
-  tmap.pars = readRDS(here(dem.meta['pars_tmap', 'file']))
-  
-} 
+  # load from disk 
+  hillshade.tif = raster(here(dem.meta['hillshade', 'file']))
+}
 ```
+
+## visualization
 
 plot the DEM raster ![elevation map of the
 UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png)
@@ -151,12 +155,29 @@ UYRW](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.p
 ``` r
 if(!file.exists(here(dem.meta['img_dem', 'file'])))
 {
-  tmap.dem = tm_shape(dem.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
-      tm_raster(palette='viridis', title='elevation (m)', style='cont') +
+  # mask/crop both rasters to the uyrw boundary
+  uyrw.poly.sp = as(uyrw.poly, 'Spatial')
+  dem.clipped.tif = crop(mask(dem.tif, uyrw.poly.sp), uyrw.poly.sp)
+  hillshade.clipped.tif = crop(mask(hillshade.tif, uyrw.poly.sp), uyrw.poly.sp)
+  
+  # load the plotting parameters used in get_basins.R
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
+  
+  # set up two palettes: one for hillshading and one for elevation
+  nc = 1e3
+  hillshade.palette = gray(0:nc/nc)
+  dem.palette = sequential_hcl(nc, palette='Terrain')
+  
+  # build the tmap object
+  tmap.dem = tm_shape(hillshade.clipped.tif, raster.downsample=FALSE, bbox=st_bbox(uyrw.poly)) +
+      tm_raster(palette=hillshade.palette, legend.show=FALSE) +
+    tm_shape(dem.clipped.tif) +
+      tm_raster(palette=dem.palette, title='elevation (m)', style='cont', alpha=0.7) +
     tm_shape(uyrw.poly) +
       tm_borders(col='white') +
     tmap.pars$layout +
-    tm_layout(main.title='Digital elevation map of the UYRW')
+    tm_layout(main.title='Digital elevation map of the UYRW',
+              legend.position = c('right', 'top'))
               
   # render the plot
   tmap_save(tm=tmap.dem, 
