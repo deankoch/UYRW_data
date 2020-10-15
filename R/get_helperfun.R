@@ -378,7 +378,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # number of soil layers in this component
     NLAYERS = my.chrz %>% 
-      summarize(n = n()) %>%
+      dplyr::summarize(n = n()) %>%
       pull(n), 
     
     # USDA Soil Survey hydrological group (A, B, C, D) 
@@ -386,7 +386,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # max rooting depth of soil profile (in mm = 10*cm)
     SOL_ZMX = my.chrz %>% 
-      summarize(depth = 10*max(hzdepb.r)) %>% 
+      dplyr::summarize(depth = 10*max(hzdepb.r)) %>% 
       pull(depth),
     
     # unavailable in SSURGO
@@ -397,8 +397,8 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # texture description (not processed by the model)
     TEXTURE = my.chrz %>%
-      summarize(texture = my.chtx$texture[match(chkey, my.chtx$chkey)]) %>%
-      summarize(texture_code = paste0(texture, collapse='-')) %>%
+      dplyr::summarize(texture = my.chtx$texture[match(chkey, my.chtx$chkey)]) %>%
+      dplyr::summarize(texture_code = paste0(texture, collapse='-')) %>%
       as.data.frame() %>%
       pull(texture_code)
     
@@ -406,7 +406,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
   
   ##  compile (as list) all parameters specific to a single horizon, later reshaped to form right half of table
   # lapply call iterates over horizon numbers, building a table (spanning all mukeys) for each one
-  my.list.right = lapply(1:n.hz, function(hz.idx) my.chrz  %>% summarize(
+  my.list.right = lapply(1:n.hz, function(hz.idx) my.chrz  %>% dplyr::summarize(
     
     # depth from soil surface to bottom of layer (in mm = 10*cm)
     SOL_Z = 10*hzdepb.r[hz.idx],
