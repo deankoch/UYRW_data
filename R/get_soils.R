@@ -527,6 +527,7 @@ if(any(!file.exists(here(soils.meta[c('swat_usersoil', 'swat_lookup', 'swat_tif'
   
   # store the integer code order for this raster, and add unique "soil name" 
   soils.rat = levels(soils.tif)[[1]] %>% mutate(NAME = paste0('UYRW_', MUKEY))
+  #soils.rat = levels(soils.tif)[[1]] %>% mutate(NAME = MUKEY)
   
   # tidy up usersoil table, add soil names in order given, and write to disk 
   idx.usersoil = match(soils.rat$MUKEY, usersoil$MUID)
@@ -632,6 +633,26 @@ if(!file.exists(here(soils.meta['img_soils_wstor', 'file'])))
 }
 
 #+ include=FALSE
+
+
+# check if all the mukeys exist in the standard SWAT+ database
+as.integer(soils.merged.sf$MUKEY)
+
+# library(Hmisc)
+# library(RODBC)
+# library(ImportExport)
+# install.packages('ImportExport')
+# 
+# 
+# access_import('H:/UYRW_QGIS3_project/test/QSWATRef2012.mdb', 'usersoil')
+# con <- odbcConnectAccess('H:/UYRW_QGIS3_project/test/QSWATRef2012.mdb')
+# sqlFetch(con, 'your_table')
+# 
+# odbcClose(con)
+
+
+
+
 
 # # convert any GEOMETRYCOLLECTION feature types to POLYGON/MULTIPOLYGON
 # idx.geomcol = st_is(statsgo.trimmed.sf, 'GEOMETRYCOLLECTION')

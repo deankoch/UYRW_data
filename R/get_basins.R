@@ -110,7 +110,7 @@ files.towrite = list(
      type='R sf object', 
      description='reprojected/repaired NHDPlus flowline geometries'),
    
-   # flowlines line geometries
+   # flowlines line geometries for mill creek
    c(name='millcreek',
      file=file.path(out.subdir, 'millcreek_nhd.rds'), 
      type='R list object', 
