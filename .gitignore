@@ -10,4 +10,4 @@ markdown/*.html
 *.rds
 development
 side_projects
-MBMG_username.txt
+data/MBMG_username.txt
