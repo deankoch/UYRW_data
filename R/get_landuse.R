@@ -105,6 +105,7 @@ print(landuse.meta[, c('file', 'type')])
 # load CRS info list and watershed polygon from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+dem.tif = raster(here(my_metadata('get_dem')['dem', 'file']))
 
 #'
 #' ## Download the landuse raster and attribute table from USGS
@@ -417,4 +418,18 @@ if(!file.exists(here(landuse.meta['img_swat_landuse', 'file'])))
 
 #+ include=FALSE
 # Development code
+
+# download link for SWAT+ SQLite Datasets
+
+# # this code is a temporary workaround to get the plants_plt data imported into QSWAT
+# library(DBI)
+# library(RSQLite)
+# swat.ds.conn = dbConnect(SQLite(), 'swatplus_datasets.sqlite')
+# plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
+# dbDisconnect(swat.ds.conn)
+# 
+# 
+# 
+
+
 #my_markdown('get_landuse')

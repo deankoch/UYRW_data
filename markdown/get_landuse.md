@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2020-10-01
+2020-10-16
 
 **Mitacs UYRW project**
 
@@ -80,6 +80,7 @@ Load some of the data prepared earlier
 # load CRS info list and watershed polygon from disk
 crs.list = readRDS(here(my_metadata('get_basins')['crs', 'file']))
 uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
+dem.tif = raster(here(my_metadata('get_dem')['dem', 'file']))
 ```
 
 ## Download the landuse raster and attribute table from USGS
