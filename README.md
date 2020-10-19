@@ -4,7 +4,7 @@ We are a team of mathematicians, statisticians, and ecologists, conducting a mul
 
 ## R code
 
-The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model:
+The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model. The following scripts download the data:
 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using
@@ -25,7 +25,14 @@ fetches SSURGO/STATSGO2 data from the Soil Data Mart using
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
 fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 
-Check back for more scripts and figures as we add to this list in the coming weeks. 
+and this script organizes the downloaded datasets into a form that can be read into QSWAT+ to build a watershed
+model:
+
+* [make_qswatplus](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswatplus.md) prepares QSWAT+ inputs
+
+
+
+Check back for more scripts and figures as we add to this list in the coming weeks.
 
 Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's [Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
 

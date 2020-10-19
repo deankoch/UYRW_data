@@ -7,7 +7,7 @@
 #'
 #' **Mitacs UYRW project**
 #' 
-#' **make_swat.R**: copies data on Mill Creek watershed for input to QSWAT+
+#' **make_swat.R**: copies data on Mill Creek watershed for input to QSWAT+ (WORK IN PROGRESS)
 #' 
 #' The (get_\*.R) URYW_data R scripts have saved our watershed data in a format convenient for
 #' analysis in R. Some changes are required to certain files to make them readable in a QSWAT+
@@ -125,11 +125,9 @@ qswatplus.meta = my_metadata('make_qswatplus', files.towrite, overwrite=TRUE)
 print(qswatplus.meta[, c('file', 'type')])
 
 #' This list of files and descriptions is now stored as a
-#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/make_swat_metadata.csv)
+#' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/make_qswatplus_metadata.csv)
 #' in the `/data` directory.
 #' 
-#' The directory structure defined above will write the SWAT+ data files to their expected paths
-#' [as outlined here](https://celray.github.io/docs/swatplus_aw/data.html). 
 
 # load project file metadata
 dem.meta = my_metadata('get_dem')
@@ -441,6 +439,8 @@ if(!file.exists(here(qswatplus.meta['swat_outlets', 'file'])))
 #+ include=FALSE
 # Development code
 
+# The directory structure defined above will write the SWAT+ data files to their expected paths
+# [as outlined here](https://celray.github.io/docs/swatplus_aw/data.html). 
 
 
 # The R package `SWATplusR` is still in development, so it should be installed using `devtools::install_github`

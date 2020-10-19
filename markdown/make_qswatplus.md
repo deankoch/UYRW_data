@@ -1,12 +1,12 @@
 make\_qswatplus.R
 ================
 Dean Koch
-2020-10-16
+2020-10-19
 
 **Mitacs UYRW project**
 
 **make\_swat.R**: copies data on Mill Creek watershed for input to
-QSWAT+
+QSWAT+ (WORK IN PROGRESS)
 
 The (get\_\*.R) URYW\_data R scripts have saved our watershed data in a
 format convenient for analysis in R. Some changes are required to
@@ -47,6 +47,16 @@ for other required libraries
 
 ``` r
 library(smoothr)
+```
+
+    ## 
+    ## Attaching package: 'smoothr'
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     smooth
+
+``` r
 library(here)
 source(here('R/get_helperfun.R'))
 ```
@@ -82,12 +92,8 @@ print(qswatplus.meta[, c('file', 'type')])
     ## metadata                           data/make_qswatplus_metadata.csv            CSV
 
 This list of files and descriptions is now stored as a [.csv
-file](https://github.com/deankoch/UYRW_data/blob/master/data/make_swat_metadata.csv)
+file](https://github.com/deankoch/UYRW_data/blob/master/data/make_qswatplus_metadata.csv)
 in the `/data` directory.
-
-The directory structure defined above will write the SWAT+ data files to
-their expected paths [as outlined
-here](https://celray.github.io/docs/swatplus_aw/data.html).
 
 ``` r
 # load project file metadata
