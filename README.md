@@ -36,12 +36,12 @@ Check back for more scripts and figures as we add to this list in the coming wee
 
 Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's [Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
 
-These scripts prepare the data structure needed to run the
+<!--- These scripts prepare the data structure needed to run the
 [SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
 python codebase from Celray James and Chris George. SWAT+ AW replaces the QSWAT+ GUI as the
 main tool for setting up a SWAT+ watershed model, as part of an effort towards reproducible
 catchment modelling science
-(see also [this talk](https://scholarsarchive.byu.edu/iemssconference/2018/Stream-A/64/)).
+(see also [this talk](https://scholarsarchive.byu.edu/iemssconference/2018/Stream-A/64/)). --->
 
 ## funding
 
