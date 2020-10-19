@@ -25,7 +25,7 @@ fetches SSURGO/STATSGO2 data from the Soil Data Mart using
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
 fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 
-and this script organizes the downloaded datasets into a form that can be read into QSWAT+ to build a watershed
+This script does some intermediate steps required to succesfully load the data into QSWAT+ and build a watershed
 model:
 
 * [make_qswatplus](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswatplus.md) prepares QSWAT+ inputs
