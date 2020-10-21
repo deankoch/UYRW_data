@@ -61,6 +61,12 @@ my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE
 lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my_dir)
 
 
+#' GeoTIFF files saved by R using `raster::WriteRaster` can lead to problems in QSWAT+ related
+#' to the way no-data entries are flagged. To be on the safe side, we define the no-data value
+#' (-32767) recommended in the SWAT+ docs for all raster files that will be loaded by QSWAT+.
+#' I think this may just be a 64-bit R problem
+tif.na.val = -32767
+
 #' This project will generate many files. To keep track of everything, each script gets a CSV table documenting every
 #' file that it creates: its file path, its type, and a short description of the contents. This function handles the construction
 #' of the table. To call up the table for a specific script, simply use `my_metadata(script.name)`.
