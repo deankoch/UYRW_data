@@ -12,6 +12,22 @@
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md) and
 #' [get_dem.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
 #' should be run first.
+#' 
+#' This script downloads and rasterizes the polygon data that SWAT+ uses to assign soil properties
+#' to different watershed areas. Soil properties are defined for the model in the `usersoil`
+#' parameter table, each row of which is mapped to a map unit key (mukey) in the soil raster.
+#'
+#' An older version of this script built a custom `usersoil` table to import into a SWAT+ project.
+#' This copied data for each mukey in the URYW, directly from the `component` and `chorizon` tables
+#' in the latest SSURGO and STATSGO2 attribute databases, with a preference for SSURGO. However,
+#' that led to errors in SWAT+ simulations indicating that we need to go back and do some
+#' data cleaning (eg verify that horizon depths are in descending order), or check for mistakes
+#' in the usersoil table syntax (eg verify no-data flag is correct), or both.
+#' 
+#' For now, we use the default soil database that ships with SWAT+. This contains all STATSGO2
+#' mukeys for the UYRW but is missing many SSURGO mukeys (particularly in Idaho and Wyoming), so
+#' it produces a far less detailed soil map. Development on the custom `usersoil` table is ongoing.
+#' 
 
 #'
 #' ## libraries
@@ -32,23 +48,6 @@ library(gdalUtilities)
 library(FedData)
 library(rvest)
 library(RSQLite)
-
-
-#' This script downloads and rasterizes the polygon data that SWAT+ uses to assign soil properties
-#' to different watershed areas. Soil properties are defined for the model in the `usersoil`
-#' parameter table, each row of which is mapped to a map unit key (mukey) in the soil raster.
-#'
-#' An older version of this script built a custom `usersoil` table to import into a SWAT+ project.
-#' This copied data for each mukey in the URYW, directly from the `component` and `chorizon` tables
-#' in the latest SSURGO and STATSGO2 attribute databases, with a preference for SSURGO. However,
-#' that led to errors in SWAT+ simulations indicating that we need to go back and do some
-#' data cleaning (eg verify that horizon depths are in descending order), or check for mistakes
-#' in the usersoil table syntax (eg verify no-data flag is correct), or both.
-#' 
-#' For now, we use the default soil database that ships with SWAT+. This contains all STATSGO2
-#' mukeys for the UYRW but is missing many SSURGO mukeys (particularly in Idaho and Wyoming), so
-#' it produces a far less detailed soil map. Development on the custom `usersoil` table is ongoing.
-#' 
 
 
 #'
@@ -243,7 +242,7 @@ if(any(!file.exists(here(soils.meta[c('soils_acodes', 'soils_sdm'), 'file']))))
 }
 
 #'
-#' ## Download the SSURGO polygons/dataframes
+#' ## download the SSURGO polygons/dataframes
 #' 
 #' Now that we have the SSA codes, we can request SSURGO data from the Soil Data Mart. This is delivered
 #' in a zip archive containing ESRI shapefiles (delineating the mapping units), and a huge collection of
@@ -335,7 +334,7 @@ if(any(!file.exists(here(soils.meta[c('ssurgo_sf', 'ssurgo_tab'), 'file']))))
 }
 
 #'
-#' ## Download STATSGO2 data
+#' ## download STATSGO2 data
 #' Looking at the distribution of SSURGO
 #' [map unit keys](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053631)
 #' (mukeys) across the landscape, we find a large area of incomplete coverage around the Absaroka-Beartooth
@@ -560,7 +559,7 @@ if(!file.exists(here(soils.meta['swat_tif', 'file'])))
   
   # crop the geotiff to URYW boundary and write to disk
   soils.tif = crop(soils.tif.prelim, as(uyrw.poly, 'Spatial'))
-  writeRaster(soils.tif, soils.tif.path, overwrite=TRUE)
+  writeRaster(soils.tif, soils.tif.path, overwrite=TRUE, NAflag=tif.na.val)
 }
 
 
