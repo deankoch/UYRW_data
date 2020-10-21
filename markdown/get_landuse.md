@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2020-10-16
+2020-10-21
 
 **Mitacs UYRW project**
 
@@ -83,7 +83,7 @@ uyrw.poly = readRDS(here(my_metadata('get_basins')['boundary', 'file']))
 dem.tif = raster(here(my_metadata('get_dem')['dem', 'file']))
 ```
 
-## Download the landuse raster and attribute table from USGS
+## download the landuse raster and attribute table from USGS
 
 The GAP/LANDFIRE data can be downloaded in a zip archive covering
 various geographic extents from the [Land Cover Data
@@ -114,7 +114,7 @@ if(!file.exists(here(landuse.meta['landuse_source', 'file'])))
 }
 ```
 
-## Process data
+## process data
 
 Some information on the NVC classifications is [available
 here](http://usnvc.org/data-standard/natural-vegetation-classification/)
@@ -178,7 +178,7 @@ if(any(!file.exists(here(landuse.meta[c('landuse_tif', 'landuse_csv'), 'file']))
 }
 ```
 
-## SWAT input files
+## QSWAT+ input files
 
 SWAT+ comes packaged with a plant growth database table, `plants_plt` in
 “swatplus\_datasets.sqlite”. This includes a large number of growth
@@ -191,7 +191,7 @@ derived from the LANDFIRE/GAP dataset. This section maps [NVC
 biogeography
 classifications](http://usnvc.org/data-standard/natural-vegetation-classification/)
 to entries of the SWAT plant growth database, generating the landuse
-GeoTIFF raster and lookup table required by SWAT+ AW.
+GeoTIFF raster and lookup table required by QSWAT+.
 
 ``` r
 if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup'), 'file']))))
@@ -216,7 +216,7 @@ if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup
   # build the raster, crop and mask to UYRW, and write the output GeoTIFF
   swat.landuse.tif = reclassify(landuse.tif, rcl)
   swat.landuse.tif = mask(crop(swat.landuse.tif, as(uyrw.poly, 'Spatial')), as(uyrw.poly, 'Spatial'))
-  writeRaster(swat.landuse.tif, here(landuse.meta['swat_landuse_tif', 'file']), overwrite=TRUE)
+  writeRaster(swat.landuse.tif, here(landuse.meta['swat_landuse_tif', 'file']), overwrite=TRUE, NAflag=tif.na.val)
   
 } else {
   
