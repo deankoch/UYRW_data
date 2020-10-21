@@ -44,6 +44,12 @@ files.towrite = list(
     type='GeoTIFF raster file',
     description='digital elevation map of the UYRW and surrounding area'), 
   
+  # DEM masked to UYRW region, for input to QSWAT+
+  c(name='swat_dem',
+    file=file.path(out.subdir, 'swat_dem.tif'), 
+    type='GeoTIFF raster file',
+    description='digital elevation map of the UYRW for QSWAT+ input'), 
+  
   # Hillshade raster from DEM
   c(name='hillshade',
     file=file.path(out.subdir, 'hillshade.tif'), 
@@ -145,6 +151,23 @@ if(!file.exists(here(dem.meta['hillshade', 'file'])))
   # load from disk 
   hillshade.tif = raster(here(dem.meta['hillshade', 'file']))
 }
+
+#'
+#' ## create SWAT+ readable DEM file
+#' 
+#' This chunk simply crops/masks the DEM to the UYRW boundary, and writes to disk using a
+#' no-data flag that is understood by QSWAT+.
+#' 
+if(!file.exists(here(dem.meta['swat_dem', 'file'])))
+{
+  # crop/mask the DEM 
+  uyrw.poly.sp = as(uyrw.poly, 'Spatial')
+  swat.dem.tif = mask(crop(dem.tif , uyrw.poly.sp), uyrw.poly.sp)
+  
+  # write the rasters to disk with new NA integer code
+  writeRaster(swat.dem.tif, here(dem.meta['swat_dem', 'file']), overwrite=TRUE, NAflag=tif.na.val)
+}
+
 
 #'
 #' ## visualization

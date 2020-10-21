@@ -1,6 +1,7 @@
 "","file","type","description"
 "ned","data/source/UYRW_NED_1.tif","GeoTIFF raster file","mosaic of elevation tiles from the NED (unchanged)"
 "dem","data/prepared/dem.tif","GeoTIFF raster file","digital elevation map of the UYRW and surrounding area"
+"swat_dem","data/prepared/swat_dem.tif","GeoTIFF raster file","digital elevation map of the UYRW for QSWAT+ input"
 "hillshade","data/prepared/hillshade.tif","GeoTIFF raster file","hillshade map of the UYRW and surrounding area, computed from dem"
 "img_dem","graphics/dem.png","png graphic","image of DEM for the UYRW"
 "metadata","data/get_dem_metadata.csv","CSV","list files of files written by get_dem.R"
