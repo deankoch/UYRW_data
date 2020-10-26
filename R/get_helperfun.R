@@ -15,7 +15,7 @@
 
 #'
 #' ## libraries
-#' These CRAN packages are quite useful, and are required by most of the scripts in the repository.
+#' These CRAN packages are quite useful, and are required by some of the scripts in the repository.
 #' If any of these are not already installed on your machine, run `install.packages(...)` to get them.
 
 #' [`raster`](https://rspatial.org/raster/) handles raster data such as GeoTIFFs
@@ -61,10 +61,10 @@ my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE
 lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my_dir)
 
 
-#' GeoTIFF files saved by R using `raster::WriteRaster` can lead to problems in QSWAT+ related
-#' to the way no-data entries are flagged. To be on the safe side, we define the no-data value
-#' (-32767) recommended in the SWAT+ docs for all raster files that will be loaded by QSWAT+.
-#' I think this may just be a 64-bit R problem
+#' NAs are represented in the GeoTiff by an integer -- usually something large and negative.
+#' The default value for this integer when using `raster::writeRaster` is so large that
+#' it can cause an integer overflow error in one of the python modules used by QSWAT+ (at 
+#' least on my 64bit machine). We instead use the value recommended in the QSWAT+ manual:
 tif.na.val = -32767
 
 #' This project will generate many files. To keep track of everything, each script gets a CSV table documenting every
@@ -232,6 +232,98 @@ my_ghcnd_reshape = function(idval, elemval)
   
   # if it exists, return a string of form "start-end", otherwise NA
   return(ifelse(!any(idx.row), NA, paste(ghcnd.df[idx.row, c('first_year', 'last_year')], collapse='-')))
+}
+
+#' This function is used by `get_meteo` to extract data from Ben Livneh's meteorological
+#' reconstruction dataset (NetCDF format), returning R data frames and `raster`/`sf` objects 
+# Open a Livneh daily meteorological data file and return a list of data frames
+my_livneh_reader = function(nc, perim, buff=0)
+{
+  # ARGUMENTS:
+  #
+  # `nc`, character vector path to the input NetCDF file (.nc or .bz2, see BEHAVIOUR below)
+  # `perim`, a projected sf geometry delineating the perimeter of the area to fetch data
+  # `buff`, numeric (metres) distance to extend the perimeter outwards
+  #
+  # RETURN VALUE:
+  #
+  # a named list of two lists:
+  #
+  # `tab`, a named list of five data frames:
+  #   `coords`, the geographical coordinates (lat/long) of each grid point imported; and
+  #   `prec`, `tmax`, `tmin`, `wind`; the daily values for each variable
+  #
+  # `spat`, a named list of five R objects
+  #   `pts`, an sf object locating each grid point (in same projection as `perim`)
+  #   `prec`, `tmax`, `tmin`, `wind`; rasterstacks with the daily values of each variable
+  #
+  # BEHAVIOUR: 
+  #
+  # If the input file path extension is 'bz2', the data are imported by decompressing to
+  # a temporary file, which gets deleted at the end (`raster` does not seem to support
+  # on-the-fly decompression)
+  #
+  # Argument `buff` allows inclusion of grid points lying adjacent (and near) the watershed. 
+  #
+  # Rows of the daily variables tables correspond to days of the month (1st row = 1st day,
+  # etc). Each grid location gets its own column, with coordinates stored as rows in the
+  # `coords` table (eg the nth row of `coords` gives the coordinates for the precipitation
+  # time series in the nth column of `prec`.
+  
+  # handle bzipped input files via temporary decompressed copy
+  is.compressed = substr(nc, nchar(nc)-3, nchar(nc)) == '.bz2'
+  if(is.compressed)
+  {
+    nc.tempfile = tempfile(fileext='.nc')
+    print(paste('decompressing', basename(nc), 'to temporary file,', basename(nc.tempfile)))
+    nc.raw = memDecompress(readBin(nc, raw(), file.info(nc)$size))
+    writeBin(nc.raw, nc.tempfile)
+    nc = nc.tempfile
+  }
+
+  # define the variable names to extract (ignore case in output names)
+  livneh.vars = c('Prec', 'Tmax', 'Tmin', 'wind')
+  names(livneh.vars) = tolower(livneh.vars)
+  
+  # open NetCDF as raster (1st band, 1st variable) to extract grid data
+  nc.r = raster(nc, varname=livneh.vars[1], band=1)
+  
+  # mask/crop to `perim` after applying `buff` metres of padding
+  perim.t = as(st_transform(st_buffer(perim, buff), crs=st_crs(nc.r)), 'Spatial')
+  nc.r.clip = mask(crop(nc.r, perim.t), perim.t)
+  idx.na = values(is.na(nc.r.clip))
+  
+  # build the coordinates table
+  coords.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
+  n.spatpts = nrow(coords.tab)
+  colnames(coords.tab) = c('long', 'lat')
+  rownames(coords.tab) = paste0('grid', 1:n.spatpts)
+  
+  # build the output `pts` sf object
+  geopts.sf = st_as_sf(coords.tab, coords=colnames(coords.tab), crs=st_crs(nc.r))
+  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.tab))), st_crs(perim))
+  
+  # initialize the other output tables
+  n.days = nbands(nc.r)
+  template.df = data.frame(matrix(NA, n.days, n.spatpts))
+  colnames(template.df) = rownames(coords.tab)
+  climdata.list = lapply(livneh.vars, function(x) template.df)
+  
+  # initialize rasterstack list
+  rbrick.list = vector(mode='list', length=length(livneh.vars))
+  names(rbrick.list) = names(livneh.vars)
+  
+  # loop to fill these tables and copy rasterstacks
+  for(varname in names(livneh.vars))
+  {
+    rbrick.list[[varname]] = mask(crop(stack(nc, varname=livneh.vars[varname]), perim.t), perim.t)
+    climdata.list[[varname]][] = t(values(rbrick.list[[varname]])[!idx.na, ])
+  }
+  
+  # bundle everything into a list and finish, tidying up tempfiles as needed
+  if(is.compressed) {unlink(nc.tempfile)}
+  return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
+  
 }
 
 
