@@ -236,9 +236,10 @@ my_ghcnd_reshape = function(idval, elemval)
 
 #' This function is used by `get_meteo` to extract data from Ben Livneh's meteorological
 #' reconstruction dataset (NetCDF format), returning R data frames and `raster`/`sf` objects 
-# Open a Livneh daily meteorological data file and return a list of data frames
 my_livneh_reader = function(nc, perim, buff=0)
 {
+  # Opens a Livneh meteorological data file and returns a list of R objects
+  #
   # ARGUMENTS:
   #
   # `nc`, character vector path to the input NetCDF file (.nc or .bz2, see BEHAVIOUR below)
@@ -268,7 +269,7 @@ my_livneh_reader = function(nc, perim, buff=0)
   # Rows of the daily variables tables correspond to days of the month (1st row = 1st day,
   # etc). Each grid location gets its own column, with coordinates stored as rows in the
   # `coords` table (eg the nth row of `coords` gives the coordinates for the precipitation
-  # time series in the nth column of `prec`.
+  # time series in the nth column of `tab[['prec']]`.
   
   # handle bzipped input files via temporary decompressed copy
   is.compressed = substr(nc, nchar(nc)-3, nchar(nc)) == '.bz2'
@@ -322,6 +323,119 @@ my_livneh_reader = function(nc, perim, buff=0)
   
   # bundle everything into a list and finish, tidying up tempfiles as needed
   if(is.compressed) {unlink(nc.tempfile)}
+  return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
+  
+}
+
+#' This function is used by `get_meteo` to extract data from the ORNL Daymet meteorological
+#' reconstruction dataset (NetCDF format), returning R data frames and `raster`/`sf` objects
+#' It is very similar to `my_livneh_reader`, except that the Daymet files are not bzipped,
+#' and different meteorological variables are stored in different files.
+#' 
+#' In the current CRAN version of the `daymetr` package (v1.4), there is a bug related to a
+#' mislabeling of projection information by the web coverage service (WCS) at ORNL's DAAC.
+#' Read about it in the bug reports [here](https://github.com/bluegreen-labs/daymetr/issues/40),
+#' [here](https://github.com/ropensci/FedData/issues/50), and
+#' [here](https://github.com/bluegreen-labs/daymetr/issues/36)).
+#' 
+#' We fix this by manually rewriting the proj4 string after it is loaded into R. Unfortunately
+#' this results in many warnings about invalid CRS definitions (these can be safely ignored) 
+my_daymet_reader = function(nc, perim, buff=0)
+{
+  # Opens a (set of) Daymet meteorological data file(s) and returns a list of R objects
+  #
+  # ARGUMENTS:
+  #
+  # `nc`, named character vector of path(s) to the input NetCDF file(s). See below
+  # `perim`, a projected sf geometry delineating the perimeter of the area to fetch data
+  # `buff`, numeric (metres) distance to extend the perimeter outwards
+  #
+  # RETURN VALUE:
+  #
+  # a named list of two lists, whose lengths depend on the number input NetCDF files (`nc`).
+  # A function typical call will provide the paths to the `prcp`, `tmin`, `tmax`, and `srad`
+  # files (named using these strings, or similar). 
+  #
+  # `tab`, a named list of `length(nc)+1` data frames:
+  #   `coords`, the geographical coordinates (lat/long) of each grid point imported; and
+  #   named entries for each file in `nc`, containing the table of daily values for that
+  #   variable.
+  #
+  # `spat`, a named list of `length(nc)+1` R objects
+  #   `pts`, an sf object locating each grid point (in same projection as `perim`); and
+  #   named entries for each file in `nc`, containing rasterstacks for each variable
+  #
+  # BEHAVIOUR: 
+  #
+  # Argument `buff` allows inclusion of grid points lying adjacent (and near) the watershed. 
+  #
+  # Rows of the daily variables tables correspond to days of the month (1st row = 1st day,
+  # etc). Each grid location gets its own column, with coordinates stored as rows in the
+  # `coords` table (eg if `nc` contains the entry `prcp` giving the path to a precipitation
+  # data file, the nth row of `coords` gives the coordinates for the precipitation time series
+  # in the nth column of `tab[['prcp']]`.
+  #
+  # The names of the data entries of output lists `tab` and `spat` are copied from the names
+  # provided for the `nc` input. If this argument is unnamed, the function assigns them based
+  # on the filenames provided.
+  
+  # warn if the `nc` paths are not named and auto-generate
+  if(any(is.null(names(nc))))
+  {
+    in.vars = substr(basename(nc), 1, 4)
+    print(paste('Warning: no name(s) supplied for', paste(basename(nc), sep=', ')))
+    print(paste('using name(s)', paste(in.vars, sep=', ')))
+    names(nc) = in.vars
+    
+  } else {
+    
+   in.vars = names(nc)
+   
+  }
+  
+  # open NetCDF as raster (1st band) to extract grid data
+  nc.r = raster(nc[[1]], band=1)
+  
+  # overwrite proj4 string with corrected version (in units of 'km', instead of 'm')
+  daymet.proj4 = '+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +datum=WGS84 +no_defs'
+  projection(nc.r) = daymet.proj4
+  
+  # mask/crop to `perim` after applying `buff` metres of padding
+  perim.t = as(st_transform(st_buffer(perim, buff), crs=st_crs(nc.r)), 'Spatial')
+  nc.r.clip = mask(crop(nc.r, perim.t), perim.t)
+  idx.na = values(is.na(nc.r.clip))
+  
+  # build the coordinates table
+  coords.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
+  n.spatpts = nrow(coords.tab)
+  colnames(coords.tab) = c('long', 'lat')
+  rownames(coords.tab) = paste0('grid', 1:n.spatpts)
+  
+  # build the output `pts` sf object
+  geopts.sf = st_as_sf(coords.tab, coords=colnames(coords.tab), crs=st_crs(nc.r))
+  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.tab))), st_crs(perim))
+  
+  # initialize the other output tables
+  n.days = nbands(nc.r)
+  template.df = data.frame(matrix(NA, n.days, n.spatpts))
+  colnames(template.df) = rownames(coords.tab)
+  climdata.list = lapply(nc, function(x) template.df)
+  
+  # initialize rasterstack list
+  rbrick.list = vector(mode='list', length=length(nc))
+  names(rbrick.list) = in.vars
+  
+  # loop to fill these tables and copy rasterstacks
+  for(varname in in.vars)
+  {
+    # load and fix projection CRS
+    nc.in = stack(nc[varname])
+    projection(nc.in) = daymet.proj4
+    rbrick.list[[varname]] = mask(crop(nc.in, perim.t), perim.t)
+    climdata.list[[varname]][] = t(values(rbrick.list[[varname]])[!idx.na, ])
+  }
+  
+  # bundle everything into a list and finish
   return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
   
 }
