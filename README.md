@@ -25,10 +25,7 @@ fetches SSURGO/STATSGO2 data from the Soil Data Mart using
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
 fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 * [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
-fetches gridded meteorological reconstructions from [Daymet](https://daymet.ornl.gov/),
-[PNWNAmet](https://www.pacificclimate.org/data/daily-gridded-meteorological-datasets), and
-Ben Livneh's [research group](https://ciresgroups.colorado.edu/livneh/data)
-at the University of Colorado Boulder
+fetches three different gridded meteorological reconstructions of Northwestern North America
 
 This script does some intermediate steps required to succesfully load the data into QSWAT+ and build a watershed
 model:
