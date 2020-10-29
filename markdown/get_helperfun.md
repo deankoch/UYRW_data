@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2020-10-01
+2020-10-28
 
 **Mitacs UYRW project**
 
@@ -15,7 +15,7 @@ detected in the data directory.
 
 ## libraries
 
-These CRAN packages are quite useful, and are required by most of the
+These CRAN packages are quite useful, and are required by some of the
 scripts in the repository. If any of these are not already installed on
 your machine, run `install.packages(...)` to get them.
 [`raster`](https://rspatial.org/raster/) handles raster data such as
@@ -32,8 +32,15 @@ shapefiles
 library(sf)
 ```
 
-[`tmap`](https://github.com/mtennekes/tmap) constructs pretty
-ggplot2-based thematic map graphics
+[`ggplot2`](https://ggplot2.tidyverse.org/) popular graphics package
+with high-level abstraction
+
+``` r
+library(ggplot2)  
+```
+
+[`tmap`](https://github.com/mtennekes/tmap) constructs pretty thematic
+map graphics
 
 ``` r
 library(tmap)
@@ -93,6 +100,16 @@ lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my
     ## 
     ## [[5]]
     ## NULL
+
+NAs are represented in the GeoTiff by an integer – usually something
+large and negative. The default value for this integer when using
+`raster::writeRaster` is so large that it can cause an integer overflow
+error in one of the python modules used by QSWAT+ (at least on my 64bit
+machine). We instead use the value recommended in the QSWAT+ manual:
+
+``` r
+tif.na.val = -32767
+```
 
 This project will generate many files. To keep track of everything, each
 script gets a CSV table documenting every file that it creates: its file
@@ -272,6 +289,222 @@ my_ghcnd_reshape = function(idval, elemval)
 }
 ```
 
+This function is used by `get_meteo` to extract data from Ben Livneh’s
+meteorological reconstruction dataset (NetCDF format), returning R data
+frames and `raster`/`sf` objects
+
+``` r
+my_livneh_reader = function(nc, perim, buff=0)
+{
+  # Opens a Livneh meteorological data file and returns a list of R objects
+  #
+  # ARGUMENTS:
+  #
+  # `nc`, character vector path to the input NetCDF file (.nc or .bz2, see BEHAVIOUR below)
+  # `perim`, a projected sf geometry delineating the perimeter of the area to fetch data
+  # `buff`, numeric (metres) distance to extend the perimeter outwards
+  #
+  # RETURN VALUE:
+  #
+  # a named list of two lists:
+  #
+  # `tab`, a named list of five data frames:
+  #   `coords`, the geographical coordinates (lat/long) of each grid point imported; and
+  #   `prec`, `tmax`, `tmin`, `wind`; the daily values for each variable
+  #
+  # `spat`, a named list of five R objects
+  #   `pts`, an sf object locating each grid point (in same projection as `perim`)
+  #   `prec`, `tmax`, `tmin`, `wind`; rasterstacks with the daily values of each variable
+  #
+  # BEHAVIOUR: 
+  #
+  # If the input file path extension is 'bz2', the data are imported by decompressing to
+  # a temporary file, which gets deleted at the end (`raster` does not seem to support
+  # on-the-fly decompression)
+  #
+  # Argument `buff` allows inclusion of grid points lying adjacent (and near) the watershed. 
+  #
+  # Rows of the daily variables tables correspond to days of the month (1st row = 1st day,
+  # etc). Each grid location gets its own column, with coordinates stored as rows in the
+  # `coords` table (eg the nth row of `coords` gives the coordinates for the precipitation
+  # time series in the nth column of `tab[['prec']]`.
+  
+  # handle bzipped input files via temporary decompressed copy
+  is.compressed = substr(nc, nchar(nc)-3, nchar(nc)) == '.bz2'
+  if(is.compressed)
+  {
+    nc.tempfile = tempfile(fileext='.nc')
+    print(paste('decompressing', basename(nc), 'to temporary file,', basename(nc.tempfile)))
+    nc.raw = memDecompress(readBin(nc, raw(), file.info(nc)$size))
+    writeBin(nc.raw, nc.tempfile)
+    nc = nc.tempfile
+  }
+
+  # define the variable names to extract (ignore case in output names)
+  livneh.vars = c('Prec', 'Tmax', 'Tmin', 'wind')
+  names(livneh.vars) = tolower(livneh.vars)
+  
+  # open NetCDF as raster (1st band, 1st variable) to extract grid data
+  nc.r = raster(nc, varname=livneh.vars[1], band=1)
+  
+  # mask/crop to `perim` after applying `buff` metres of padding
+  perim.t = as(st_transform(st_buffer(perim, buff), crs=st_crs(nc.r)), 'Spatial')
+  nc.r.clip = mask(crop(nc.r, perim.t), perim.t)
+  idx.na = values(is.na(nc.r.clip))
+  
+  # build the coordinates table
+  coords.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
+  n.spatpts = nrow(coords.tab)
+  colnames(coords.tab) = c('long', 'lat')
+  rownames(coords.tab) = paste0('grid', 1:n.spatpts)
+  
+  # build the output `pts` sf object
+  geopts.sf = st_as_sf(coords.tab, coords=colnames(coords.tab), crs=st_crs(nc.r))
+  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.tab))), st_crs(perim))
+  
+  # initialize the other output tables
+  n.days = nbands(nc.r)
+  template.df = data.frame(matrix(NA, n.days, n.spatpts))
+  colnames(template.df) = rownames(coords.tab)
+  climdata.list = lapply(livneh.vars, function(x) template.df)
+  
+  # initialize rasterstack list
+  rbrick.list = vector(mode='list', length=length(livneh.vars))
+  names(rbrick.list) = names(livneh.vars)
+  
+  # loop to fill these tables and copy rasterstacks
+  for(varname in names(livneh.vars))
+  {
+    rbrick.list[[varname]] = mask(crop(stack(nc, varname=livneh.vars[varname]), perim.t), perim.t)
+    climdata.list[[varname]][] = t(values(rbrick.list[[varname]])[!idx.na, ])
+  }
+  
+  # bundle everything into a list and finish, tidying up tempfiles as needed
+  if(is.compressed) {unlink(nc.tempfile)}
+  return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
+  
+}
+```
+
+This function is used by `get_meteo` to extract data from the ORNL
+Daymet meteorological reconstruction dataset (NetCDF format), returning
+R data frames and `raster`/`sf` objects It is very similar to
+`my_livneh_reader`, except that the Daymet files are not bzipped, and
+different meteorological variables are stored in different files.
+
+In the current CRAN version of the `daymetr` package (v1.4), there is a
+bug related to a mislabeling of projection information by the web
+coverage service (WCS) at ORNL’s DAAC. Read about it in the bug reports
+[here](https://github.com/bluegreen-labs/daymetr/issues/40),
+[here](https://github.com/ropensci/FedData/issues/50), and
+[here](https://github.com/bluegreen-labs/daymetr/issues/36)).
+
+We fix this by manually rewriting the proj4 string after it is loaded
+into R. Unfortunately this results in many warnings about invalid CRS
+definitions (these can be safely ignored)
+
+``` r
+my_daymet_reader = function(nc, perim, buff=0)
+{
+  # Opens a (set of) Daymet meteorological data file(s) and returns a list of R objects
+  #
+  # ARGUMENTS:
+  #
+  # `nc`, named character vector of path(s) to the input NetCDF file(s). See below
+  # `perim`, a projected sf geometry delineating the perimeter of the area to fetch data
+  # `buff`, numeric (metres) distance to extend the perimeter outwards
+  #
+  # RETURN VALUE:
+  #
+  # a named list of two lists, whose lengths depend on the number input NetCDF files (`nc`).
+  # A function typical call will provide the paths to the `prcp`, `tmin`, `tmax`, and `srad`
+  # files (named using these strings, or similar). 
+  #
+  # `tab`, a named list of `length(nc)+1` data frames:
+  #   `coords`, the geographical coordinates (lat/long) of each grid point imported; and
+  #   named entries for each file in `nc`, containing the table of daily values for that
+  #   variable.
+  #
+  # `spat`, a named list of `length(nc)+1` R objects
+  #   `pts`, an sf object locating each grid point (in same projection as `perim`); and
+  #   named entries for each file in `nc`, containing rasterstacks for each variable
+  #
+  # BEHAVIOUR: 
+  #
+  # Argument `buff` allows inclusion of grid points lying adjacent (and near) the watershed. 
+  #
+  # Rows of the daily variables tables correspond to days of the month (1st row = 1st day,
+  # etc). Each grid location gets its own column, with coordinates stored as rows in the
+  # `coords` table (eg if `nc` contains the entry `prcp` giving the path to a precipitation
+  # data file, the nth row of `coords` gives the coordinates for the precipitation time series
+  # in the nth column of `tab[['prcp']]`.
+  #
+  # The names of the data entries of output lists `tab` and `spat` are copied from the names
+  # provided for the `nc` input. If this argument is unnamed, the function assigns them based
+  # on the filenames provided.
+  
+  # warn if the `nc` paths are not named and auto-generate
+  if(any(is.null(names(nc))))
+  {
+    in.vars = substr(basename(nc), 1, 4)
+    print(paste('Warning: no name(s) supplied for', paste(basename(nc), sep=', ')))
+    print(paste('using name(s)', paste(in.vars, sep=', ')))
+    names(nc) = in.vars
+    
+  } else {
+    
+   in.vars = names(nc)
+   
+  }
+  
+  # open NetCDF as raster (1st band) to extract grid data
+  nc.r = raster(nc[[1]], band=1)
+  
+  # overwrite proj4 string with corrected version (in units of 'km', instead of 'm')
+  daymet.proj4 = '+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +datum=WGS84 +no_defs'
+  projection(nc.r) = daymet.proj4
+  
+  # mask/crop to `perim` after applying `buff` metres of padding
+  perim.t = as(st_transform(st_buffer(perim, buff), crs=st_crs(nc.r)), 'Spatial')
+  nc.r.clip = mask(crop(nc.r, perim.t), perim.t)
+  idx.na = values(is.na(nc.r.clip))
+  
+  # build the coordinates table
+  coords.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
+  n.spatpts = nrow(coords.tab)
+  colnames(coords.tab) = c('long', 'lat')
+  rownames(coords.tab) = paste0('grid', 1:n.spatpts)
+  
+  # build the output `pts` sf object
+  geopts.sf = st_as_sf(coords.tab, coords=colnames(coords.tab), crs=st_crs(nc.r))
+  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.tab))), st_crs(perim))
+  
+  # initialize the other output tables
+  n.days = nbands(nc.r)
+  template.df = data.frame(matrix(NA, n.days, n.spatpts))
+  colnames(template.df) = rownames(coords.tab)
+  climdata.list = lapply(nc, function(x) template.df)
+  
+  # initialize rasterstack list
+  rbrick.list = vector(mode='list', length=length(nc))
+  names(rbrick.list) = in.vars
+  
+  # loop to fill these tables and copy rasterstacks
+  for(varname in in.vars)
+  {
+    # load and fix projection CRS
+    nc.in = stack(nc[varname])
+    projection(nc.in) = daymet.proj4
+    rbrick.list[[varname]] = mask(crop(nc.in, perim.t), perim.t)
+    climdata.list[[varname]][] = t(values(rbrick.list[[varname]])[!idx.na, ])
+  }
+  
+  # bundle everything into a list and finish
+  return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
+  
+}
+```
+
 This is a kludge combining various `FedData` functions with some of my
 own code, in order to import STATSGO2 data and produce output similar to
 FedData::get\_ssurgo. It uses data from
@@ -430,7 +663,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # number of soil layers in this component
     NLAYERS = my.chrz %>% 
-      summarize(n = n()) %>%
+      dplyr::summarize(n = n()) %>%
       pull(n), 
     
     # USDA Soil Survey hydrological group (A, B, C, D) 
@@ -438,7 +671,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # max rooting depth of soil profile (in mm = 10*cm)
     SOL_ZMX = my.chrz %>% 
-      summarize(depth = 10*max(hzdepb.r)) %>% 
+      dplyr::summarize(depth = 10*max(hzdepb.r)) %>% 
       pull(depth),
     
     # unavailable in SSURGO
@@ -449,8 +682,8 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
     
     # texture description (not processed by the model)
     TEXTURE = my.chrz %>%
-      summarize(texture = my.chtx$texture[match(chkey, my.chtx$chkey)]) %>%
-      summarize(texture_code = paste0(texture, collapse='-')) %>%
+      dplyr::summarize(texture = my.chtx$texture[match(chkey, my.chtx$chkey)]) %>%
+      dplyr::summarize(texture_code = paste0(texture, collapse='-')) %>%
       as.data.frame() %>%
       pull(texture_code)
     
@@ -458,7 +691,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
   
   ##  compile (as list) all parameters specific to a single horizon, later reshaped to form right half of table
   # lapply call iterates over horizon numbers, building a table (spanning all mukeys) for each one
-  my.list.right = lapply(1:n.hz, function(hz.idx) my.chrz  %>% summarize(
+  my.list.right = lapply(1:n.hz, function(hz.idx) my.chrz  %>% dplyr::summarize(
     
     # depth from soil surface to bottom of layer (in mm = 10*cm)
     SOL_Z = 10*hzdepb.r[hz.idx],
