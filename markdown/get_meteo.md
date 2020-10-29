@@ -112,7 +112,7 @@ print(meteo.meta[, c('file', 'type')])
     ## metadata                 data/get_meteo_metadata.csv           CSV
 
 This list of files and descriptions is now stored as a [.csv
-file](https://github.com/deankoch/UYRW_data/blob/master/data/get_livneh_metadata.csv)
+file](https://github.com/deankoch/UYRW_data/blob/master/data/get_meteo.csv)
 in the `/data` directory.
 
 All of the pertinent meteorological data for our SWAT+ model of the UYRW
