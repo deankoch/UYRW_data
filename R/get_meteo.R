@@ -51,12 +51,10 @@
 #' 
 #' * [Livneh (1950-2013)](https://ciresgroups.colorado.edu/livneh/data)
 #' 
-#' Users of this script should be aware of the filesizes involved. The Daymet, PNWNAmet, and Livneh
-#' source files will consume 7GB, 12GB, and 58GB of space, respectively. Expect these downloads to
-#' take several days to complete.
-#' 
-#' This script downloads the full source datasets, then extracts/imports the relevant subsets
-#' containing data on the URYW, writing them into much smaller R data (rds) files. 
+#' The Daymet, PNWNAmet, and Livneh source files will require 1GB, 82GB, and 58GB of space, respectively,
+#' after compression. Some of the files must be downloaded uncompressed. Expect these downloads to take
+#' several days in total to complete. This script downloads the full source datasets, then extracts/imports
+#' the relevant subsets containing data on the URYW, writing them into much smaller R data (rds) files. 
 #' 
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 #' should be run before this script.
@@ -148,10 +146,10 @@ print(meteo.meta[, c('file', 'type')])
 #' day in the time series, and one file per variable for each of the data sources.
 #' 
 #' These GeoTIFF files preserve the original gridded projection of the data, allowing easy
-#' visualization of the weather grids in future analysis (using `plot(raster(...))`). Note that
-#' different sources have different projections. The tabular data, however are all accompanied by
-#' geographical (lat/long) coordinates, as needed in SWAT+; whereas the points shapefile is
-#' projected to our UYRW project reference system (UTM).
+#' visualization of the weather grids (using `plot(raster(...))`). Note that different sources have
+#' different projections. The tabular data, however are all accompanied by geographical (lat/long)
+#' coordinates, as needed in SWAT+; whereas the points shapefile is projected to our UYRW project
+#' reference system (UTM).
 #' 
 #' An xml file is generated when we save the rasters (using `writeRaster`). This contains
 #' precomputed summary stats (mean, sd, etc) for the large rasters, which may speed up future
@@ -160,7 +158,7 @@ print(meteo.meta[, c('file', 'type')])
 #' To clip the gridded datasets to size, we need a watershed boundary polygon. This boundary
 #' will be padded by a buffer zone (the value of `uyrw.buff` in metres) in order to capture
 #' adjacent grid points that may be closer to a subbasin centroid than any of the interior ones.
-
+#' 
 #' Load some of the data prepared earlier 
 
 # load CRS info list and watershed polygon from disk
@@ -377,8 +375,8 @@ if(any(idx.missfile))
     dest.path = livneh.paths[idx.file]
     tryCatch(
       {
-        # ... and if it fails with any error ...
         download.file(src.url, dest.path, mode='wb')
+        # ... and if it fails with any error ...
 
       }, error = function(cond) {
       
@@ -407,11 +405,9 @@ if(any(idx.missfile))
 #' netcdf files into R, clipping to the URYW region, then deleting the uncompressed file.
 #' The import will be slow (expect it to take a few hours), but it requires far less storage
 #' space, and only needs to be run once. The output (rds) files store the clipped data as
-#' tables and multiband rasters, which are much more convenient for analysis in R.
-#'  
-#' A [helper function](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' `my_livneh_reader`, handles the opening of these files. This will take a long time because each
-#' file must be decompressed to a temporary file before it can be loaded and subsetted.
+#' tables and multiband rasters, which are much more convenient for analysis in R. A
+#' [helper function](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
+#' `my_livneh_reader`, handles the extraction of these files. 
 
 # import relevant subset of Livneh dataset and write output if it doesn't exist already
 if(any(!file.exists(c(livneh.out.path, livneh.out.rasters))))
@@ -487,8 +483,8 @@ daymet.fns.prefix = lapply(daymet.vars, function(varname) paste0(varname, '_dail
 daymet.fns = lapply(daymet.vars, function(varname) paste0(daymet.fns.prefix[[varname]], '_ncss.nc'))
 daymet.paths = lapply(daymet.vars, function(varname) file.path(daymet.storage, daymet.fns[[varname]]))
 
-#' After the UYRW subset of the Daymet data is extracted and saved, we will compress the source
-#' NetCDF files to reduce their size. We define the paths of these zipped copies now, so that we
+#' After the UYRW subset of the Daymet data is extracted and saved, we compress the source NetCDF
+#' files to reduce their size. We define the paths of these zipped copies now, so that we
 #' can check for them in the next step, and avoid downloading things twice. 
 
 # define the paths to the zipped daymet source files
@@ -560,8 +556,8 @@ if(any(unlist(idx.missfile) & !file.exists(daymet.paths.zip)) )
 #' 
 #' Note that the current CRAN version of `daymetr` (v1.4) mislabels the projection units of the
 #' downloaded data: [see here](https://github.com/bluegreen-labs/daymetr/issues/40). This CRS bug is
-#' corrected manually by our helper function, but as a result users will see many warnings from GDAL
-#' during the import process.
+#' corrected manually by our helper function, but as a result users may see a large number of warnings
+#' from GDAL during the import process.
 #' 
 #' 
 
