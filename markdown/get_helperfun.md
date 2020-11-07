@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2020-10-28
+2020-11-06
 
 **Mitacs UYRW project**
 
@@ -51,6 +51,13 @@ tabular data
 
 ``` r
 library(dplyr)
+```
+
+[‘RSQLite’](https://www.r-project.org/nosvn/pandoc/RSQLite.html)
+connects to SQLite databases
+
+``` r
+library(RSQLite)
 ```
 
 ## project data
@@ -469,16 +476,19 @@ my_daymet_reader = function(nc, perim, buff=0)
   nc.r.clip = mask(crop(nc.r, perim.t), perim.t)
   idx.na = values(is.na(nc.r.clip))
   
-  # build the coordinates table
-  coords.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
-  n.spatpts = nrow(coords.tab)
-  colnames(coords.tab) = c('long', 'lat')
-  rownames(coords.tab) = paste0('grid', 1:n.spatpts)
   
   # build the output `pts` sf object
-  geopts.sf = st_as_sf(coords.tab, coords=colnames(coords.tab), crs=st_crs(nc.r))
-  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.tab))), st_crs(perim))
+  coords.lcc.tab = data.frame(coordinates(nc.r.clip)) %>% filter(!idx.na)
+  n.spatpts = nrow(coords.lcc.tab)
+  colnames(coords.lcc.tab) = c('long', 'lat')
+  rownames(coords.lcc.tab) = paste0('grid', 1:n.spatpts)
+  geopts.sf = st_as_sf(coords.lcc.tab, coords=colnames(coords.lcc.tab), crs=st_crs(nc.r))
+  pts.sf = st_transform(cbind(geopts.sf, data.frame(name=rownames(coords.lcc.tab))), st_crs(perim))
   
+  # build the lat/long coordinates table
+  coords.tab = st_coordinates(st_transform(geopts.sf, crs=4326))
+  rownames(coords.tab) = rownames(coords.lcc.tab)
+
   # initialize the other output tables
   n.days = nbands(nc.r)
   template.df = data.frame(matrix(NA, n.days, n.spatpts))
@@ -962,7 +972,165 @@ category](http://usnvc.org/explore-classification/) in the UYRW.
 can be very helpful for parsing this kind of data, with clean printouts
 of nested lists of strings.
 
+In addition to having different file and data structures, SWAT2012 and
+SWAT+ (currently) differ in the default parameter sets that are included
+in each release. For example, while most of the plant growth parameters
+appearing SWAT2012’s reference database ‘crop’ table can be found in the
+SWAT+ database, there are many plant codes in SWAT+ that have not yet
+been added to SWAT2012.
+
+This helper function translates the relevant data from the SWAT+
+reference database into a form that can be written to the SWAT2012
+reference database (mdb), so the missing plant codes can be used in a
+SWAT2012 model
+
 ``` r
+my_plants2swat = function(crop_in, swatplus_db)
+{
+  # ARGUMENTS:
+  #
+  # `crop_in`: 'crop' table (as data frame) from the SWAT2012's MS Access (mdb) reference database
+  # `swatplus_db`: path to the mySQL (sql) reference database 
+  #
+  # RETURN VALUE:
+  #
+  # A named list with two entries;
+  #
+  # `crop_out`: data frame in the same form as `crop_in`, appended with any data on plant codes
+  # found in `swatplus_db` but missing from `crop_in`. 
+  #
+  # `lookup`: a data frame matching the plant codes assigned in `crop_out` to their original
+  # values in the SWAT+ database. These plant codes are modified only when it is necessary to
+  # satisfy SWAT2012's 4-letter naming requirement. Auto-generated names are all of the form 'ZZ**'
+  #
+  # BEHAVIOUR: 
+  #
+  # Note that two fields in the 'crop' table, 'FERTFIELD' and 'OpSchedule', are assigned the default
+  # values of 0 and 'RNGB' in all appended rows, as we could not find suitable surrogates in
+  # `swatplus_db`. These fields appear to be missing from the SWAT theory and I/O documentation. As
+  # far as we can tell, they are unimportant to our implementation of SWAT/SWAT+
+  
+  # open the SWAT+ database to pull a copy of four tables containing land use parameters
+  swatplus.con = RSQLite::dbConnect(RSQLite::SQLite(), swatplus_db)
+  
+  # ... the main data table...
+  plants.plt = dbReadTable(swatplus.con, 'plants_plt')
+  
+  # ... and linked tables for Manning's 'n' for overland flow, runoff curve numbers
+  landuse.lum = dbReadTable(swatplus.con, 'landuse_lum')
+  ovn.lum = dbReadTable(swatplus.con, 'ovn_table_lum')
+  cn.lum = dbReadTable(swatplus.con, 'cntable_lum')
+  
+  # close the connection
+  RSQLite::dbDisconnect(swatplus.con)
+  
+  # The SWAT+ database table 'plants_plt' (copied into R as `plants.plt`) contains most of the
+  # parameters needed in the 'crop' table in the SWAT2012 database. The field names are different,
+  # however, so these need to be translated. A handful of parameters also need to be fetched from
+  # other tables. These are linked to 'plants_plt' via 'landuse_lum'
+  
+  # identify plant codes common to both databases
+  codes.common = crop_in$CPNM[crop_in$CPNM %in% toupper(plants.plt$name)]
+  
+  # identify plant codes in 'plants_plt' which are missing from SWAT2012 database
+  codes.toadd = plants.plt$name[!(toupper(plants.plt$name) %in% codes.common)]
+  
+  # fetch variables located outside `plants.plt`, append as new columns
+  ovn.vn = 'ovn_mean'
+  cn.vn = c('cn_a', 'cn_b', 'cn_c', 'cn_d')
+  idx.lum = match(plants.plt$name, sapply(landuse.lum$name, function(nm) strsplit(nm, '_lum')[[1]]))
+  plants.plt[, ovn.vn] = ovn.lum[landuse.lum$ov_mann_id[idx.lum], ovn.vn]
+  plants.plt[, cn.vn] = cn.lum[landuse.lum$cn2_id[idx.lum], cn.vn]
+  
+  # identify 'trees' and translate 'plnt_typ' to integer code (see 'swat2009-theory.pdf', p.311)
+  plants.plt$plnt_typ[plants.plt$bm_tree_acc>0 & plants.plt$bm_tree_max>0] = 'trees'
+  idc.codes = c(NA, NA, NA, 'warm_annual', 'cold_annual', 'perennial', 'trees')
+  plants.plt$plnt_typ = match(plants.plt$plnt_typ, idc.codes)
+  
+  # add dummy data to two missing fields
+  plants.plt$FERTFIELD = rep(0, nrow(plants.plt))
+  plants.plt$OpSchedule = rep('RNGB', nrow(plants.plt))
+  
+  # All of the necessary data has now been added to `plants.plt`. Next we trim this table to include
+  # only plant codes which are missing from `crop_in` and modify field names and row keys to match
+  # with the syntax of SWAT2012's 'crop'.
+  
+  # create a translation table (SWAT+/plants_plt -> SWAT2012/crop)
+  swat2012.lu = c(CPNM='name',
+                  IDC='plnt_typ',
+                  CROPNAME='description',
+                  BIO_E='bm_e',
+                  HVSTI='harv_idx',
+                  BLAI='lai_pot',
+                  FRGRW1='frac_hu1', 
+                  LAIMX1='lai_max1', 
+                  FRGRW2='frac_hu2', 
+                  LAIMX2='lai_max2', 
+                  DLAI='hu_lai_decl', 
+                  CHTMX='can_ht_max', 
+                  RDMX='rt_dp_max', 
+                  T_OPT='tmp_opt', 
+                  T_BASE='tmp_base', 
+                  CNYLD='frac_n_yld',
+                  CPYLD='frac_p_yld',
+                  BN1='frac_n_em',
+                  BN2='frac_n_50',
+                  BN3='frac_n_mat',
+                  BP1='frac_p_em',
+                  BP2='frac_p_50',
+                  BP3='frac_p_mat',
+                  WSYF='harv_idx_ws',
+                  USLE_C='usle_c_min',
+                  GSI='stcon_max',
+                  VPDFR='vpd',
+                  FRGMAX='frac_stcon',
+                  WAVP='ru_vpd',
+                  CO2HI='co2_hi',
+                  BIOEHI='bm_e_hi',
+                  RSDCO_PL='plnt_decomp',
+                  OV_N='ovn_mean',
+                  CN2A='cn_a',
+                  CN2B='cn_b',  
+                  CN2C='cn_c',  
+                  CN2D='cn_d', 
+                  FERTFIELD='FERTFIELD',
+                  ALAI_MIN='lai_min',
+                  BIO_LEAF='bm_tree_acc',
+                  MAT_YRS='yrs_mat',
+                  BMX_TREES='bm_tree_max',
+                  EXT_COEF='ext_co',
+                  BM_DIEOFF='bm_dieoff',
+                  OpSchedule='OpSchedule')
+  
+  # translate column names of `plants.plt` (SWAT+) to those of `crop` (SWAT2012)
+  plants.tocrop = plants.plt[plants.plt$name %in% codes.toadd, swat2012.lu]
+  colnames(plants.tocrop) = names(swat2012.lu)
+  
+  # append new row key columns
+  keys.tocrop = (1:length(codes.toadd)) + nrow(crop_in) + 1
+  plants.tocrop = cbind(data.frame(OBJECTID=keys.tocrop, ICNUM=keys.tocrop), plants.tocrop)
+  
+  # generate new 4-letter codes (of form 'ZZ**') to replace longer SWAT+ plant codes
+  idx.namechange = nchar(plants.plt$name) > 4 
+  seq.namechange = (1:sum(idx.namechange)) - 1
+  suffix.namechange = cbind(LETTERS[(seq.namechange %/% 26) + 1], LETTERS[(seq.namechange %% 26) + 1])
+  codes.namechange = paste0('ZZ', apply(suffix.namechange, 1, paste, collapse=''))
+  
+  # lookup vector that switches all codes to uppercase, and subs in 4-letter versions as needed
+  codes.new = setNames(toupper(plants.plt$name), nm=plants.plt$name)
+  codes.new[idx.namechange] = codes.namechange
+  plants.tocrop$CPNM = codes.new[match(plants.tocrop$CPNM, names(codes.new))]
+  
+  # return output as list
+  return(list(crop_out=plants.tocrop, lookup=codes.new))
+  
+}
+
+
+
+
+
+
 # # print all available SWAT+ plant codes containing the following keywords
 # kw = 'forest|woodland|pine'
 # plants_plt %>% filter(grepl(kw, description, ignore.case=TRUE)) %>% pull(description)
