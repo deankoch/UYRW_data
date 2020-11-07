@@ -1,7 +1,7 @@
 make\_qswat.R
 ================
 Dean Koch
-2020-11-06
+2020-11-07
 
 **Mitacs UYRW project**
 
@@ -54,33 +54,21 @@ swat.projdir = file.path(swat.dir, swat.name)
 swat.qgz = file.path(swat.dir, paste0(swat.name, '.qgz'))
 ```
 
-A list object definition here (`files.towrite`) has been hidden from the
-markdown output for brevity. The list itemizes all files written by the
-script along with a short description. We use a helper function to write
-this information to disk:
-
-``` r
-qswat.meta = my_metadata('make_qswat', files.towrite, overwrite=TRUE)
-```
-
     ## [1] "writing to data/make_qswat_metadata.csv"
 
-``` r
-print(qswat.meta[, c('file', 'type')])
-```
-
-    ##                                                            file           type
-    ## swat_source                                 data/prepared/qswat      directory
-    ## swat_proj                         data/prepared/qswat/millcreek      directory
-    ## swat_qgz                      data/prepared/qswat/millcreek.qgz      directory
-    ## swat_dem_tif                   data/prepared/qswat/swat_dem.tif        GeoTIFF
-    ## swat_landuse_tif           data/prepared/qswat/swat_landuse.tif        GeoTIFF
-    ## swat_soils_tif                data/prepared/qswat/swat_soil.tif        GeoTIFF
-    ## swat_landuse_lookup data/prepared/qswat/swat_landuse_lookup.csv            CSV
-    ## swat_soil_lookup      data/prepared/qswat/swat_soils_lookup.csv            CSV
-    ## swat_outlets               data/prepared/qswat/swat_outlets.shp ESRI Shapefile
-    ## swat_streams               data/prepared/qswat/swat_streams.shp ESRI Shapefile
-    ## metadata                           data/make_qswat_metadata.csv            CSV
+    ##                                                            file              type
+    ## swat_source                                 data/prepared/qswat         directory
+    ## swat_proj                         data/prepared/qswat/millcreek         directory
+    ## swat_qgz                      data/prepared/qswat/millcreek.qgz         directory
+    ## swat_boundary             data/prepared/qswat/swat_boundary.rds sf polygon object
+    ## swat_dem_tif                   data/prepared/qswat/swat_dem.tif           GeoTIFF
+    ## swat_landuse_tif           data/prepared/qswat/swat_landuse.tif           GeoTIFF
+    ## swat_soils_tif                data/prepared/qswat/swat_soil.tif           GeoTIFF
+    ## swat_landuse_lookup data/prepared/qswat/swat_landuse_lookup.csv               CSV
+    ## swat_soil_lookup      data/prepared/qswat/swat_soils_lookup.csv               CSV
+    ## swat_outlets               data/prepared/qswat/swat_outlets.shp    ESRI Shapefile
+    ## swat_streams               data/prepared/qswat/swat_streams.shp    ESRI Shapefile
+    ## metadata                           data/make_qswat_metadata.csv               CSV
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/make_qswat_metadata.csv)
@@ -175,11 +163,26 @@ paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stre
 ## define a subbasin of the UYRW to set up
 
 ``` r
-# load the mill creek data for testing purposes
-millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
+subbasin.poly.path = here(makeqswat.meta['swat_boundary', 'file'])
+if(!file.exists(subbasin.poly.path))
+{
+  
+  # load the mill creek data for testing purposes
+  millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
+  
+  # define its drainage boundary and save to disk
+  subbasin.poly = millcreek.list$boundary
+  saveRDS(subbasin.poly, subbasin.poly.path)
+  
+  
+} else {
+  
+  # load boundary polygon from disk
+  subbasin.poly = readRDS(subbasin.poly.path)
+   
+}
 
-# define its drainage boundary
-subbasin.poly = millcreek.list$boundary
+# coerce to `sp` object for compatibility with `raster`
 subbasin.poly.sp = as(subbasin.poly, 'Spatial')
 
 # crop flowlines, waterbodies, and outlet geometries to this subbasin 
@@ -197,12 +200,12 @@ soils and land use rasters, setting the custom NA flag.
 
 ``` r
 # create the QSWAT source directory if necessary
-my_dir(here(qswat.meta['swat_source', 'file']))
+my_dir(here(makeqswat.meta['swat_source', 'file']))
 
 # set the file paths to write
-dem.path = here(qswat.meta['swat_dem_tif', 'file'])
-landuse.path = here(qswat.meta['swat_landuse_tif', 'file'])
-soils.path = here(qswat.meta['swat_soils_tif', 'file'])
+dem.path = here(makeqswat.meta['swat_dem_tif', 'file'])
+landuse.path = here(makeqswat.meta['swat_landuse_tif', 'file'])
+soils.path = here(makeqswat.meta['swat_soils_tif', 'file'])
 
 # run the chunk if any of these files don't exist
 if(any(!file.exists(c(dem.path, landuse.path, soils.path))))
@@ -234,7 +237,7 @@ This remains a work in progress.
 
 ``` r
 # set the file paths to write
-streams.path = here(qswat.meta['swat_streams', 'file'])
+streams.path = here(makeqswat.meta['swat_streams', 'file'])
 
 # run the chunk if any of these files don't exist
 if(any(!file.exists(c(streams.path))))
@@ -285,7 +288,7 @@ outlet.snapval = units::set_units(10, 'meters')
 For demonstration purposes I will include only USGS gages
 
 ``` r
-if(!file.exists(here(qswat.meta['swat_outlets', 'file'])))
+if(!file.exists(here(makeqswat.meta['swat_outlets', 'file'])))
 {
   # prune to time-series data, add some attributes about time series length
   usgs.ts.sf = subbasin.usgs.sf[subbasin.usgs.sf$data_type_cd %in% c('dv', 'iv', 'id'),]
@@ -303,7 +306,7 @@ if(!file.exists(here(qswat.meta['swat_outlets', 'file'])))
   outlets.swat = st_sf(data.frame(ID=1:n.pts, RES=0, INLET=0, PTSOURCE=0), geom=outlets.swat)
 
   # write to disk as ESRI shapefile
-  st_write(outlets.swat, here(qswat.meta['swat_outlets', 'file']), overwrite=TRUE)
+  st_write(outlets.swat, here(makeqswat.meta['swat_outlets', 'file']), overwrite=TRUE)
   
 }
 ```
@@ -342,7 +345,7 @@ odbcClose(swatref.con)
 landuse.csv = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
 landuse.codes = plants2swat.list$lookup[match(landuse.csv$Landuse, names(plants2swat.list$lookup))]
 landuse.swat2012 = data.frame(LANDUSE_ID=landuse.csv$Value, SWAT_CODE=landuse.codes)
-write.csv(landuse.swat2012, here(qswat.meta['swat_landuse_lookup', 'file']), row.names=FALSE)
+write.csv(landuse.swat2012, here(makeqswat.meta['swat_landuse_lookup', 'file']), row.names=FALSE)
 ```
 
 soils data
@@ -365,7 +368,7 @@ parameters are used.
 ssurgo.db.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb'
 
 # load the SSURGO database and the mukeys list for the study area
-mukeys = unique(raster(here(qswat.meta['swat_soils_tif', 'file'])))
+mukeys = unique(raster(here(makeqswat.meta['swat_soils_tif', 'file'])))
 
 # grab a copy of the reference database 'usersoil' then close the connection
 ssurgo.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', ssurgo.db.path))
@@ -395,7 +398,7 @@ swat.soil.lookup = swat.usersoil %>%
   select(SOIL_ID, SNAM)
 
 # finally, write the lookup table 
-write.csv(swat.soil.lookup, here(qswat.meta['swat_soil_lookup', 'file']), row.names=FALSE)
+write.csv(swat.soil.lookup, here(makeqswat.meta['swat_soil_lookup', 'file']), row.names=FALSE)
 ```
 
 At this point, the user should be able to open the QSWAT project in

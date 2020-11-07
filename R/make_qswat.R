@@ -72,6 +72,12 @@ files.towrite = list(
     type='directory',
     description='QSWAT project directory'),
   
+  # project subbasin boundary polygon (subset of 'boundary' from 'get_basins.R')
+  c(name='swat_boundary',
+    file=file.path(swat.dir, 'swat_boundary.rds'), 
+    type='sf polygon object',
+    description='polygon identifying subset of UYRW to set up QSWAT'),
+  
   # DEM raster ('swat_dem' from 'get_dem.R', cropped to AOI)  
   c(name='swat_dem_tif',
   file=file.path(swat.dir, 'swat_dem.tif'), 
@@ -117,11 +123,9 @@ files.towrite = list(
 )
 }
 
-#' A list object definition here (`files.towrite`) has been hidden from the markdown output for
-#' brevity. The list itemizes all files written by the script along with a short description.
-#' We use a helper function to write this information to disk:
-qswat.meta = my_metadata('make_qswat', files.towrite, overwrite=TRUE)
-print(qswat.meta[, c('file', 'type')])
+# write metadata to csv
+makeqswat.meta = my_metadata('make_qswat', files.towrite, overwrite=TRUE)
+print(makeqswat.meta[, c('file', 'type')])
 
 #' This list of files and descriptions is now stored as a
 #' [.csv file](https://github.com/deankoch/UYRW_data/blob/master/data/make_qswat_metadata.csv)
@@ -211,12 +215,26 @@ paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stre
 #'
 #' ## define a subbasin of the UYRW to set up
 #+ warning=FALSE
+subbasin.poly.path = here(makeqswat.meta['swat_boundary', 'file'])
+if(!file.exists(subbasin.poly.path))
+{
+  
+  # load the mill creek data for testing purposes
+  millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
+  
+  # define its drainage boundary and save to disk
+  subbasin.poly = millcreek.list$boundary
+  saveRDS(subbasin.poly, subbasin.poly.path)
+  
+  
+} else {
+  
+  # load boundary polygon from disk
+  subbasin.poly = readRDS(subbasin.poly.path)
+   
+}
 
-# load the mill creek data for testing purposes
-millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
-
-# define its drainage boundary
-subbasin.poly = millcreek.list$boundary
+# coerce to `sp` object for compatibility with `raster`
 subbasin.poly.sp = as(subbasin.poly, 'Spatial')
 
 # crop flowlines, waterbodies, and outlet geometries to this subbasin 
@@ -234,12 +252,12 @@ subbasin.usgs.sf = st_intersection(usgs.sf, subbasin.poly)
 #' the soils and land use rasters, setting the custom NA flag.
 #'
 # create the QSWAT source directory if necessary
-my_dir(here(qswat.meta['swat_source', 'file']))
+my_dir(here(makeqswat.meta['swat_source', 'file']))
 
 # set the file paths to write
-dem.path = here(qswat.meta['swat_dem_tif', 'file'])
-landuse.path = here(qswat.meta['swat_landuse_tif', 'file'])
-soils.path = here(qswat.meta['swat_soils_tif', 'file'])
+dem.path = here(makeqswat.meta['swat_dem_tif', 'file'])
+landuse.path = here(makeqswat.meta['swat_landuse_tif', 'file'])
+soils.path = here(makeqswat.meta['swat_soils_tif', 'file'])
 
 # run the chunk if any of these files don't exist
 if(any(!file.exists(c(dem.path, landuse.path, soils.path))))
@@ -268,7 +286,7 @@ if(any(!file.exists(c(dem.path, landuse.path, soils.path))))
 #'   
 
 # set the file paths to write
-streams.path = here(qswat.meta['swat_streams', 'file'])
+streams.path = here(makeqswat.meta['swat_streams', 'file'])
 
 # run the chunk if any of these files don't exist
 if(any(!file.exists(c(streams.path))))
@@ -307,7 +325,7 @@ if(any(!file.exists(c(streams.path))))
 outlet.snapval = units::set_units(10, 'meters')
 
 #' For demonstration purposes I will include only USGS gages 
-if(!file.exists(here(qswat.meta['swat_outlets', 'file'])))
+if(!file.exists(here(makeqswat.meta['swat_outlets', 'file'])))
 {
   # prune to time-series data, add some attributes about time series length
   usgs.ts.sf = subbasin.usgs.sf[subbasin.usgs.sf$data_type_cd %in% c('dv', 'iv', 'id'),]
@@ -325,7 +343,7 @@ if(!file.exists(here(qswat.meta['swat_outlets', 'file'])))
   outlets.swat = st_sf(data.frame(ID=1:n.pts, RES=0, INLET=0, PTSOURCE=0), geom=outlets.swat)
 
   # write to disk as ESRI shapefile
-  st_write(outlets.swat, here(qswat.meta['swat_outlets', 'file']), overwrite=TRUE)
+  st_write(outlets.swat, here(makeqswat.meta['swat_outlets', 'file']), overwrite=TRUE)
   
 }
 
@@ -360,7 +378,7 @@ odbcClose(swatref.con)
 landuse.csv = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
 landuse.codes = plants2swat.list$lookup[match(landuse.csv$Landuse, names(plants2swat.list$lookup))]
 landuse.swat2012 = data.frame(LANDUSE_ID=landuse.csv$Value, SWAT_CODE=landuse.codes)
-write.csv(landuse.swat2012, here(qswat.meta['swat_landuse_lookup', 'file']), row.names=FALSE)
+write.csv(landuse.swat2012, here(makeqswat.meta['swat_landuse_lookup', 'file']), row.names=FALSE)
 
 
 #' soils data
@@ -380,7 +398,7 @@ write.csv(landuse.swat2012, here(qswat.meta['swat_landuse_lookup', 'file']), row
 ssurgo.db.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb'
 
 # load the SSURGO database and the mukeys list for the study area
-mukeys = unique(raster(here(qswat.meta['swat_soils_tif', 'file'])))
+mukeys = unique(raster(here(makeqswat.meta['swat_soils_tif', 'file'])))
 
 # grab a copy of the reference database 'usersoil' then close the connection
 ssurgo.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', ssurgo.db.path))
@@ -410,7 +428,7 @@ swat.soil.lookup = swat.usersoil %>%
   select(SOIL_ID, SNAM)
 
 # finally, write the lookup table 
-write.csv(swat.soil.lookup, here(qswat.meta['swat_soil_lookup', 'file']), row.names=FALSE)
+write.csv(swat.soil.lookup, here(makeqswat.meta['swat_soil_lookup', 'file']), row.names=FALSE)
 
 
 #' At this point, the user should be able to open the QSWAT project in QGIS3 and complete the
@@ -445,8 +463,6 @@ write.csv(swat.soil.lookup, here(qswat.meta['swat_soil_lookup', 'file']), row.na
 #' If all steps complete without errors, they should produce a working QSWAT3 model. Users can
 #' then run SWATEDitor.exe or click the 'Edit Inputs and Run SWAT' button on the main QSWAT
 #' dialogue to set up climatological inputs and model parameters required for simulations.
-
-
 
 
 
