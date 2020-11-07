@@ -19,18 +19,14 @@ configuration. Users can then initialize a SWAT2012 model by running
 QSWAT (from QGIS) and pointing it to these input files
 
 The following scripts should be run first to fetch and process data
-inputs: (1)
-[get\_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-(2)
-[get\_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
-(3)
-[get\_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
-(4)
-[get\_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
-(5)
-[get\_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
-(6)
-[get\_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
+inputs:
+[get\_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+[get\_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md),
+[get\_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md),
+[get\_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md),
+[get\_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md),
+and
+[get\_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md).
 
 ## libraries
 
@@ -74,7 +70,6 @@ print(qswat.meta[, c('file', 'type')])
 ```
 
     ##                                                            file           type
-    ## swat_weatherstn                  data/prepared/qswat/weatherstn      directory
     ## swat_source                                 data/prepared/qswat      directory
     ## swat_proj                         data/prepared/qswat/millcreek      directory
     ## swat_qgz                      data/prepared/qswat/millcreek.qgz      directory

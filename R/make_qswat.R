@@ -19,12 +19,12 @@
 #'
 #' 
 #' The following scripts should be run first to fetch and process data inputs:
-#' (1)  [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md) 
-#' (2)  [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md) 
-#' (3)  [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md) 
-#' (4)  [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md) 
-#' (5)  [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md) 
-#' (6)  [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md) 
+#' [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+#' [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md),
+#' [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md),
+#' [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md),
+#' [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md), and
+#' [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md).
 #' 
 
 #'
@@ -65,12 +65,6 @@ files.towrite = list(
     file=swat.projdir, 
     type='directory',
     description='QSWAT project directory'),
-  
-  # directory to write SWAT wdat input text files
-  c(name='swat_weatherstn',
-    file=file.path(swat.dir, 'weatherstn'),
-    type='directory',
-    description='directory for writing SWAT weather input text files'),
   
   # QGIS project file for QSWAT model
   c(name='swat_qgz',
