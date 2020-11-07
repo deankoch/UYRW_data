@@ -2,6 +2,7 @@
 "swat_source","data/prepared/qswat","directory","QSWAT I/O directory"
 "swat_proj","data/prepared/qswat/millcreek","directory","QSWAT project directory"
 "swat_qgz","data/prepared/qswat/millcreek.qgz","directory","QSWAT project directory"
+"swat_boundary","data/prepared/qswat/swat_boundary.rds","sf polygon object","polygon identifying subset of UYRW to set up QSWAT"
 "swat_dem_tif","data/prepared/qswat/swat_dem.tif","GeoTIFF","SWAT DEM"
 "swat_landuse_tif","data/prepared/qswat/swat_landuse.tif","GeoTIFF","SWAT land use classification"
 "swat_soils_tif","data/prepared/qswat/swat_soil.tif","GeoTIFF","SWAT soils classification, maps to soil table in SWAT database"

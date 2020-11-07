@@ -54,6 +54,7 @@ source(here('R/get_helperfun.R'))
 swat.dir = file.path(data.dir, 'prepared/qswatplus')
 
 # define the files to write
+{
 files.towrite = list(
   
   # path to subdirectory with QSWAT+ inputs
@@ -62,41 +63,29 @@ files.towrite = list(
     type='directory',
     description='QSWAT+ project source files'),
   
-  # DEM raster ('dem' from 'get_dem.R') masked to UYRW boundary  
+  # DEM raster ('swat_dem' from 'get_dem.R', cropped to AOI)  
   c(name='swat_dem_tif',
   file=file.path(swat.dir, 'swat_dem.tif'), 
   type='GeoTIFF',
-  description='DEM cropped to UYRW boundary, with outside areas designated NA'),
+  description='SWAT+ DEM'),
   
-  # land use raster for the UYRW (copy of 'swat_landuse_tif' from 'get_landuse.R')
+  # land use raster for the UYRW ('swat_landuse_tif' from 'get_landuse.R', cropped to AOI)
   c(name='swat_landuse_tif',
     file=file.path(swat.dir, 'swat_landuse.tif'), 
     type='GeoTIFF',
-    description='SWAT+ land use classification, maps to swat_landuse_lookup'),
+    description='SWAT+ land use classification'),
   
-  # soils raster for the UYRW (copy of 'swat_tif' from 'get_soils.R')
+  # soils raster for the UYRW ('swat_tif' from 'get_soils.R', cropped to AOI)
   c(name='swat_soils_tif',
     file=file.path(swat.dir, 'swat_soil.tif'), 
     type='GeoTIFF',
-    description='SWAT+ soils classification, maps to swat_soils_lookup'),
+    description='SWAT+ soils classification, maps to soil table in SWAT+ database'),
   
   # lookup table for 'swat_landuse_tif' (copy of 'swat_landuse_lookup' from 'get_landuse.R')
   c(name='swat_landuse_lookup',
     file=file.path(swat.dir, 'swat_landuse_lookup.csv'), 
     type='CSV',
     description='swat_landuse_tif integer code lookup table, maps to plants_plt SWAT+ dataset'), 
-  
-  # lookup table for 'swat_soils_tif' (copy of 'swat_lookup' from 'get_soils.R')
-  c(name='swat_soils_lookup',
-    file=file.path(swat.dir, 'swat_soil_lookup.csv'), 
-    type='CSV',
-    description='integer code to mukey (MUID) table for SWAT+, connects swat_soils_tif to swat_usersoil'), 
-  
-  # soils database (copy of 'swat_usersoil' from 'get_soils.R')
-  c(name='swat_usersoil',
-    file=file.path(swat.dir, 'swat_usersoil.csv'), 
-    type='CSV',
-    description='soil database for SWAT+, contains attributes for swat_soils_tif'), 
   
   # outlets shapefile (largely based on 'USGS_sites' from 'get_streamgages.R')
   c(name='swat_outlets',
@@ -117,6 +106,7 @@ files.towrite = list(
     description='stream geometries to "burn" into DEM prior to running TauDEM')
   
 )
+}
 
 #' A list object definition here (`files.towrite`) has been hidden from the markdown output for
 #' brevity. The list itemizes all files written by the script along with a short description.
@@ -135,43 +125,38 @@ basins.meta = my_metadata('get_basins')
 landuse.meta = my_metadata('get_landuse')
 soils.meta = my_metadata('get_soils')
 streamgages.meta = my_metadata('get_streamgages')
+weatherstations.meta = my_metadata('get_weatherstations')
 
 # load some of the watershed data created by 'get_basins.R'
-# uyrw.poly gets overwritten below by mill creek polygon for debugging ************************************
-#uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
+uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 poi.list = readRDS(here(basins.meta['poi', 'file']))
 uyrw.mainstem = readRDS(here(basins.meta['mainstem', 'file']))
 crs.list = readRDS(here(basins.meta['crs', 'file']))
 uyrw.waterbody = readRDS(here(basins.meta['waterbody', 'file']))
 uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
 
-# test mill creek  ***************************************************************************************
-millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
-
-# switch to mill creek boundary ***************************************************************************
-uyrw.poly = millcreek.list$boundary
-uyrw.poly.sp = as(uyrw.poly, 'Spatial')
-
-# crop to mill creek ***************************************************************************************
-uyrw.flowline = st_intersection(uyrw.flowline, uyrw.poly)
-uyrw.waterbody = st_intersection(uyrw.waterbody, uyrw.poly)
-
 # load USGS stream gage station points and attributes
 paramcodes.df = read.csv(here(streamgages.meta['USGS_paramcodes', 'file']), colClasses='character')
 usgs.sf = readRDS(here(streamgages.meta['USGS_sites', 'file']))
 paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
 
-# crop to mill creek ***************************************************************************************
-usgs.sf = st_intersection(usgs.sf, uyrw.poly) 
+
+#'
+#' ## define a subbasin of the UYRW to set up
+
+# load the mill creek data for testing purposes
+millcreek.list = readRDS(here(basins.meta['millcreek', 'file']))
+
+# define its drainage boundary
+subbasin.poly = millcreek.list$boundary
+subbasin.poly.sp = as(subbasin.poly, 'Spatial')
+
+# crop flowlines, waterbodies, and outlet geometries to this subbasin 
+subbasin.flowline = st_intersection(uyrw.flowline, subbasin.poly)
+subbasin.waterbody = st_intersection(uyrw.waterbody, subbasin.poly)
+subbasin.usgs.sf = st_intersection(usgs.sf, subbasin.poly) 
 
 
-#' NAs are represented in the GeoTiff by an integer -- usually something large and negative. Unfortunately
-#' the default value for this integer when using `raster::writeRaster` is so large that (in 64bit QSWAT+
-#' v1.2.3) it can cause an integer overflow error in one of the python modules used by QSWAT+. We instead
-#' use the value recommended in the QSWAT+ manual:
-
-# define the NA flag integer value for rasters
-tif.na.val = -32767
 
 #'
 #' ## copy DEM, soils, and land use rasters
@@ -188,51 +173,23 @@ dem.path = here(qswatplus.meta['swat_dem_tif', 'file'])
 landuse.path = here(qswatplus.meta['swat_landuse_tif', 'file'])
 landuselu.path = here(qswatplus.meta['swat_landuse_lookup', 'file'])
 soils.path = here(qswatplus.meta['swat_soils_tif', 'file'])
-soilslu.path = here(qswatplus.meta['swat_soils_lookup', 'file'])
-usersoil.path = here(qswatplus.meta['swat_usersoil', 'file'])
-
-
 
 # run the chunk if any of these files don't exist
-if(any(!file.exists(c(dem.path, landuse.path, landuselu.path, soils.path, soilslu.path, usersoil.path))))
+if(any(!file.exists(c(dem.path, landuse.path, landuselu.path, soils.path))))
 {
-  # to use `raster` functions, coerce URYW boundary polygon to 'Spatial' type (from package `sp`)
-  # moved above for debugging **************************************************************************
-  # uyrw.poly.sp = as(uyrw.poly, 'Spatial')
-  
-  # copy, crop, mask the DEM 
-  dem.tif = raster(here(dem.meta['dem', 'file']))
-  swat.dem.tif = mask(crop(dem.tif , uyrw.poly.sp), uyrw.poly.sp)
+  # crop/mask the rasters and write to new location
+  dem.tif = raster(here(dem.meta['swat_dem', 'file']))
+  landuse.tif = raster(here(landuse.meta['swat_landuse_tif', 'file']))
+  soils.tif = raster(here(soils.meta['swat_tif', 'file']))
+  swat.dem.tif = mask(crop(dem.tif , subbasin.poly.sp), subbasin.poly.sp)
+  swat.landuse.tif = mask(crop(landuse.tif , subbasin.poly.sp), subbasin.poly.sp)
+  swat.soils.tif = mask(crop(soils.tif , subbasin.poly.sp), subbasin.poly.sp)
+  writeRaster(swat.dem.tif, dem.path, NAflag=tif.na.val, overwrite=TRUE)
+  writeRaster(swat.landuse.tif, landuse.path, NAflag=tif.na.val, overwrite=TRUE)
+  writeRaster(swat.soils.tif, soils.path, NAflag=tif.na.val, overwrite=TRUE)
 
-  # load the soils and land use rasters
-  swat.soils.tif = raster(here(soils.meta['swat_tif', 'file']))
-  swat.landuse.tif = raster(here(landuse.meta['swat_landuse_tif', 'file']))
-  
-  # crop and mask ***************************************************************************************
-  swat.soils.tif = mask(crop(swat.soils.tif, uyrw.poly.sp), uyrw.poly.sp)
-  swat.landuse.tif = mask(crop(swat.landuse.tif, uyrw.poly.sp), uyrw.poly.sp)
-  
-  # write the rasters to disk with new NA integer code
-  writeRaster(swat.dem.tif, dem.path, overwrite=TRUE, NAflag=tif.na.val)
-  writeRaster(swat.soils.tif, soils.path, overwrite=TRUE, NAflag=tif.na.val)
-  writeRaster(swat.landuse.tif, landuse.path, overwrite=TRUE, NAflag=tif.na.val)
-  
-  # copy the attribute tables for soil and landuse
+  # copy the land use lookup table
   file.copy(here(landuse.meta['swat_landuse_lookup', 'file']), landuselu.path, overwrite=TRUE)
-  file.copy(here(soils.meta['swat_lookup', 'file']), soilslu.path, overwrite=TRUE)
-  file.copy(here(soils.meta['swat_usersoil', 'file']), usersoil.path, overwrite=TRUE)
-  
-  # testing  ***************************************************************************************
-
-  # change column headers for SWAT+
-  xx = read.csv(here(soils.meta['swat_lookup', 'file']))
-  names(xx) = c('SOIL_ID', 'SNAM')
-  write.csv(xx, soilslu.path, row.names=FALSE)
-  # xx = read.csv(usersoil.path)
-  # xx.names = names(xx)
-  # xx.names[4] = 'name'
-  # write.csv(xx, soilslu.path, row.names=FALSE)
-  
 }
 
 #' 
@@ -242,8 +199,8 @@ if(any(!file.exists(c(dem.path, landuse.path, landuselu.path, soils.path, soilsl
 #' channels correctly around lakes
 #'   
 #' There is a bug in the current version of QSWAT+ (v1.2.3) where the plugin fails to add lakes during
-#' watershed delineation ("computing topology" stage), probably due to some overlooked changes in the
-#' QGIS2->QGIS3 update. The developer has posted a patched module file (QSWATTopology.py) on
+#' watershed delineation ("computing topology" fails, perhaps due to a syntax change in the QGIS v2->v3
+#' update). The developer has posted a patched module file (QSWATTopology.py) on
 #' [google groups](https://groups.google.com/g/qswatplus/c/uDQD80gdXd4/m/2Iq05SUNBQAJ); this file
 #' should be downloaded and copied over prior to running the workflow.
 #' 
@@ -260,13 +217,13 @@ streams.path = here(qswatplus.meta['swat_streams', 'file'])
 if(any(!file.exists(c(lakes.path, streams.path))))
 {
   # make sure the streams network contains only LINESTRING geometries, drop attributes
-  streams.sf = st_cast(st_geometry(uyrw.flowline[!st_is(uyrw.flowline, 'POINT'),]), 'LINESTRING')
+  streams.sf = st_cast(st_geometry(subbasin.flowline[!st_is(subbasin.flowline, 'POINT'),]), 'LINESTRING')
   
   # these steps unnecessary in mill creek ********************************************************************
   #
   # # identify adjacent polygons (indicating lakes split into multiple shapes)
-  # lakes.adjmat = st_intersects(uyrw.waterbody, sparse=FALSE)
-  # n.lakes = nrow(uyrw.waterbody)
+  # lakes.adjmat = st_intersects(subbasin.waterbody, sparse=FALSE)
+  # n.lakes = nrow(subbasin.waterbody)
   # idx.tomerge = lapply(1:n.lakes, function(idx.row) 
   #   idx.row + c(0, which(lakes.adjmat[idx.row, upper.tri(lakes.adjmat)[idx.row,]])))
   # idx.tomerge = idx.tomerge[sapply(idx.tomerge, length) > 1]
@@ -293,14 +250,14 @@ if(any(!file.exists(c(lakes.path, streams.path))))
   # 
   # 
   # # this dplyr style code can be used for the final dissolve at the end
-  # lakes.sf = uyrw.waterbody %>% 
+  # lakes.sf = subbasin.waterbody %>% 
   #   mutate(lakeID = sapply(1:n.lakes, function(idx) sort(dfs(adjmat, idx))[1])) %>%
   #   group_by(lakeID) %>%
   #   summarize(areasqkm = sum(areasqkm))
   
   
   # make sure the lakes network contains only POLYGON geometries, drop attributes
-  lakes.sf = st_cast(st_geometry(uyrw.waterbody), 'POLYGON')
+  lakes.sf = st_cast(st_geometry(subbasin.waterbody), 'POLYGON')
   n.lakes = length(lakes.sf)
   
   # omit any islands from lakes
@@ -363,7 +320,7 @@ outlet.snapval = units::set_units(10, 'meters')
 if(!file.exists(here(qswatplus.meta['swat_outlets', 'file'])))
 {
   # prune to time-series data, add some attributes about time series length
-  usgs.ts.sf = usgs.sf[usgs.sf$data_type_cd %in% c('dv', 'iv', 'id'),]
+  usgs.ts.sf = subbasin.usgs.sf[subbasin.usgs.sf$data_type_cd %in% c('dv', 'iv', 'id'),]
   usgs.ts.sf$endyear = as.integer(sapply(strsplit(usgs.ts.sf$end_date,'-'), function(xx) xx[1]))
   usgs.ts.sf$startyear = as.integer(sapply(strsplit(usgs.ts.sf$begin_date,'-'), function(xx) xx[1]))
   usgs.ts.sf$duration = usgs.ts.sf$endyear - usgs.ts.sf$startyear
@@ -374,7 +331,7 @@ if(!file.exists(here(qswatplus.meta['swat_outlets', 'file'])))
   idx.current = 1
   #idx.current = usgs.ts.sf$endyear == 2020
   outlets.swat = st_geometry(usgs.ts.sf[idx.streamflow & idx.current,])
-  outlets.swat = st_snap(outlets.swat, uyrw.flowline, outlet.snapval)
+  outlets.swat = st_snap(outlets.swat, subbasin.flowline, outlet.snapval)
   
   # reproject the Carter's Bridge point, snap to nearest flowline point, add to the outlets set
   # let QSWAT+ detect the main outlet ****************************************************************
@@ -433,6 +390,439 @@ if(!file.exists(here(qswatplus.meta['swat_outlets', 'file'])))
 #' 6) automate the definitions of reservoir/ponds/wetlands based on main/trib channel locations
 #' 7) try SWAT+ AW for automating the full process
 #' 8) look into defining full UYRW watershed by joining multiple submodels
+
+#' Land use data
+#' 
+#' Certain plant-code entries appear in the database that ships with SWAT+, but are missing from
+#' the database included with SWAT2012. This chunk builds a SWAT2012-compatible `crop` table from
+#' the SWAT+ 'swatplus_datasets.sqlite' database, containing all of these missing entries.  
+#' 
+
+# following instructions at https://leowong.ca/blog/connect-to-microsoft-access-database-via-r/
+library(RODBC)
+odbc.driver.string = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};'
+#mdb.path = 'H:/UYRW_data/data/prepared/qswatplus/mc_swat2012/mc1/QSWATRef2012.mdb'
+mdb.path = 'C:/SWAT/SWATEditor/Databases/QSWATRef2012.mdb'
+odbc.string = paste0(odbc.driver.string, 'DBQ=', mdb.path)
+mdb.con = odbcDriverConnect(odbc.string)
+crop2012 = sqlFetch(mdb.con, 'crop')
+
+#' The SWAT database table 'crop' is now copied to the R dataframe `crop2012`. The goal is to
+#' update this table with the values found in the SWAT+ mySQL database, so that we can use the
+#' same land use raster data with both SWAT and SWAT+.
+
+# consider adding this library to helper_functions
+library(RSQLite)
+
+# set path to 'swatplus_datasets.sqlite'
+data.sql.path = 'C:/SWAT/SWATPlus/Databases/swatplus_datasets.sqlite'
+
+# import the main plant growth table:
+data.sql = dbConnect(RSQLite::SQLite(), data.sql.path)
+plants.plt = dbReadTable(data.sql, 'plants_plt') # main data table
+
+# move this to the end of the chunk 
+# dbDisconnect(data.sql)
+
+# identify plant codes common to both databases
+codes.common = crop2012$CPNM[crop2012$CPNM %in% toupper(plants.plt$name)]
+
+# identify plant codes in 'plants_plt' which are missing from SWAT2012 database
+codes.toadd = plants.plt$name[!(toupper(plants.plt$name) %in% codes.common)]
+
+#' The SWAT+ database table 'plants_plt' (copied into R as `plants.plt`) contains most of the
+#' parameters needed in the 'crop' table in the SWAT2012 database. The field names are different,
+#' however, so these need to be translated. A handful of parameters also need to be fetched from
+#' other tables. These are linked to 'plants_plt' via 'landuse_lum'
+
+# open linked tables for Manning's 'n' for overland flow, runoff curve numbers
+landuse.lum = dbReadTable(data.sql, 'landuse_lum')
+ovn.lum = dbReadTable(data.sql, 'ovn_table_lum')
+cn.lum = dbReadTable(data.sql, 'cntable_lum')
+
+# fetch find variables located outside `plants.plt`, append as new columns
+ovn.vn = 'ovn_mean'
+cn.vn = c('cn_a', 'cn_b', 'cn_c', 'cn_d')
+idx.lum = match(plants.plt$name, sapply(landuse.lum$name, function(nm) strsplit(nm, '_lum')[[1]]))
+plants.plt[, ovn.vn] = ovn.lum[landuse.lum$ov_mann_id[idx.lum], ovn.vn]
+plants.plt[, cn.vn] = cn.lum[landuse.lum$cn2_id[idx.lum], cn.vn]
+
+# identify 'trees' and translate 'plnt_typ' to integer code (see 'swat2009-theory.pdf', p.311)
+plants.plt$plnt_typ[plants.plt$bm_tree_acc>0 & plants.plt$bm_tree_max>0] = 'trees'
+idc.codes = c(NA, NA, NA, 'warm_annual', 'cold_annual', 'perennial', 'trees')
+plants.plt$plnt_typ = match(plants.plt$plnt_typ, idc.codes)
+
+# add dummy data to two missing fields
+plants.plt$FERTFIELD = rep(0, nrow(plants.plt))
+plants.plt$OpSchedule = rep('RNGB', nrow(plants.plt))
+
+#' The 'FERTFIELD' and 'OpSchedule' fields (added above) do not appear in any of the SWAT
+#' theory or I/O documentation that I have seen. As far as I can tell, these give details about
+#' agricultural operations that are not relevant to our implementation of SWAT/SWAT+
+#' 
+#' All of the necessary data has now been added to `plants.plt`. We now trim this table to include
+#' only plant codes which are missing from `crop2012` and modify field names and row keys to match
+#' with the syntax of SWAT2012's 'crop'.
+
+# create a translation table (SWAT+/plants_plt -> SWAT2012/crop)
+swat2012.lu = c(CPNM='name',
+                IDC='plnt_typ',
+                CROPNAME='description',
+                BIO_E='bm_e',
+                HVSTI='harv_idx',
+                BLAI='lai_pot',
+                FRGRW1='frac_hu1', 
+                LAIMX1='lai_max1', 
+                FRGRW2='frac_hu2', 
+                LAIMX2='lai_max2', 
+                DLAI='hu_lai_decl', 
+                CHTMX='can_ht_max', 
+                RDMX='rt_dp_max', 
+                T_OPT='tmp_opt', 
+                T_BASE='tmp_base', 
+                CNYLD='frac_n_yld',
+                CPYLD='frac_p_yld',
+                BN1='frac_n_em',
+                BN2='frac_n_50',
+                BN3='frac_n_mat',
+                BP1='frac_p_em',
+                BP2='frac_p_50',
+                BP3='frac_p_mat',
+                WSYF='harv_idx_ws',
+                USLE_C='usle_c_min',
+                GSI='stcon_max',
+                VPDFR='vpd',
+                FRGMAX='frac_stcon',
+                WAVP='ru_vpd',
+                CO2HI='co2_hi',
+                BIOEHI='bm_e_hi',
+                RSDCO_PL='plnt_decomp',
+                OV_N='ovn_mean',
+                CN2A='cn_a',
+                CN2B='cn_b',  
+                CN2C='cn_c',  
+                CN2D='cn_d', 
+                FERTFIELD='FERTFIELD',
+                ALAI_MIN='lai_min',
+                BIO_LEAF='bm_tree_acc',
+                MAT_YRS='yrs_mat',
+                BMX_TREES='bm_tree_max',
+                EXT_COEF='ext_co',
+                BM_DIEOFF='bm_dieoff',
+                OpSchedule='OpSchedule')
+
+# translate column names of `plants.plt` (SWAT+) to those of `crop` (SWAT2012)
+plants.tocrop = plants.plt[plants.plt$name %in% codes.toadd, swat2012.lu]
+colnames(plants.tocrop) = names(swat2012.lu)
+
+# append new row key columns
+keys.tocrop = (1:length(codes.toadd)) + nrow(crop2012) + 1
+plants.tocrop = cbind(data.frame(OBJECTID=keys.tocrop, ICNUM=keys.tocrop), plants.tocrop)
+
+# generate new 4-letter codes (of form 'ZZ**') to replace longer SWAT+ plant codes
+idx.namechange = nchar(plants.plt$name) > 4 
+seq.namechange = (1:sum(idx.namechange)) - 1
+suffix.namechange = cbind(LETTERS[(seq.namechange %/% 26) + 1], LETTERS[(seq.namechange %% 26) + 1])
+codes.namechange = paste0('ZZ', apply(suffix.namechange, 1, paste, collapse=''))
+
+# lookup vector that switches all codes to uppercase, and subs in 4-letter versions as needed
+codes.new = setNames(toupper(plants.plt$name), nm=plants.plt$name)
+codes.new[idx.namechange] = codes.namechange
+plants.tocrop$CPNM = codes.new[match(plants.tocrop$CPNM, names(codes.new))]
+
+#' Finally we update the SWAT2012 database by appending this table to 'crop'. We also create a
+#' new land use lookup table in which the plant codes are of the (uppercase, 4-letter) form used
+#' by SWAT2012 
+
+# append SWAT+ plants data to SWAT2012 database, close the connection
+# mdb.path = 'H:/UYRW_data/data/prepared/qswatplus/mc_swat2012/mc1/QSWATRef2012.mdb'
+# odbc.string = paste0(odbc.driver.string, 'DBQ=', mdb.path)
+# mdb.con = odbcDriverConnect(odbc.string)
+sqlSave(mdb.con, dat=plants.tocrop, tablename='crop', rownames=FALSE, append=TRUE)
+sqlSave(mdb.con, dat=plants.tocrop, tablename='cropdefault', rownames=FALSE, append=TRUE)
+odbcClose(mdb.con)
+
+# create modified landuse lookup CSV for SWAT2012
+new.landuse.csv = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
+new.landuse.csv$Landuse = codes.new[match(new.landuse.csv$Landuse, names(codes.new))]
+
+# write to disk
+landuse.csv.path = here('data/prepared/qswatplus/swat2012_landuse_lookup.csv')
+write.csv(new.landuse.csv, landuse.csv.path, row.names=FALSE)
+
+############
+############
+# The us_soils_v3.pdf instructions say to copy the SWAT_US_SSURGO_Soils.mdb database to the
+# SWATEditor/Databases folder
+
+# check that the SWAT2012 version of SSURGO database contains all our mukeys
+mukeys = unique(raster(soils.meta['swat_tif', 'file']))
+
+odbc.driver.string = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};'
+mdb.path = 'C:/SWAT/SWATEditor/Databases/SWAT_US_SSURGO_Soils.mdb'
+odbc.string = paste0(odbc.driver.string, 'DBQ=', mdb.path)
+mdb.con = odbcDriverConnect(odbc.string)
+sqlTables(mdb.con)
+soils2012 = sqlFetch(mdb.con, 'SSURGO_Soils')
+odbcClose(mdb.con)
+
+# index all the relevant mukeys, check that none are missing from the mdb table
+mukeys2012 = unique(soils2012$MUID)
+all(mukeys %in% mukeys2012)
+idx.usersoil = soils2012$MUID %in% mukeys
+
+# check for bad datapoints (empty or negative)
+usersoil = soils2012
+usersoil.classes = sapply(soils2012, class)
+usersoil.cha = usersoil[, usersoil.classes == 'character']
+usersoil.num = usersoil[, usersoil.classes != 'character']
+any(usersoil.num<0)
+any(is.na(usersoil.num))
+any(is.na(usersoil.cha))
+
+# there are some NA text fields. Fill them with dummy data
+problem.fields = names(usersoil.cha)[sapply(usersoil.cha, anyNA)]
+for(vn in problem.fields)
+{
+  new.column = usersoil[,vn]
+  new.column[is.na(new.column)] = 'A'
+  usersoil[,vn] = new.column
+}
+
+# match OBJECTID with MUKEY
+usersoil = cbind(data.frame(OBJECTID=usersoil$MUID), usersoil)
+
+# try writing the usersoil table to the SWATEditor reference database
+mdb.path = 'C:/SWAT/SWATEditor/Databases/QSWATRef2012.mdb'
+odbc.string = paste0(odbc.driver.string, 'DBQ=', mdb.path)
+mdb.con = odbcDriverConnect(odbc.string)
+sqlDrop(mdb.con, 'usersoil', errors=FALSE)
+sqlSave(mdb.con, dat=usersoil[idx.usersoil,], tablename='usersoil', rownames=FALSE, safer=FALSE)
+odbcClose(mdb.con)
+
+# make a soil lookup table
+soils.csv.path = here('data/prepared/qswatplus/swat2012_soil_lookup.csv')
+write.csv(data.frame(VALUE=mukeys, NAME=mukeys), soils.csv.path, row.names=FALSE)
+
+
+# # drop the old table then add the new one, then close the connection
+# mdb.classes = usersoil.classes
+# mdb.classes[mdb.classes=='numeric'] = 'double'
+# sqlDrop(mdb.con, 'SSURGO_Soils', errors=FALSE)
+# sqlSave(mdb.con, dat=usersoil[idx.usersoil,], 
+#         tablename='SSURGO_Soils', 
+#         rownames=FALSE)
+
+# try exporting a custom usersoil table
+write.csv(usersoil[idx.usersoil,], 'data/prepared/swat2012_usersoil.csv', row.names=FALSE)
+
+
+
+
+
+
+
+# # compare the tables among plant codes common to both databases
+# codes.common = crop2012$CPNM[crop2012$CPNM %in% plants.tocrop$CPNM]
+# 
+# idx.orig = match(codes.common, crop2012$CPNM)
+# idx.modi = match(codes.common, plants.tocrop$CPNM)
+# idx.vars = 31:40
+# idx.rows = 1:10
+# plants.tocrop[idx.modi[idx.rows], idx.vars]
+# crop2012[idx.orig[idx.rows], 2 + idx.vars]
+# 
+# xx = crop2012 %>% slice(idx.orig) %>% 
+#   select(-OBJECTID, -ICNUM, -CPNM, -CROPNAME, -FERTFIELD, -OpSchedule) %>% 
+#   as.matrix
+# 
+# yy = plants.tocrop %>% slice(idx.modi) %>% 
+#   select(-CPNM, -CROPNAME) %>% 
+#   as.matrix
+#   
+# apply(xx -yy, 2, median)
+
+
+
+
+
+#########
+library(RSQLite)
+data.sql.path = 'C:/SWAT/SWATPlus/Databases/swatplus_datasets.sqlite'
+data.sql = dbConnect(RSQLite::SQLite(), data.sql.path)
+tablenames = dbListTables(data.sql)
+plants.plt = dbReadTable(data.sql, 'plants_plt')
+
+for(idx in 1:length(tablenames))
+{
+  print(tablenames[idx])
+  print(head(dbReadTable(data.sql, tablenames[idx])))
+}
+
+yy = as.integer(landuse.lum %>% pull(id))
+xx = sapply(landuse.lum %>% pull(name), function(nm) strsplit(nm, '_lum', fixed=TRUE)[[1]])
+zz = data.frame(id=yy, lum=as.vector(xx))
+nrow(zz)
+match(zz$lum, plants.plt$name)
+
+
+# from https://swatplus.gitbook.io/docs/user/editor/inputs/land-use-management
+landuse.lum = dbReadTable(data.sql, 'landuse_lum')
+landuse.lum %>% pull(id, name)
+# landuse_lum (name field, without '_lum' suffix) matches entries of plants_plt to integer keys:
+# cn2_id: links to cntable_lum, containing curve number data (CN2A-D)
+# ov_mann_id: links to ovn_table_lum, containing Manning n value for overland flow (OV_N)
+# 
+dbReadTable(data.sql, 'ovn_table_lum')
+dbReadTable(data.sql, 'cntable_lum')
+dbReadTable(data.sql, 'cons_prac_lum')
+
+
+# this file exported from SWAT2012 MS Access database (R can't open these files)
+crop.csv.path = 'C:/Users/deank/Documents/crop.csv'
+crop2012 = read.csv(crop.csv.path)
+str(crop2012)
+
+# load existing SWAT+ landuse lookup
+landuse.csv = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
+landuse.codes = landuse.csv$Landuse
+
+# check for missing entries
+sum(!(landuse.codes %in% tolower(crop2012$CPNM))) # 14 missing
+sum(landuse.codes %in% tolower(crop2012$CPNM)) # 6 are there
+
+plants.plt[plants.plt$name %in% landuse.codes[!(landuse.codes %in% tolower(crop2012$CPNM))],]
+
+# compare a row from both tables to look for common parameters
+plants.plt[plants.plt$name=='alfa',]
+crop2012[crop2012$CPNM=='ALFA',]
+
+crop2012$OpSchedule
+
+
+
+
+crop2012[, names(swat2012.lu[swat2012.lu==''])]
+
+plants.plt[plants.plt$name=='ldgp', !(colnames(plants.plt) %in% swat2012.lu[swat2012.lu!=''])]
+
+
+
+tolower(crop2012$CPNM) %in% plants.plt$name
+
+colnames(crop2012)
+xx = crop2012[,names(swat2012.lu[swat2012.lu!=''])]
+yy = plants.plt[,swat2012.lu[swat2012.lu!='']]
+
+plants.plt[, !(colnames(plants.plt) %in% swat2012.lu[swat2012.lu!=''])]
+  
+head(xx)
+head(yy)
+
+# check if we can find all the same parameters in the SWAT+ database
+names(crop2012)
+toupper(names(plants.plt))
+
+tail(crop2012)
+
+# take a stab at a translation
+
+
+crop2012$OpSchedule
+
+str(plants.plt)
+
+# 
+
+
+wgn.sql.path = 'C:/SWAT/SWATPlus/Databases/swatplus_wgn.sqlite'
+wgn.sql = dbConnect(RSQLite::SQLite(), wgn.sql.path)
+dbListTables(wgn.sql)
+
+
+
+#' Weather data
+#' 
+#' 
+#' 
+
+
+wgn = dbReadTable(wgn.sql, 'wgn_cfsr_world')
+head(wgn)
+nrow(wgn)
+
+wgn.mon = dbReadTable(wgn.sql, 'wgn_cfsr_world_mon')
+head(wgn.mon)
+#wgn.mon %>% group_by(wgn_id)
+xx = unique(wgn.mon$wgn_id)
+length(xx)
+
+#####
+
+wgn = dbReadTable(wgn.sql, 'wgn_us')
+head(wgn)
+nrow(wgn)
+
+wgn.mon = dbReadTable(wgn.sql, 'wgn_us_mon')
+head(wgn.mon)
+#wgn.mon %>% group_by(wgn_id)
+xx = unique(wgn.mon$wgn_id)
+length(xx)
+###
+
+statsgo.ref = dbReadTable(soils.sql, 'statsgo')
+dbDisconnect(soils.sql)
+
+###
+
+
+###
+
+
+# # load the data
+# ghcnd.sf = readRDS(here(weatherstations.meta['ghcnd', 'file']))
+# ghcnd.list = readRDS(here(weatherstations.meta['ghcnd_data', 'file']))
+# 
+# # find the stations with data relevant to SWAT+
+# # for now I use only 1950s data (corresponding to the discharge time series) *****************************
+# yrs.target = 1950:1960
+# var.target = setNames(nm=c('PRCP', 'TMAX', 'TMIN'))
+# # these codes explained at https://www1.ncdc.noaa.gov/pub/data/cdo/documentation/GHCND_documentation.pdf
+# 
+# #
+# #precipitation, temperature, solar radiation, wind speed and relative humidity
+# #should be mm, degree centigrade, MJ/m², m/s, and decimal fraction, respectively
+# 
+# # helper function to identify time series that overlap with a target range
+# my_parsedate = function(yrs.range, yrs.target)
+# {
+#   # yrs.range should be a character vector with entries of the form 'year-year'
+#   # yrs.target is a integer vector of target years
+#   #
+#   # yrs.range is converted to integer and checked against yrs.target. The function
+#   # returns a boolean vector (same length as yrs.range) indicating for each entry
+#   # if there is any overlap with target years 
+#   
+#   # initialize output vector
+#   idx.out = rep(FALSE, length(yrs.range))
+#   idx.na = is.na(yrs.range)
+#   
+#   # parse the years defining each (non-NA) range as integers
+#   yr.start = sapply(strsplit(yrs.range[!idx.na], '-'), function(yr.range) as.integer(yr.range[1]))
+#   yr.end = sapply(strsplit(yrs.range[!idx.na], '-'), function(yr.range) as.integer(yr.range[1]))
+#   
+#   # identify the keepers and update boolean output values, finish 
+#   idx.keep = sapply(1:sum(!idx.na), function(idx) any(yr.start[idx]:yr.end[idx] %in% yrs.target))
+#   idx.out[!idx.na] = idx.keep
+#   return(idx.out)
+# }
+# 
+# # find all relevant station entries 
+# idx.keep.byvar = lapply(var.target, function(varname) my_parsedate(ghcnd.sf %>% pull(varname), yrs.target))
+# idx.keep = Reduce('|', idx.keep.byvar)
+# 
+# # build the station metadata SWAT+ table
+# id.keep = ghcnd.sf$id[idx.keep]
 
 
 
