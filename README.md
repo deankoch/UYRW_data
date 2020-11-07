@@ -30,7 +30,7 @@ fetches three different gridded meteorological reconstructions of Northwestern N
 This script does some intermediate steps required to succesfully load the data into QSWAT3 and build a watershed
 model:
 
-* [make_swat](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_swat.md) prepares QSWAT3 inputs
+* [make_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswat.md) prepares QSWAT3 inputs
 
 
 
