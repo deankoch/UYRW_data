@@ -179,18 +179,21 @@ uyrw.buff = 3e3 # meters
 #' meteorological dataset covers the period 1945-2012 at 1/16 degree resolution (~6km). See
 #' [this Nature paper](https://doi.org/10.1038/sdata.2018.299) for information on methodology.
 #' 
-#' The chunk below downloads four large NetCDF files (~128GB total) containing the entire time
+#' The chunk below downloads four large NetCDF files (~206GB total) containing the entire time
 #' series of the four variables ('tmax', 'tmin', 'prec', 'wind'), clips to the UYRW region,
 #' and reshapes the data into a list of variable-specific tables for easier handling in R. 
 #' 
 
-# PCIC download URL, variable names, filenames, and write paths
-pcic.domain = 'https://data.pacificclimate.org/data/gridded_observations'
+# set variable names and filenames from PCIC, and file paths for the downloads
 pcic.vn = setNames(nm=c('tmin', 'tmax', 'prcp', 'wind')) # my names
 pcic.vars = setNames(c('tasmin', 'tasmax', 'pr', 'wind'), nm=pcic.vn) # source names
 pcic.fn = paste0('PNWNAmet_', pcic.vars, '.nc.nc')
-pcic.url = setNames(file.path(pcic.domain, pcic.fn), nm=pcic.vn)
 pcic.paths = setNames(here(meteo.meta['pnwnamet_source', 'file'], pcic.fn), nm=pcic.vn)
+
+# PCIC download URL. The suffix ensures we get the full time series
+pcic.domain = 'http://data.pacificclimate.org/data/gridded_observations'
+pcic.suffix = '?pr[0:24836][][]=&='
+pcic.url = setNames(file.path(pcic.domain, pcic.fn, pcic.suffix), nm=pcic.vn)
 
 # define the paths to the zipped pnwnamet source files
 pcic.paths.zip = gsub(pattern = '\\.nc\\.nc$', '.zip', pcic.paths)
@@ -198,7 +201,6 @@ pcic.paths.zip = gsub(pattern = '\\.nc\\.nc$', '.zip', pcic.paths)
 # define processed output files
 pcic.out.path = here(meteo.meta['pnwnamet_uyrw', 'file'])
 pcic.out.raster.dir = here(meteo.meta['pnwnamet_raster', 'file'])
-my_dir(pcic.out.raster.dir)
 pcic.out.rasters = setNames(file.path(pcic.out.raster.dir, paste0(pcic.vn, '.tif')), nm=pcic.vn)
 
 
@@ -222,6 +224,9 @@ if(any(idx.missfile & !file.exists(pcic.paths.zip)))
 # load the data into R and write output rasters and R object files if they don't already exist
 if(any(!file.exists(c(pcic.out.path, pcic.out.rasters))))
 {
+  # create the raster output directory if it doesn't exist 
+  my_dir(pcic.out.raster.dir)
+  
   # open one of the nc files as raster to determine grid geometry
   nc.r = raster(pcic.paths[1], band=1)
   
@@ -278,7 +283,7 @@ if(any(!file.exists(c(pcic.out.path, pcic.out.rasters))))
 } 
 
 #' Finally, we zip the source files to save storage space. This step reduces storage requirements
-#' by about one half (to ~82GB)
+#' by about one half (to 111GB)
 
 # identify uncompressed source files that need to be zipped
 idx.unzipped = file.exists(pcic.paths) & !file.exists(pcic.paths.zip)
@@ -297,8 +302,8 @@ if(any(idx.unzipped))
     path.zipped = pcic.paths.zip[idx.file]
     setTxtProgressBar(pb, idx.tozip)
     
-    # zip the file then delete the original
-    zip(path.zipped, files=path.tozip)
+    # zip the file then delete the original, argument -j is to junk paths
+    zip(path.zipped, files=path.tozip, extras='-j')
     unlink(path.tozip)
     
   }
@@ -500,7 +505,7 @@ daymet.paths.zip = gsub(pattern = '\\.nc$', '.zip', daymet.paths.orig)
 
 # download a file only if we have neither the zip or uncompressed source data on disk
 idx.missfile = lapply(daymet.vars, function(varname) !file.exists(daymet.paths[[varname]]))
-if(any(unlist(idx.missfile) & !file.exists(daymet.paths.zip)) )
+if(any(unlist(idx.missfile) & !file.exists(daymet.paths.zip)))
 {
   # loop to download each file
   print(paste('downloading', sum(unlist(idx.missfile)), 'files from Daymet Web Services'))
@@ -567,6 +572,7 @@ daymet.out.path = here(meteo.meta['daymet_uyrw', 'file'])
 # this directory stores multiband rasters (band=day) for each variable
 daymet.out.raster.dir = here(meteo.meta['daymet_raster', 'file'])
 
+
 # import relevant subset of daymet dataset and write output
 if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
 {
@@ -574,7 +580,7 @@ if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
   nc.list = lapply(1:length(daymet.years), function(idx.yr) {
     sapply(setNames(nm=daymet.vars), function(varname) daymet.paths[[varname]][idx.yr])
     })
-  
+
   # call the data import function on all years (ignore warnings about ill-defined CRS) 
   print('loading daymet netcdf data into memory...')
   daymet.in = lapply(nc.list, function(fn) my_daymet_reader(fn, uyrw.poly, buff=3e3))
@@ -679,8 +685,8 @@ if(any(idx.unzipped))
     path.zipped = daymet.paths.zip[idx.file]
     setTxtProgressBar(pb, idx.tozip)
     
-    # zip the file then delete the original
-    zip(path.zipped, files=path.tozip)
+    # zip the file then delete the original, -j flag drops the paths in the zip
+    zip(path.zipped, files=path.tozip, extras='-j')
     unlink(path.tozip)
   
   }
