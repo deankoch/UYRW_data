@@ -39,7 +39,8 @@
 #' [`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is used to parse the NRCS website for
 #' links to STATSGO2 data archives, and
 #' ['RSQLite'](https://cran.r-project.org/web/packages/RSQLite/index.html) is used to open the soil parameters
-#' database (usersoil) that ships with SWAT+. See the
+#' database (usersoil) that ships with SWAT+.
+#' ['RODBC'](https://db.rstudio.com/odbc/) connects to MS Access databases using ODBC drivers. See the
 #' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
 #' for other required libraries
 library(here)
@@ -48,7 +49,7 @@ library(gdalUtilities)
 library(FedData)
 library(rvest)
 library(RSQLite)
-
+library(RODBC)
 
 #'
 #' ## project data
@@ -59,6 +60,12 @@ files.towrite = list(
   c(name='soils_sqlite',
     file=file.path(src.subdir, 'swatplus_soils.sqlite'), 
     type='SQLite database',
+    description='soil properties parameter tables'),
+  
+  # SWAT2012 soils database file (same as the one that ships with SWATEditor)
+  c(name='soils_mdb',
+    file=file.path(src.subdir, 'swat_soils.mdb'), 
+    type='MDB database',
     description='soil properties parameter tables'),
   
   # Soil survey area codes for SSURGO datasets in the UYRW area
@@ -115,6 +122,12 @@ files.towrite = list(
     type='R list object',
     description='merged STATSGO2/SSURGO tabular data for the UYRW area (a list of data frames)'), 
   
+  # usersoil table that ships with SWAT2012, pruned to only include relevant mukeys
+  c(name='usersoil',
+    file=file.path(out.subdir, 'usersoil_default.csv'), 
+    type='CSV',
+    description='usersoil table from mdb database on SWAT2012 website, cropped to URYW area codes'), 
+  
   # geotiff mapping rows of soil data table for SWAT+ to locations in the watershed
   c(name='swat_tif',
     file=file.path(out.subdir, 'swat_soil.tif'), 
@@ -147,28 +160,49 @@ dem.tif = raster(here(my_metadata('get_dem')['dem', 'file']))
 
 
 #' 
-#' ## download the SWAT+ sqlite soils database
+#' ## download the SWAT mdb and SWAT+ sqlite soils databases
 #' 
 #' Before writing the soil mukeys raster, we need to find out which mukeys are listed in the
 #' default `usersoil` parameter table. A soil mukey that appears in the raster but not in the
-#' parameter table will lead to errors in watershed delineation when we run QSWAT+
-#' 
-#' This chunk downloads the database (separately from  QSWAT+/SWAT+Tools) so that we can cross
+#' parameter table will lead to errors in watershed delineation. To avoid this we need to cross
 #' reference mukeys discovered via NRCS with those in the default `usersoil`, and avoid writing
 #' mukeys not listed in that table.
+#' 
+#' This chunk downloads two databases: A .mdb file for use with SWAT2012, and a .sqlite file for
+#' use with SWAT+. It then extracts the usersoil table from the mdb file so that we can use it
+#' later to prepare the input files necessary for running QSWAT3 
 
-if(!file.exists(here(soils.meta['soils_sqlite', 'file'])))
+# download the sqlite file if it is not already on the destination path
+sqlite.dest.path = here(soils.meta['soils_sqlite', 'file'])
+if(!file.exists(sqlite.dest.path))
 {
   # URL pulled from the [SWAT+ docs](https://swatplus.gitbook.io/docs/installation)
   soils.sql.url = 'https://bitbucket.org/swatplus/swatplus.editor/downloads/swatplus_soils.sqlite'
-  download.file(soils.sql.url, here(soils.meta['soils_sqlite', 'file']), mode='wb')
+  download.file(soils.sql.url, sqlite.dest.path, mode='wb')
  
 } 
 
-# load the relevant tables from the database
+# download the mdb file if needed, then extract/save usersoil table
+mdb.dest.path = here(soils.meta['soils_mdb', 'file'])
+if(!file.exists(mdb.dest.path))
+{
+  # URL pulled from the SWAT Global Data [webpage](https://swat.tamu.edu/data/)
+  soils.mdb.url = 'https://swat.tamu.edu/media/116587/swat_us_ssurgo_soils_withstatsgo_20200723.zip'
+  soils.mdb.fn = 'SWAT_US_SSURGO_Soils.mdb'
+  
+  # download (32MB) zip to temporary file, extract mdb (544MB) to destination path
+  temp.zip.path = tempfile(fileext='.zip')
+  download.file(soils.mdb.url, temp.zip.path, mode='wb')
+  unzip(temp.zip.path, files=soils.mdb.fn, exdir=dirname(temp.zip.path))
+  file.copy(file.path(dirname(temp.zip.path), soils.mdb.fn), mdb.dest.path)
+} 
+
+# 
+
+# load the relevant tables from the SWAT+ database
 soils.sql = dbConnect(RSQLite::SQLite(), here(soils.meta['soils_sqlite', 'file']))
-ssurgo.ref = dbReadTable(soils.sql, 'ssurgo')
-statsgo.ref = dbReadTable(soils.sql, 'statsgo')
+ssurgo.sql.ref = dbReadTable(soils.sql, 'ssurgo')
+statsgo.sql.ref = dbReadTable(soils.sql, 'statsgo')
 dbDisconnect(soils.sql)
 
 #'
@@ -448,13 +482,38 @@ if(any(!file.exists(here(soils.meta[c('statsgo_sf', 'statsgo_tab'), 'file']))))
   statsgo.tab = readRDS(here(soils.meta['statsgo_tab', 'file']))
 
 }
+
+#'
+#' ## Save a copy of the usersoil table from the mdb database
+#' 
+if(!file.exists(here(soils.meta['usersoil', 'file'])))
+{
+  # open the database to extract the (very large) usersoil table
+  mdb.string = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};'
+  ssurgo.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', mdb.dest.path))
+  usersoil.ref = sqlFetch(ssurgo.con, 'SSURGO_Soils')
+  odbcClose(ssurgo.con)
+  
+  # prune to remove entries whose mukeys aren't found in the UYRW area
+  ssurgo.mukeys = unique(as.integer(ssurgo.sf$MUKEY))
+  statsgo.mukeys = unique(as.integer(statsgo.sf$MUKEY))
+  idx.keep = usersoil.ref$MUID %in% c(ssurgo.mukeys, statsgo.mukeys)
+  
+  # write to disk as CSV
+  write.csv(usersoil.ref[idx.keep,], file=here(soils.meta['usersoil', 'file']), row.names=F)
+} 
+
   
 #'
 #' ## SSURGO vs STATSGO coverage
 #' 
-#' The soils database for SWAT+ is currently (October, 2020) missing a large number of SSURGO mukeys
-#' in the UYRW area. However the STATSGO2 coverage is complete. This chunk identifies all missing
-#' SSURGO mukeys and replaces them with the appropriate STATSGO2 mukey
+#' The soils database for SWAT/SWAT+ is currently (October, 2020) missing a large number of SSURGO
+#' mukeys in the UYRW area. However the STATSGO2 coverage is complete. This chunk identifies all missing
+#' SSURGO mukeys (there are 74) and replaces them with the appropriate STATSGO2 mukey.
+#' 
+#' Note that while the mdb table for SWAT appears to be smaller, it contains the same SSURGO mukeys
+#' as the sql table for SWAT+, at least as far as the URYW is concerned. Assuming that errors in parameter
+#' values are more likely to have been corrected in the SWAT+ database, we will use that version going forward
 #' 
 if(any(!file.exists(here(soils.meta[c('ssurgo_incomplete_sfc', 'soils_merged_sf', 'soils_merged_tab'), 'file']))))
 {
@@ -463,7 +522,7 @@ if(any(!file.exists(here(soils.meta[c('ssurgo_incomplete_sfc', 'soils_merged_sf'
   length(ssurgo.mukeys)
 
   # some of these are missing from the SWAT+ database
-  ssurgo.mukeys.ref = as.integer(ssurgo.ref$muid)
+  ssurgo.mukeys.ref = as.integer(ssurgo.sql.ref$muid)
   mukey.miss = ssurgo.mukeys[!(ssurgo.mukeys %in% ssurgo.mukeys.ref)]
   length(mukey.miss) # missing 74 (22%) ...
   
