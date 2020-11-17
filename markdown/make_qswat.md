@@ -1,7 +1,7 @@
 make\_qswat.R
 ================
 Dean Koch
-2020-11-07
+2020-11-17
 
 **Mitacs UYRW project**
 
@@ -59,7 +59,7 @@ swat.qgz = file.path(swat.dir, paste0(swat.name, '.qgz'))
     ##                                                            file              type
     ## swat_source                                 data/prepared/qswat         directory
     ## swat_proj                         data/prepared/qswat/millcreek         directory
-    ## swat_qgz                      data/prepared/qswat/millcreek.qgz         directory
+    ## swat_qgz                      data/prepared/qswat/millcreek.qgz QGIS project file
     ## swat_boundary             data/prepared/qswat/swat_boundary.rds sf polygon object
     ## swat_dem_tif                   data/prepared/qswat/swat_dem.tif           GeoTIFF
     ## swat_landuse_tif           data/prepared/qswat/swat_landuse.tif           GeoTIFF
@@ -364,16 +364,11 @@ STATSGO2. By importing a custom ‘usersoil’, we control exactly which
 parameters are used.
 
 ``` r
-# path to SWAT2012 soils database (mdb)
-ssurgo.db.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb'
-
-# load the SSURGO database and the mukeys list for the study area
+# load the the mukeys list for the study area
 mukeys = unique(raster(here(makeqswat.meta['swat_soils_tif', 'file'])))
 
-# grab a copy of the reference database 'usersoil' then close the connection
-ssurgo.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', ssurgo.db.path))
-usersoil.ref = sqlFetch(ssurgo.con, 'SSURGO_Soils')
-odbcClose(ssurgo.con)
+# load the default usersoil table extracted from the reference soils database (mdb)
+usersoil.ref = read.csv(here(soils.meta['usersoil', 'file']))
 
 # index all the relevant mukeys, check that none are missing from the mdb table
 mukeys.ssurgo = unique(usersoil.ref$MUID)

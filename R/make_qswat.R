@@ -69,8 +69,8 @@ files.towrite = list(
   # QGIS project file for QSWAT model
   c(name='swat_qgz',
     file=swat.qgz, 
-    type='directory',
-    description='QSWAT project directory'),
+    type='QGIS project file',
+    description='QGIS project file for QSWAT3 worflow'),
   
   # project subbasin boundary polygon (subset of 'boundary' from 'get_basins.R')
   c(name='swat_boundary',
@@ -394,16 +394,12 @@ write.csv(landuse.swat2012, here(makeqswat.meta['swat_landuse_lookup', 'file']),
 #' exactly which parameters are used.
 #+ eval=FALSE
 
-# path to SWAT2012 soils database (mdb)
-ssurgo.db.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb'
 
-# load the SSURGO database and the mukeys list for the study area
+# load the the mukeys list for the study area
 mukeys = unique(raster(here(makeqswat.meta['swat_soils_tif', 'file'])))
 
-# grab a copy of the reference database 'usersoil' then close the connection
-ssurgo.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', ssurgo.db.path))
-usersoil.ref = sqlFetch(ssurgo.con, 'SSURGO_Soils')
-odbcClose(ssurgo.con)
+# load the default usersoil table extracted from the reference soils database (mdb)
+usersoil.ref = read.csv(here(soils.meta['usersoil', 'file']))
 
 # index all the relevant mukeys, check that none are missing from the mdb table
 mukeys.ssurgo = unique(usersoil.ref$MUID)
