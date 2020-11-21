@@ -10,4 +10,5 @@
 "swat_soil_lookup","data/prepared/qswat/swat_soils_lookup.csv","CSV","integer code for swat_soils_tif, maps to `usersoil` table in SWAT database"
 "swat_outlets","data/prepared/qswat/swat_outlets.shp","ESRI Shapefile","outlet point locations, used by SWAT to delineate subbasins"
 "swat_streams","data/prepared/qswat/swat_streams.shp","ESRI Shapefile","stream geometries to ""burn"" into DEM prior to running TauDEM"
+"swat_weatherstn","data/prepared/qswat/millcreek/UYRW_weather_data","directory","directory for writing SWAT weather input text files"
 "metadata","data/make_qswat_metadata.csv","CSV","list files of files written by make_qswat.R"

@@ -118,7 +118,13 @@ files.towrite = list(
   c(name='swat_streams',
     file=file.path(swat.dir, 'swat_streams.shp'), 
     type='ESRI Shapefile',
-    description='stream geometries to "burn" into DEM prior to running TauDEM')
+    description='stream geometries to "burn" into DEM prior to running TauDEM'),
+  
+  # directory to write SWAT wdat input text files
+  c(name='swat_weatherstn',
+    file=file.path(swat.projdir, 'UYRW_weather_data'),
+    type='directory',
+    description='directory for writing SWAT weather input text files')
   
 )
 }
@@ -197,6 +203,7 @@ landuse.meta = my_metadata('get_landuse')
 soils.meta = my_metadata('get_soils')
 streamgages.meta = my_metadata('get_streamgages')
 weatherstations.meta = my_metadata('get_weatherstations')
+meteo.meta = my_metadata('get_meteo')
 
 # load some of the watershed data created by 'get_basins.R'
 uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
@@ -425,6 +432,37 @@ swat.soil.lookup = swat.usersoil %>%
 
 # finally, write the lookup table 
 write.csv(swat.soil.lookup, here(makeqswat.meta['swat_soil_lookup', 'file']), row.names=FALSE)
+
+
+#'
+#' ## write weather station data and position files
+#' 
+#' The next step in the worflow is to define weather inputs and set the model parameters. This
+#' should initially be done be via QSWAT (which opens SWATEditor) using default parameters and the
+#' weather inputs files written below.
+#' 
+#' Eventually we plan to set up parameters and weather inputs directly by writing the inputs (.pcp, .tmp,
+#' .cio, etc) to the SWAT2012 project directory (TxtInOut)
+#' 
+
+
+# For now we use Ben Livneh's climatic reconstruction 
+wdat.in = readRDS(here(meteo.meta['livneh_uyrw', 'file']))
+
+# map variable names from input dataset to SWAT names
+vn.in = list(temp=c('tmax', 'tmin'), prec='prec', wind='wind')
+
+# define and create the weather station data directory
+wstn.dir = makeqswat.meta['swat_weatherstn', 'file']
+my_dir(wstn.dir)
+
+# add 3km buffer to boundary for intersection with weather grid points
+bd.poly.buff = st_buffer(subbasin.poly, dist=units::set_units(3, km))
+
+# load DEM and call the weather station data export function
+dem.tif = dem.in = raster(dem.meta['dem', 'file'])
+print('writing weather station data files...')
+my_grid2wstn(wdat.in, vn.in, bd.poly.in=bd.poly.buff, dem.in=dem.tif, exdir=wstn.dir)
 
 
 #' At this point, the user should be able to open the QSWAT project in QGIS3 and complete the
