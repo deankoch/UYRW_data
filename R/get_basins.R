@@ -394,7 +394,7 @@ if(!file.exists(here(basins.meta['img_flowline', 'file'])))
     tm_shape(uyrw.waterbody) + 
       tm_polygons(col='dodgerblue4', border.col='deepskyblue4') +
     tm_shape(millcreek.list$boundary) +
-      tm_polygons(col='blue', alpha=0.2, border.alpha=0) +
+      tm_polygons(col='blue', alpha=0.2, border.col='brown1') +
     tm_shape(poi.list$pt[['cartersbridge']]) +   
       tm_dots(size=0.2, col='red') +
     tm_text('request', size=tmap.pars$label.txt.size, ymod=0.5) +

@@ -1,7 +1,7 @@
 get\_basins.R
 ================
 Dean Koch
-2020-10-01
+2020-11-30
 
 **Mitacs UYRW project**
 
@@ -84,28 +84,21 @@ basins.meta = my_metadata('get_basins', files.towrite, overwrite=TRUE)
 print(basins.meta[, c('file', 'type')])
 ```
 
-    ##                                                       file          type
-    ## landuse_source                    data/source/GAP_LANDFIRE     directory
-    ## landuse_csv                      data/prepared/landuse.csv           CSV
-    ## landuse_tif                      data/prepared/landuse.tif       GeoTIFF
-    ## swat_landuse_lookup  data/prepared/swat_landuse_lookup.csv           CSV
-    ## swat_landuse_tif            data/prepared/swat_landuse.tif       GeoTIFF
-    ## img_landuse                           graphics/landuse.png   png graphic
-    ## img_swat_landuse                 graphics/swat_landuse.png   png graphic
-    ## poi                                      data/uyrw_poi.rds R list object
-    ## nhd                              data/source/uyrw_nhd.gpkg    geopackage
-    ## crs                                      data/uyrw_crs.rds R list object
-    ## boundary               data/prepared/uyrw_nhd_boundary.rds  R sfc object
-    ## boundary_padded     data/prepared/uyrw_boundary_padded.rds   R sf object
-    ## mainstem               data/prepared/uyrw_nhd_mainstem.rds  R sfc object
-    ## catchment             data/prepared/uyrw_nhd_catchment.rds   R sf object
-    ## waterbody             data/prepared/uyrw_nhd_waterbody.rds   R sf object
-    ## flowline               data/prepared/uyrw_nhd_flowline.rds   R sf object
-    ## millcreek                  data/prepared/millcreek_nhd.rds R list object
-    ## pars_tmap                         data/tmap_get_basins.rds R list object
-    ## img_flowlines                  graphics/uyrw_flowlines.png   png graphic
-    ## img_basins                        graphics/uyrw_basins.png   png graphic
-    ## metadata                      data/get_basins_metadata.csv           CSV
+    ##                                                   file          type
+    ## poi                                  data/uyrw_poi.rds R list object
+    ## nhd                          data/source/uyrw_nhd.gpkg    geopackage
+    ## crs                                  data/uyrw_crs.rds R list object
+    ## boundary           data/prepared/uyrw_nhd_boundary.rds  R sfc object
+    ## boundary_padded data/prepared/uyrw_boundary_padded.rds   R sf object
+    ## mainstem           data/prepared/uyrw_nhd_mainstem.rds  R sfc object
+    ## catchment         data/prepared/uyrw_nhd_catchment.rds   R sf object
+    ## waterbody         data/prepared/uyrw_nhd_waterbody.rds   R sf object
+    ## flowline           data/prepared/uyrw_nhd_flowline.rds   R sf object
+    ## millcreek              data/prepared/millcreek_nhd.rds R list object
+    ## pars_tmap                     data/tmap_get_basins.rds R list object
+    ## img_flowlines              graphics/uyrw_flowlines.png   png graphic
+    ## img_basins                    graphics/uyrw_basins.png   png graphic
+    ## metadata                  data/get_basins_metadata.csv           CSV
 
 The list of files (and descriptions) is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_basins_metadata.csv)
@@ -381,7 +374,7 @@ if(!file.exists(here(basins.meta['img_flowline', 'file'])))
     tm_shape(uyrw.waterbody) + 
       tm_polygons(col='dodgerblue4', border.col='deepskyblue4') +
     tm_shape(millcreek.list$boundary) +
-      tm_polygons(col='blue', alpha=0.2, border.alpha=0) +
+      tm_polygons(col='blue', alpha=0.2, border.col='brown1') +
     tm_shape(poi.list$pt[['cartersbridge']]) +   
       tm_dots(size=0.2, col='red') +
     tm_text('request', size=tmap.pars$label.txt.size, ymod=0.5) +
