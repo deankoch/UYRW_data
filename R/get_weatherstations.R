@@ -20,7 +20,8 @@
 #' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
 #' [`rnoaa`](https://github.com/ropensci/rnoaa) package fetches
 #' [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description) data (see documentation 
-#' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)).
+#' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt) and 
+#' [here](https://docs.ropensci.org/rnoaa/)).
 #' We use them to build a map of climatic sensor stations in the UYRW, and to query historical data
 #' for model training. See the
 #' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
@@ -58,6 +59,12 @@ files.towrite = list(
     file=file.path(out.subdir, 'ghcnd_sites.rds'),
     type='R sf object',
     description='sfc object with GHCN Daily sensor locations in UYRW'),
+  
+  # GHCND data tables 
+  c(name='ghcnd_data',
+    file=file.path(out.subdir, 'ghcnd_data.rds'),
+    type='R list object',
+    description='list of data frames with GHCN Daily data in UYRW'),
   
   # aesthetic parameters for plotting
   c(name='pars_tmap',
@@ -148,8 +155,12 @@ if(!file.exists(here(weatherstations.meta['csv_ghcnd', 'file'])))
 }
 
 #' Load this CSV. It indexed over 100,000 stations worldwide! This chunk transforms the coordinates to UTM,
-#' omits stations not in UYRW (leaving 138), converts the result to an `sf` object with one feature per station,
-#' and saves the result to disk
+#' omits stations not in UYRW area (leaving 138), converts the result to an `sf` object with one feature
+#' per station, and saves the result to disk.
+#' 
+#' Note that when clipping to the URYW area, we use a polygon that is padded by several kilometers
+#' from the outer boundary of the watershed. This allows us to fetch nearby but out-of-watershed station
+#' data to better inform the SWAT+ weather generator (which uses spatial interpolation).
 if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
 {
 
@@ -201,6 +212,35 @@ if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
   ghcnd.sf = readRDS(here(weatherstations.meta['ghcnd', 'file']))
   
 } 
+
+#' 
+#' ## download station data
+#' see
+#' [here](https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ncdc:C00861/html)
+#' for documentation on the dataset and its variable names.
+#' 
+if(!file.exists(here(weatherstations.meta['ghcnd_data', 'file'])))
+{
+  # this call may take some time to download all station data listed in `ghcnd.sf`
+  ghcnd.list = lapply(setNames(nm=ghcnd.sf$id), meteo_pull_monitors)
+  
+  # save to disk
+  saveRDS(ghcnd.list, here(weatherstations.meta['ghcnd_data', 'file']))
+  
+} else {
+  
+  # load from disk
+  ghcnd.list = readRDS(here(weatherstations.meta['ghcnd_data', 'file']))
+  
+} 
+
+#'
+#' ## download soil and water hub dataset
+#' 
+#' This chunk in development. Downloads and imports 1900-2013 time series of weather
+
+
+
 
 #'
 #' ## visualization

@@ -1,7 +1,7 @@
 get\_weatherstations.R
 ================
 Dean Koch
-2020-10-01
+2020-11-30
 
 **Mitacs UYRW project**
 
@@ -19,9 +19,10 @@ fetches [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from
 the USDA; and the [`rnoaa`](https://github.com/ropensci/rnoaa) package
 fetches [GHCN Daily](https://www.ncdc.noaa.gov/ghcn-daily-description)
 data (see documentation
-[here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)). We
-use them to build a map of climatic sensor stations in the UYRW, and to
-query historical data for model training. See the [get\_helperfun.R
+[here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt) and
+[here](https://docs.ropensci.org/rnoaa/)). We use them to build a map of
+climatic sensor stations in the UYRW, and to query historical data for
+model training. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
@@ -31,6 +32,12 @@ source(here('R/get_helperfun.R'))
 library(snotelr)
 library(rnoaa)
 ```
+
+    ## Warning: package 'rnoaa' was built under R version 4.0.3
+
+    ## Registered S3 method overwritten by 'hoardr':
+    ##   method           from
+    ##   print.cache_info httr
 
 ## project data
 
@@ -54,6 +61,7 @@ print(weatherstations.meta[, c('file', 'type')])
     ## snotel                    data/prepared/snotel_sites.rds   R sf object
     ## csv_ghcnd                    data/source/ghcnd_sites.csv           CSV
     ## ghcnd                      data/prepared/ghcnd_sites.rds   R sf object
+    ## ghcnd_data                  data/prepared/ghcnd_data.rds R list object
     ## pars_tmap              data/tmap_get_weatherstations.rds R list object
     ## img_weatherstation     graphics/weatherstation_sites.png   png graphic
     ## metadata           data/get_weatherstations_metadata.csv           CSV
@@ -139,9 +147,15 @@ if(!file.exists(here(weatherstations.meta['csv_ghcnd', 'file'])))
 ```
 
 Load this CSV. It indexed over 100,000 stations worldwide\! This chunk
-transforms the coordinates to UTM, omits stations not in UYRW (leaving
-138), converts the result to an `sf` object with one feature per
-station, and saves the result to disk
+transforms the coordinates to UTM, omits stations not in UYRW area
+(leaving 138), converts the result to an `sf` object with one feature
+per station, and saves the result to disk.
+
+Note that when clipping to the URYW area, we use a polygon that is
+padded by several kilometers from the outer boundary of the watershed.
+This allows us to fetch nearby but out-of-watershed station data to
+better inform the SWAT+ weather generator (which uses spatial
+interpolation).
 
 ``` r
 if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
@@ -196,6 +210,34 @@ if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
   
 } 
 ```
+
+## download station data
+
+see
+[here](https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ncdc:C00861/html)
+for documentation on the dataset and its variable names.
+
+``` r
+if(!file.exists(here(weatherstations.meta['ghcnd_data', 'file'])))
+{
+  # this call may take some time to download all station data listed in `ghcnd.sf`
+  ghcnd.list = lapply(setNames(nm=ghcnd.sf$id), meteo_pull_monitors)
+  
+  # save to disk
+  saveRDS(ghcnd.list, here(weatherstations.meta['ghcnd_data', 'file']))
+  
+} else {
+  
+  # load from disk
+  ghcnd.list = readRDS(here(weatherstations.meta['ghcnd_data', 'file']))
+  
+} 
+```
+
+## download soil and water hub dataset
+
+This chunk in development. Downloads and imports 1900-2013 time series
+of weather
 
 ## visualization
 
