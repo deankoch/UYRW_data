@@ -1,7 +1,7 @@
 get\_meteo.R
 ================
 Dean Koch
-2020-11-06
+2020-12-03
 
 **Mitacs UYRW project**
 
@@ -10,7 +10,7 @@ reconstructions
 
 ## background
 
-SWAT+ uses weather inputs at the subbasin level to drive the model’s
+SWAT uses weather inputs at the subbasin level to drive the model’s
 day-to-day water budget. Ideally these inputs would be copied directly
 from quality-controlled station observations of daily weather data, such
 as total precipitation. In practice, two things prevent that from
@@ -22,14 +22,14 @@ happening:
   - real spatio-temporal records of weather states are inherently
     sparse. Space-time is continuous, point data are not.
 
-SWAT+ can desparsify the record by simulating daily point data using
+SWAT can desparsify the record by simulating daily point data using
 MCMC-based weather generator models. These are parametrized by the local
 long-term climatology, so they are usually located at points where
-long-term historical gage data are available. SWAT+ ships with a large
+long-term historical gage data are available. SWAT ships with a large
 set of parametrized weather generators.
 
-The aggregation method in SWAT+ is very simple: Each subbasin centroid
-is mapped to the nearest point weather record (generated or observed).
+The aggregation method in SWAT is very simple: Each subbasin centroid is
+mapped to the nearest point weather record (generated or observed).
 Orographic adjustments of precipitation (using elevation bands) can
 introduce additional detail downstream, but ultimately all of the
 weather drivers enter the model through a nearest-neighbour
@@ -41,20 +41,23 @@ Depending on the detail level of the subbasin delineation, this
 nearest-neighbour method may be too simplistic. The introduced bias can
 be particularly problematic in mountaineous terrain like the URYW (see
 [this discussion](https://doi.org/10.1016/j.jhydrol.2017.03.008), for
-example). One alternative is to replace the SWAT+ weather generators
-with a high- resolution gridded reconstruction of local weather.
+example). One alternative is to replace the SWAT weather generators with
+a high- resolution gridded reconstruction of local weather.
 
 [This recent paper](https://doi.org/10.1111/1752-1688.12819) discusses
 the use of an ensemble of grids from different sources. We will be
 exploring this idea in our project, so we download three long-term
 gridded climatic datasets in the script below:
 
-  - [Daymet (1980-2017)](https://daymet.ornl.gov/)
+  - [Daymet (1980-2017)](https://daymet.ornl.gov/) (‘tmax’, ‘tmin’,
+    ‘prcp’, ‘srad’, ‘swe’)
 
   - [PNWNAmet
     (1945-2012)](https://www.pacificclimate.org/data/daily-gridded-meteorological-datasets)
+    (‘tmax’, ‘tmin’, ‘prec’, ‘wind’)
 
   - [Livneh (1950-2013)](https://ciresgroups.colorado.edu/livneh/data)
+    (‘tmax’, ‘tmin’, ‘prec’, ‘wind’)
 
 The Daymet, PNWNAmet, and Livneh source files will require 1GB, 82GB,
 and 58GB of space, respectively, after compression. Some of the files
@@ -113,7 +116,7 @@ This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_meteo.csv)
 in the `/data` directory.
 
-All of the pertinent meteorological data for our SWAT+ model of the UYRW
+All of the pertinent meteorological data for our SWAT model of the UYRW
 will be stored in the rds files listed as `livneh_uyrw`, `daymet_uyrw`,
 and `pnwnamet_source` in the metadata table. This script also saves a
 copy of these data as multiband rasters, with one band per day in the
@@ -123,7 +126,7 @@ These GeoTIFF files preserve the original gridded projection of the
 data, allowing easy visualization of the weather grids (using
 `plot(raster(...))`). Note that different sources have different
 projections. The tabular data, however are all accompanied by
-geographical (lat/long) coordinates, as needed in SWAT+; whereas the
+geographical (lat/long) coordinates, as needed in SWAT; whereas the
 points shapefile is projected to our UYRW project reference system
 (UTM).
 
