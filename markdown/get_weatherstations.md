@@ -38,12 +38,6 @@ library(snotelr)
 library(rnoaa)
 ```
 
-    ## Warning: package 'rnoaa' was built under R version 4.0.3
-
-    ## Registered S3 method overwritten by 'hoardr':
-    ##   method           from
-    ##   print.cache_info httr
-
 ## project data
 
 A list object definition here (`files.towrite`) has been hidden from the
@@ -243,6 +237,10 @@ if(!file.exists(here(weatherstations.meta['ghcnd_data', 'file'])))
 
 This chunk in development. Downloads and imports 1900-2013 time series
 of weather
+
+``` r
+# come back to this after gridded weather is tested
+```
 
 ## visualization
 

@@ -13,9 +13,6 @@
 #' however for the SWAT model we will mostly be interested in the variables 'tmin', 'tmax', 'prcp', 'snow', 'awnd'   
 #' 
 
-str(ghcnd.sf)
-
-
 #' 
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 #' which creates some required directories and project config files, should be run before this script.
@@ -244,7 +241,7 @@ if(!file.exists(here(weatherstations.meta['ghcnd_data', 'file'])))
 #' ## download soil and water hub dataset
 #' 
 #' This chunk in development. Downloads and imports 1900-2013 time series of weather
-
+# come back to this after gridded weather is tested
 
 
 
