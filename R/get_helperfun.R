@@ -1037,7 +1037,6 @@ my_plants2swat = function(crop_in, swatplus_db)
   
 }
 
-
 #' Weather data enters the SWAT2012 as input txt files, one for each variable at each observation
 #' point in space. These locations are called "weather stations", although they need not come from
 #' actual gages. We will use data gridded climatic reconstruction models to train the SWAT model.
@@ -1142,9 +1141,10 @@ my_grid2wstn = function(wdat.in, vn.in, bd.poly.in, dem.in, exdir)
   return(list(stations=wstn.path, data=wstn.ts.path))
 }
 
-#' The functions below handle I/O text files associated with SWAT2012 simulations
+#' Convenience functions below are for handling I/O text files associated with SWAT2012
+#' simulations, and for managing parameters and system calls to the SWAT executables
  
-# convenience function for reading output.rch data
+# read output.rch data
 my_read_rch = function(rch.path, varname=character(0), origin.date=character(0))
 {
   # ARGUMENTS:
@@ -1155,8 +1155,8 @@ my_read_rch = function(rch.path, varname=character(0), origin.date=character(0))
   #
   # RETURN VALUE:
   #
-  # a data frame containing the data from "output.rch" (with the first 9 lines of preamble text
-  # omitted). By default returns the entire dataset, but a subset of columns can be specified in
+  # A data frame containing the data from "output.rch" (with comment lines 1-9 omitted).
+  # By default returns the entire dataset, but a subset of columns can be specified in
   # `varname`.
   #
   # If `origindate` is supplied, the function appends a column containing the dates for
@@ -1166,7 +1166,7 @@ my_read_rch = function(rch.path, varname=character(0), origin.date=character(0))
   # line number of the headers
   rch.idx = 9
   
-  # scan the headers line and note that R can't parse the crazy system of delimiters in use here
+  # scan the headers line and note that R can't parse the delimiters in use here
   rch.header = paste0(scan(rch.path, what=character(), skip=rch.idx-1, nlines=1), collapse=' ')
   
   # use regexp to identify whitespace and units delimiting individual variables
@@ -1260,274 +1260,1285 @@ my_read_rch = function(rch.path, varname=character(0), origin.date=character(0))
 
 }
 
-# convenience function for system call to run a SWAT simulation
-my_call_swat = function(io_dir, exec_path)
+# reads simulation output text files: output.rch, output.sub, output.hru
+my_swat_rout = function(output.path, varname=character(0), origin.date=character(0))
 {
   # ARGUMENTS:
   #
-  # `io_dir`, character string path to the text input file directory (TxtInOut) of a SWAT2012 model
+  # `output.path`, character string, path to either 'output.rch', 'output.sub', or 'output.hru'
+  # `varname`, character string vector of variable names to load from the output file
+  # `origindate`, (optional) 'Date' class object specifying first day of simulation period
+  #
+  # RETURN VALUE:
+  #
+  # A data frame containing the data from the files at `output.path` (with comment lines 1-9
+  # omitted). By default returns the entire dataset, but a subset of columns can be specified in
+  # `varname`.
+  #
+  # If `origindate` is supplied, the function appends a column containing the dates for
+  # each data row (note that this assumes a daily time step). It also returns the 'RCH', 'MON'
+  # columns (if they are not already specified in varname)
+  
+  # line number of the headers
+  out.idx = 9
+  
+  # identify the output text file type
+  out.ext = gsub('.', '', extension(output.path), fixed=TRUE)
+  
+  # define key fields that vary by output type
+  key.names = list(rch=c('RCH', 'GIS', 'MON'), 
+                   sub=c('SUB'), 
+                   hru=c('LULC', 'HRU', 'GIS', 'SUB', 'MGT'))[[out.ext]]
+  
+  # scan the headers line and note that R can't parse the delimiters in use here
+  out.header = paste0(scan(output.path, what=character(), skip=out.idx-1, nlines=1), collapse=' ')
+  
+  # bugfix for 'LAT Q' variable in .sub files: switch to 'LAT_Q' 
+  out.header = gsub('LAT Q(mm)LATNO3', 'LAT_Q ', out.header, fixed=TRUE)
+  
+  # use regexp to identify whitespace and units delimiting individual variables
+  rch.regexp = '(km2)|(cms)|(tons)|(mg/L)|(kg)|(mg)|(ct)|(TOT)|(Mg/l)|(degc)'
+  sub.regexp = '(mm)|(kg/ha)|(kg/h)|(t/ha)|(mic/L)'
+  hru.regexp = '(dgC)|(MJ/m2)'
+  out.regexp = paste0(c('(\\s)', rch.regexp, sub.regexp, hru.regexp), collapse='|')
+  out.header.parsed = strsplit(out.header, out.regexp)[[1]]
+  out.header.parsed = out.header.parsed[nchar(out.header.parsed) > 0]
+  
+  # bugfix: field 'MON' is listed in header of hru and sub files, but not in numeric table
+  if(out.ext != 'rch') { out.header.parsed = out.header.parsed[out.header.parsed!='MON'] }
+    
+  # bugfix: first column is unnamed in sub and rch files, but it appears to be a dummy variable
+  if(out.ext != 'hru') { out.header.parsed = c('DUMMY', out.header.parsed) }
+  
+  # default behaviour is to load all fields except 'DUMMY'
+  if(length(varname)==0)
+  {
+    varname = out.header.parsed[out.header.parsed != 'DUMMY']
+    
+  } else {
+    
+    # the integer fields should always be returned
+    varname = unique(c(key.names, varname))
+    
+  }
+  
+  # count the number of requested fields
+  n.col = length(out.header.parsed) 
+  
+  # build a list of column types - most are doubles
+  fread.what = rep('numeric', n.col)
+  fread.what[out.header.parsed == 'DUMMY'] = 'character'
+  fread.what[out.header.parsed %in% key.names] = 'integer'
+  fread.what[out.header.parsed == 'LULC'] = 'character'
+  
+  # verify that the requested variable name was printed to this output file
+  idx.varname.found = varname %in% out.header.parsed
+  if(!all(idx.varname.found))
+  {
+    print(paste('error: the following variable name(s) not found in', basename(output.path)))
+    print(varname[!idx.varname.found])
+    return(NA)
+  }
+  
+  # reorder varname to match ordering in headers
+  varname = varname[order(match(varname, out.header.parsed))]
+  
+  # index the columns to keep and drop
+  idx.read = out.header.parsed %in% varname
+  idx.drop = which(!idx.read)
+  
+  # load the requested columns using fread
+  dat.out = fread(output.path, 
+                  header=FALSE, 
+                  skip=out.idx, 
+                  col.names=varname, 
+                  colClasses=fread.what, 
+                  drop=idx.drop)
+  
+  # warn of any coercion errors in the numeric data and replace invalid entries with NA
+  idx.col.invalid = sapply(dat.out, class) != fread.what[idx.read]
+  if(any(idx.col.invalid))
+  {
+    # identify the variables and print the warning
+    names.col.invalid = names(dat.out)[idx.col.invalid]
+    print('warning: type coercion failed in the following variable(s)')
+    print(names.col.invalid)
+    print('coercing to numeric...')
+    
+    # perform the coercion
+    invisible(sapply(names.col.invalid, function(vn) {
+      set(dat.out, j=varname, value=as.numeric(dat.out[[vn]]))
+    }))
+    
+  }
+  
+  # if dates requested, append the row, then finish
+  if(length(origin.date)>0)
+  {
+    n.id = length(unique(dat.out[[toupper(out.ext)]]))
+    n.days = nrow(dat.out)/n.id
+    dates.out = rep(seq.Date(as.Date(origin.date), by='day', length.out=n.days), each=n.id)
+    return(cbind(date=dates.out, dat.out))
+    
+  } else {
+    
+    return(dat.out)
+    
+  }
+  
+}
+
+# system call to run a SWAT simulation
+my_call_swat = function(txtio.dir, exec_path)
+{
+  # ARGUMENTS:
+  #
+  # `txtio.dir`, character string path to the text input file directory of a SWAT2012 model
   # `exec_path`, character string path to swat executable (.exe, likely in SWATEditor directory)
   #
   
   # shell command prefix to change to the directory (avoids changing R's working directory)
-  shell.prefix = paste0('pushd ', normalizePath(io_dir), ' &&')
+  shell.prefix = paste0('pushd ', normalizePath(txtio.dir), ' &&')
   
   # build system call and run SWAT
   syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exec_path)))
   shell(syscall.string)
 }
 
-#' convenience function for reading/writing numeric parameters in SWAT configuration text files
-my_swat_rwnum = function(textpath, parname=character(0), newval=numeric(0), type='f')
+#' parse SWAT text file lines to return: value, name, comment fields for non-vector parameters
+my_swat_readpar = function(linetext)
 {
   # ARGUMENTS:
   #
-  # `textpath`, character string giving the full path to the swat config file
-  # `parname`, vector of character strings giving the SWAT parameter names to query
-  # `newval`, (optional) vector of new parameter values, to replace the ones listed in `linetxt`
-  # `type`, character string providing data type: either 'f' = floating point, or 'i' = integer
+  # `linetext`, character string vector, the (line by line) raw text from a SWAT config file 
   #
   # RETURN VALUE:
   #
-  # A numeric vector of the same length as `parname` (or `newval`, if `parname` is not supplied; See
-  # below). This reports the (numeric) values of the parameters as they are written in the SWAT text
-  # file located at `textpath`.
+  # dataframe with nrows equal to the number of lines in `linetext` that match a standard
+  # non-vector variable assignment pattern (see DETAILS). The five named columns are:
+  #
+  # line = (integer) line number, indicates entry of `linetext` that was parsed
+  # name = (character) the parameter name (usually UPPERCASE)
+  # value = (character) the parameter value
+  # comment = (character) the comment string (if any)
+  # type = (character) either 'character', 'integer', 'numeric', or 'unknown'
+  #
+  # DETAILS:
+  #
+  # Most SWAT parameters appear as lines of the form "<value>|<name>:<comment>", where <value>
+  # may be of type character, integer, or real. This function parses a line of text in this
+  # syntax, separating the three components, trimming whitespace, and returning the result as
+  # character.
+  #
+  # Type detection is based on the presence/absence of non-numeric characters and the decimal
+  # symbol ('.'). According to the SWAT docs, the distinction between integers are reals is
+  # important - eg. there could be problems associated with writing the integer 3 as a float
+  # such as "3.00" (and vice versa).
   # 
-  # If `newval` is supplied, its values are written to the SWAT text file. When `newval` is unnamed, 
-  # the function uses the ordering in `parname` to match values to parameter names. Otherwise, the names
-  # of `newval` entries are interpreted as SWAT variable names, and `parname` is ignored (and can be
-  # ommitted).
+  # When there is no template value assigned in the input `linetext` to pattern-match, the 
+  # function looks for a comment that ends with 'file' (indicating 'character' type), and
+  # failing that, it assigns 'unknown' type.
+  # 
   
-  # set (max) number of decimal places to use in character representations
-  dpmax = 6
+  # regexp to find standard pattern
+  idx.match = grepl('(.+)(\\|)(.+)(:)(.+)', linetext)
+  linetext.m = linetext[idx.match]
   
-  # set a whitespace suffix for parameters (space separating it from comment)
+  # split into <value><name><comment> (literal '0-1' is bugfix for missing ':' in 'BFLO_DIST')
+  out.ms = strsplit(linetext.m, '(\\s*\\|\\s*)|(\\s*:\\s*)|(\\s0-1\\s)', perl=TRUE)
+  
+  # trim leading and trailing whitepace
+  out.mst = lapply(out.ms, function(vec) gsub('($\\s*)|(^\\s*)', '', vec, perl=TRUE))
+  
+  # reshape into matrix, fuse comments that got split because they have a ':' symbol
+  out.list = lapply(out.mst, function(vec) c(vec[2:1], paste(vec[-(1:2)], collapse=': ')))
+  
+  # initialize output dataframe
+  df.out = cbind(which(idx.match), data.frame(do.call(rbind, out.list)))
+  names(df.out) = c('line', 'name', 'value', 'comment')
+  
+  # initialize output type column with 'integer'
+  df.out$type = 'integer'
+  
+  # determine character and numeric value types
+  df.out$type[grepl('[0-9,A-z]\\.[A-z]', df.out$value, perl=TRUE)] = 'character'
+  df.out$type[grepl('\\d+\\.\\d+', df.out$value, perl=TRUE)] = 'numeric'
+  
+  # deal with unknowns
+  idx.unknown = df.out$value == ''
+  df.out$type[idx.unknown] = 'unknown'
+  df.out$type[ endsWith(df.out$comment, 'file') & idx.unknown ] = 'character'
+  
+  # finish
+  return(df.out)
+}
+
+#' write parameter values and raw text lines to SWAT configuration text files
+my_swat_writepar = function(textpath, newval=character(0), wipe=integer(0), dpmax=6)
+{
+  # ARGUMENTS:
+  #
+  # `textpath`, full path to the swat text config file
+  # `newval`, named vector or list of new parameter values to overwrite the existing ones
+  # `wipe`, (optional) integer vector of line numbers to replace, overrides names of `newval` 
+  # `dpmax`, integer number of decimal places (maximum) to use for 'real' type variables
+  #
+  # RETURN VALUE:
+  #
+  # A data frame with columns 'written' and 'old' indicating the existing values and the ones
+  # that were overwritten
+  # 
+  # DETAILS:
+  #
+  # `wipe` is used to overwrite entire lines in the text file, by specifying their line numbers.
+  # Any names in `newval` are ignored in this case, and its entries must be of character type
+  # (or coercible to character). If `wipe` is assigned but `newval` is not, the function simply
+  # returns the text at the specified lines without overwriting anything.
+  # 
+  # When `wipe` is unassigned, the names of `newval` should match SWAT parameter names in the file
+  # at `textpath`. The function then parses the file to overwrite the entries of `newval` in the
+  # correct place. The entries of `newval` may be character, numeric or integer - they will be
+  # converted to text automatically, with whitespace and truncation of decimals handled to
+  # satisfy `dpmax` (whenever there is space)
+  #
+  # Note that the existing parameter value text in `textpath` is parsed to determine parameter
+  # type and the appropriate character representation. eg. if variable 'FOO' in `textpath` is an
+  # integer (with no decimal place) then `newval$FOO` will be coerced to integer, possibly by
+  # rounding.
+  #
+  
+  # whitespace separating parameters from comment delimiter
   suffix.s = strrep(' ', 4)
 
-  # give preference to names of `newval` when they are provided in combination with `parname`
-  if(!is.null(names(newval))) { parname = names(newval) }
-   
-  # open the file and parse for relevant line numbers 
+  # open the file and parse for SWAT variables
   text.raw = readLines(textpath)
-  parname.ln = my_swat_parln(text.raw, parname)
-  linetext = setNames(text.raw[parname.ln], nm=parname)
+  text.parsed = my_swat_readpar(text.raw)
   
-  # regular expression to trim whitespace and comments
-  comment.regexp = '\\|.+'
+  # unpack inputs
+  names.new = names(newval)
+  n.names = length(names.new)
+  n.text = length(text.raw)
+  n.newval = length(newval)
+  n.wipe = length(wipe)
   
-  # visual representation of regexp matches, useful for debugging:
-  #library(stringr)
-  #str_view_all(linetext, comment.regexp)
-  
-  # grab string containing the parameter (with whitespace) and parse as numeric
-  partxt = sapply(linetext, function(string) strsplit(string, comment.regexp)[[1]])
-  parval = sapply(partxt, as.numeric)
-  
-  # conditional for write-mode
-  if(length(newval) > 0)
+  # conditional for overwriting entire lines
+  if(n.wipe>0)
   {
-    # identify position of comment start position (it seems to be always in position 20?)
-    partxt.n = sapply(partxt, nchar)
-    par.maxn = partxt.n - nchar(suffix.s)
+    # check for invalid lines
+    if(any(wipe < 1 | wipe > n.text))
+    {
+      print(paste0('error: valid line numbers for `wipe` are 1,...', n.text))
+      return(NA)
+    }
     
-    # for floating point, we round to a known precision level (set by dpmax)
-    if(type=='f') { newval.s = format(round(newval, dpmax), nsmall=dpmax) }
+    # check for unmatched input
+    if(n.wipe != n.newval)
+    {
+      print(paste('error:', n.wipe, 'line numbers supplied for', n.newval, 'strings'))
+    }
     
-    # SWAT requires the decimal point be omitted for integer type
-    if(type=='i') { newval.s = format(round(newval, dpmax), nsmall=0) }
+    # check for replacement text argument
+    if(n.newval>0)
+    {
+      # copy the old text
+      text.raw.new = text.raw
+      
+      # write the lines
+      text.raw.new[wipe] = sapply(newval, as.character)
+      writeLines(text.raw.new, textpath)
+      
+      # return the old and new lines in a data frame
+      return(data.frame(old=text.raw[wipe], new=text.raw.new[wipe]))
+      
+    } else {
+      
+      # return only the old text
+      return(text.raw[wipe])
+      
+    }
+    
+  # conditional for replacing parameter values
+  } else {
+    
+    # check that we have valid names as input
+    idx.parsed = match(names.new, text.parsed$name)
+    if(anyNA(idx.parsed))
+    {
+      missing.names = paste(names.new[is.na(idx.parsed)], collapse=', ')
+      print(paste('error: variable name(s)', missing.names, 'not found'))
+      print(paste(basename(textpath), 'was not modified'))
+      return(NA)
+    }
+    
+    # grab line numbers and index special types
+    newval.ln = text.parsed$line[idx.parsed]
+    newval.type = text.parsed$type[idx.parsed]
+    idx.num = newval.type == 'numeric'
+    idx.int = newval.type == 'integer'
+    idx.char = newval.type %in% c('character', 'unknown')
+    
+    # coerce everything to character
+    newval.s = sapply(newval, as.character)
+    
+    # reformat special types as needed then drop leading whitespace
+    newval.num = sapply(newval[idx.num], function(x) round(x, dpmax))
+    newval.int = sapply(newval[idx.int], function(x) round(x, dpmax))
+    newval.s[idx.num] = format(newval.num, nsmall=dpmax, scientific=FALSE)
+    newval.s[idx.int] = format(newval.int, nsmall=0, scientific=FALSE)
+    newval.s = gsub(' ', '', newval.s)
+    
+    # grab full line text from the matching lines
+    linetext = setNames(text.raw[newval.ln], nm=names.new)
+    
+    # grab string containing the parameter with whitespace
+    partxt = sapply(linetext, function(string) strsplit(string, '\\|.+')[[1]])
+    
+    # identify the space we have for the parameter
+    par.maxn = sapply(partxt, nchar) - nchar(suffix.s)
     
     # truncate (as needed) to stay within max width
     idx.trunc = sapply(newval.s, nchar) > par.maxn
     if(any(idx.trunc))
     {
-      newval.s[idx.trunc] = sapply(which(idx.trunc), function(idx) {
-        substr(newval.s[idx], 1, par.maxn[idx]) })
+      newval.s[idx.trunc] = mapply(function(x,y) substr(x, 1, y), 
+                                   newval.s[idx.trunc], 
+                                   par.maxn[idx.trunc])
+      
+      # warn if any character strings have been truncated
+      idx.truncchar = idx.trunc & idx.char
+      if(any(idx.truncchar))
+      {
+        print(paste('warning: string(s)',
+                    paste(names.new[idx.truncchar], collapse='. '), 
+                    'were truncated')) 
+      }
+      
+      # warn if truncation affected accuracy of numerics substantially
+      idx.accucheck = idx.trunc & (idx.num | idx.int)
+      if(any(idx.accucheck))
+      {
+        num.in = as.numeric(newval[idx.accucheck])
+        num.out = as.numeric(newval.s[idx.accucheck])
+        rel.diff = 100 * (num.in - num.out) / num.in
+        if(any(rel.diff > 1))
+        {
+          print('warning: truncation produced relative change(s) of:')
+          print(paste(paste0(rel.diff, '%'), collapse=', '))
+          print(paste('in variables:', paste(names.new[idx.accucheck], collapse='. ')))
+        }
+      }
       
     }
     
     # pad with leading whitespace to produce strings of exactly max width
-    if(any(!idx.trunc))
-    {
-      newval.s[!idx.trunc] = sapply(which(!idx.trunc), function(idx) {
-        paste0(strrep(' ', par.maxn[idx] - nchar(newval.s[idx])), newval.s[idx]) })
-      
-    }
+    newval.s[!idx.trunc] = mapply(function(x,y,z) paste0(strrep(' ', y-z), x),
+                                  newval.s[!idx.trunc],
+                                  par.maxn[!idx.trunc],
+                                  nchar(newval.s[!idx.trunc]))
+
     
-    # warn if truncation produced any precision issues detectable in R (15 decimal places or so)
-    idx.imprecise = as.numeric(newval.s) != unname(newval)
-    if(any(idx.imprecise))
-    {
-      print('warning: supplied parameter value(s) required truncation, as follow:')
-      print(rbind(original=newval, truncated=as.numeric(newval.s))[, idx.imprecise, drop=FALSE])
+    # build replacement strings, adding terminal whitespace 
+    linetext.out =  mapply(gsub, partxt, paste0(newval.s, suffix.s), linetext)
   
-    }
+    # copy changes to SWAT text file
+    text.raw.new = text.raw
+    text.raw.new[newval.ln] = linetext.out
+    writeLines(text.raw.new, textpath)
     
-    # add terminal whitespace
-    newval.s = paste0(newval.s, suffix.s)
+    # return the old and new lines in a data frame
+    return(data.frame(old=text.raw[newval.ln], new=text.raw.new[newval.ln]))
     
-    # substitute replacement values into old line strings
-    linetext.out =  mapply(gsub, partxt, newval.s, linetext)
-    text.raw[parname.ln] = linetext.out
-    
-    # write changes to SWAT text file
-    writeLines(text.raw, textpath)
-  
   }
   
-  # return (original) parameter values
-  return(setNames(parval, nm=parname))
 }
 
-#' convenience function for reading/writing integer vectors in SWAT configuration text files
-my_swat_rwvec = function(textpath, parname=character(0), newval=numeric(0))
+#' read/write SWAT text files for vector-valued parameter assignments
+my_swat_rwvec = function(textpath, newval=character(0))
 {
   # ARGUMENTS:
   #
-  # `textpath`, character string giving the full path to the swat config file
-  # `parname`, vector of character strings giving the SWAT parameter names to query
-  # `newval`, (optional) list of new integer vectors, to replace the ones listed in `linetxt`
-  #
-  # RETURN VALUE:
-  #
-  # A list of integer vectors, the same length as `parname` (or `newval`, if `parname` is not
-  # supplied; See below). This reports the integer vectors as they are written in the SWAT text
-  # file located at `textpath`.
+  # `textpath`, full path to the swat text config file
+  # `newval`, optional named list of (numeric or integer) vectors to overwrite the existing ones
   # 
-  # If `newval` is supplied, its values are written to the SWAT text file. When `newval` is unnamed, 
-  # the function uses the ordering in `parname` to match values to parameter names. Otherwise, the
-  # names of `newval` entries are interpreted as SWAT variable names, and `parname` is ignored (and
-  # can be ommitted).
-  
-  # set a whitespace delimiter for vector entries
-  delim.s = strrep(' ', 3)
-  
-  # give preference to names of `newval` when they are provided in combination with `parname`
-  if(!is.null(names(newval))) { parname = names(newval) }
-  
-  # open the file and parse for relevant line numbers 
-  text.raw = readLines(textpath)
-  parname.ln = my_swat_parln(text.raw, parname, special=TRUE)
-  linetext = setNames(text.raw[parname.ln], nm=parname)
-  
-  # regular expression to identify delimiters
-  delim.regexp = '[\\s]+'
-  
-  # visual representation of regexp matches, useful for debugging:
-  #library(stringr)
-  #str_view_all(linetext, delim.regexp)
-
-  # parse string containing the parameters (with whitespace) as integer
-  parval = lapply(linetext, function(txt) unlist(read.table(textConnection(txt)), use.names=FALSE))
-  
-  # conditional for write-mode
-  if(length(newval) > 0)
-  {
-    # compute lengths of existing parameters
-    parval.len = sapply(parval, length)
-    newval.len = sapply(newval, length)
-    
-    # if any of the new parameter vectors are longer, truncate them and warn the user
-    idx.over = newval.len > parval.len
-    if(any(idx.over))
-    {
-      print('warning: supplied parameter vectors(s) longer than existing vectors.')
-      newval.trunc = mapply(function(x, y) x[1:y], newval[idx.over], parval.len[idx.over])
-      newval[idx.over] = newval.trunc
-      newval.len = sapply(newval, length)
-    }
-    
-    # pad replacement integer vectors with zeros if necessary
-    newval.padded = mapply(function(x, y, z) c(x, rep(0, z-y)), 
-                           newval, 
-                           newval.len, 
-                           parval.len,
-                           SIMPLIFY=FALSE)
-    
-    # coerce to character strings
-    newval.s = sapply(newval.padded, function(vec) paste(c('', vec), collapse=delim.s))
-
-    # substitute replacement values into old line strings
-    text.raw[parname.ln] = newval.s
-    
-    # write changes to SWAT text file
-    writeLines(text.raw, textpath)
-    
-  }
-  
-  # return (original) parameter values
-  return(setNames(parval, nm=parname))
-}
-
-#' convenience function for looking up the line numbers corresponding to a parameter name
-my_swat_parln = function(filetext, parname, special=FALSE)
-{
-  # ARGUMENTS:
-  #
-  # `filetext`, character string vector, the (line by line) raw text from a SWAT config file 
-  # `parname`, character string vector, the SWAT variable names (usually all uppercase) to look up
-  # `special`, boolean indicating if `parname` contains special case parameters (see DETAILS)
-  #
   # RETURN VALUE:
   #
-  # an integer vector of same length as `parname`, matching the input SWAT variable names to
-  # the line numbers on which their values can be found in `filetext`. If multiple matches are
-  # found for any of the input variables, the function prints an error and returns NA
+  # A (possibly empty) list of lists, one per vector-valued parameter in the SWAT file appearing
+  # in `newval` or, if `newval` unassigned, the complete list of vector-valued parameters avilable
+  # in the file. List entries are named according to their SWAT variable names, and contain the
+  # following elements:
+  #
+  # ln = (integer) line number where the vector appears in the text file
+  # old = (integer or numeric) vector of existing parameter values
+  # new = (if specified in `newval`) the replacements for the existing values
   #
   # DETAILS:
   #
-  # Most SWAT parameters are followed on the same line by a '|' symbol, indicating the beginning
-  # of a comment which supplies the variable name and a short explanation. However, certain
-  # "special" parameters don't follow this convention, and instead have a description printed on
-  # the line above. In those cases (indicated by the `special=TRUE` flag), the function parses for
-  # the descriptive text and returns the subsequent line number (where parameter values are found) 
+  # If `newval` is assigned, its names should match the names of the SWAT vector parameters to
+  # overwrite. Note these are names for the full vector, the individual entries of which are
+  # unnamed (here, and in the SWAT config files/docs). The function will overwrite the existing
+  # values in the text file, handling padding and truncation appropriately
   
-  # prepare the string literals to search for, handling special case differently
-  sl = paste0('| ', parname)
-  if(special) { sl = parname }
-
-  # for each of these, search all lines for any instances of the string: produces matrix of booleans...
-  slmat = sapply(sl, function(pattern) {
-    sapply(filetext, function(linetext) grepl(pattern, linetext, fixed=TRUE)) })
+  # spacing info, literal strings to parse, and associated variable name for i/o control vectors
+  pos.io = c(n.entries=20, len.entries=4, n.prec=0)
+  key.io = c(IPDVAR = 'Reach output variables',
+             IPDVAB = 'Subbasin output variables',
+             IPDVAS = 'HRU output variables',
+             IPDHRU = 'HRU data to be printed')
   
-  # ... where each input parameter name correspond to a column, each row a line number
-  ln = apply(as.matrix(slmat), 2, which)
+  # do the same for for elevation bands
+  pos.el = c(n.entries=10, len.entries=8, n.prec=3)
+  key.el = c(ELEVB = 'Elevation at center of elevation bands [m]',
+             ELEVB_FR = 'Fraction of subbasin area within elevation band')
   
-  # count the number of matches found for each input parameter name
-  if(length(ln) == 0)
+  # do the same for for climate change variables
+  pos.cc = c(n.entries=6, len.entries=8, n.prec=3)
+  key.cc = c(RFINC1 = 'Climate change monthly rainfall adjustment (January - June)',
+             RFINC2 = 'Climate change monthly rainfall adjustment (July - December)',
+             TMPINC1 = 'Climate change monthly temperature adjustment (January - June)',
+             TMPINC2 = 'Climate change monthly temperature adjustment (July - December)',
+             RADINC1 = 'Climate change monthly radiation adjustment (January - June)',
+             RADINC2 = 'Climate change monthly radiation adjustment (July - December)',
+             HUMINC1 = 'Climate change monthly humidity adjustment (January - June)',
+             HUMINC2 = 'Climate change monthly humidity adjustment (July - December)')
+  
+  # compile everything into one data frame
+  key.all = rbind(data.frame(comment=key.io, do.call(rbind, rep(list(pos.io), length(key.io)))),
+                  data.frame(comment=key.el, do.call(rbind, rep(list(pos.el), length(key.el)))),
+                  data.frame(comment=key.cc, do.call(rbind, rep(list(pos.cc), length(key.cc)))))
+  
+  # check `newval` for unmatched entries wrt the keys defined above
+  newval.names = names(newval)
+  idx.newval.matched = newval.names %in% rownames(key.all)
+  if(sum(idx.newval.matched) != length(newval))
   {
-    # when none of the `parname` values are found in `filetext`, `ln` becomes `integer(0)`
-    n.matches = rep(0, length(parname))
-    
-  } else {
-    
-    n.matches = sapply(ln, length)
-  }
-  
-  # if any of the `parname` entries didn't find a match, warn user
-  if(any(n.matches==0))
-  {
-    print('error: the following variables were not found in input text')
-    print(parname[n.matches==0])
-  }
-  
-  # error in case of multiple matches
-  if(is.matrix(ln))
-  {
-    print('warning: multiple matches for one or more entries of `parname`. Match counts:')
-    print(setNames(apply(slmat, 2, sum), nm=parname))
-    print('returning NA')
+    unmatched.char = paste(newval.names[!idx.newval.matched], collapse=', ')
+    print(paste('error: unrecognized variable(s)', unmatched.char))
     return(NA)
   }
   
-  # handle special case
-  if(special) { ln = ln + 1 }
+  # scan the text file for comment strings, omit non-matches, increment line number
+  linetext = readLines(textpath)
+  match.ln = sapply(key.all$comment,  function(pattern) grep(pattern, linetext, fixed=TRUE))
+  match.ln = setNames(unlist(match.ln) + 1, rownames(key.all)[sapply(match.ln, length)>0])
+  
+  # finish if no matches are found
+  if(length(match.ln)==0)
+  { 
+    # returning empty list 
+    return(vector(mode='list', length=0))
+    
+  } 
+  
+  # initialize output list with line number
+  out.list = lapply(match.ln, function(x) list(ln=x))
+  
+  # set up write-mode
+  if(length(newval.names) > 0)
+  {
+    # check for unmatched write input variables wrt the variable names in the file
+    idx.newval.matched = newval.names %in% names(match.ln)
+    if(any(!idx.newval.matched))
+    {
+      unmatched.char = paste(newval.names[!idx.newval.matched], collapse=', ')
+      print(paste('error: variable(s)', unmatched.char, 'not found in', basename(textpath)))
+      return(NA)
+    }
+    
+    # make a copy of the full text to modify 
+    linetext.new = linetext
+  }
+  
+  # grab full text from matched line numbers
+  match.linetext = setNames(linetext[match.ln], names(match.ln))
+  
+  # handle i/o control type vectors by pattern matching
+  idx.io = names(match.linetext) %in% names(key.io)
+  if(any(idx.io))
+  {
+    # names of the variables of this type
+    io.names = names(match.linetext)[idx.io]
+    
+    # split at whitespace, tidy up, convert to numeric, append to output list
+    io.split = strsplit(match.linetext[idx.io], '\\s+')
+    io.val = lapply(io.split, function(string) as.numeric(string[sapply(string, nchar) > 0]))
+    
+    # append to output list
+    out.list[io.names] = mapply(function(x, y) { c(x, list(old=y)) },
+                                x = out.list[io.names],
+                                y = io.val,
+                                SIMPLIFY = FALSE)
+    
+    # grab the subset of `newval` to write (if any)
+    idx.io.newval = io.names %in% names(newval)
+    if(any(idx.io.newval))
+    {
+      # add zeroes to complete any missing fields of the i/o vectors
+      io.newval = mapply(function(x, y) { c(x, rep(0, y-length(x))) },
+                         x = newval[names(newval) %in% io.names],
+                         y = key.all[io.names[idx.io.newval], 'n.entries'],
+                         SIMPLIFY = FALSE)
+      
+      # format the numeric/integer values as character
+      io.newval.s = lapply(io.newval, function(int) as.character(int))
+ 
+      # compute amount of whitespace to lead with (if any)
+      io.newval.nchar = lapply(io.newval.s, nchar)
+      io.newval.nws = mapply(function(x, y) { y - x },
+                                x = io.newval.nchar,
+                                y = key.all[io.names[idx.io.newval], 'len.entries'],
+                                SIMPLIFY = FALSE)
+      
+      # check for input too large to fit in specified width
+      idx.newval.toobig = sapply(io.newval.nws, function(x) any(x < 0))
+      toobig.names = names(which(idx.newval.toobig))
+      if(any(idx.newval.toobig))
+      {
+        toobig.char = paste(toobig.names, collapse=', ')
+        toobig.max = paste(key.all[toobig.names, 'len.entries'], collapse=', ')
+        print(paste('error: invalid newval for variable(s)', toobig.char))
+        print(paste('width as character exceeded upper limit(s) of', toobig.max))
+      }
+      
+      # add leading whitespace and delimiters as needed
+      io.newval.spad = mapply(function(x, y) { paste(paste0(strrep(' ', x), y), collapse='') },
+                                 x = io.newval.nws,
+                                 y = io.newval.s,
+                                 SIMPLIFY = FALSE)
+      
+      # add modifications to file text and append to output list
+      linetext.new[match.ln[names(io.newval.spad)]] = unlist(io.newval.spad)
+      out.list[names(io.newval.spad)] = mapply(function(x, y) { c(x, list(new=y)) },
+                                               x = out.list[names(io.newval.spad)],
+                                               y = io.newval,
+                                               SIMPLIFY = FALSE)
+      
+    }
+  }
+  
+  # handle other vectors by exact character start/stop rules
+  idx.other = !idx.io
+  if(any(idx.other))
+  {
+    # names of the variables of this type
+    other.names = names(match.linetext)[idx.other]
+    
+    # set up character start positions
+    startpos = mapply(function(x, y) { 1 + x*( (1:y) - 1 ) }, 
+                      x = key.all[other.names, 'len.entries'],
+                      y = key.all[other.names, 'n.entries'])
+    
+    # set up character end positions
+    endpos = mapply(function(x, y) { x + y - 1 },
+                    x = key.all[other.names, 'len.entries'],
+                    y = startpos)
+    
+    # extract the vectors as character then coerce to numeric
+    other.val = mapply(function(x, y, z) { as.numeric(substring(x, y, z)) }, 
+                       x = match.linetext, 
+                       y = startpos, 
+                       z = endpos)
+    
+    # append to output list
+    out.list[other.names] = mapply(function(x, y) { c(x, list(old=y)) },
+                                   x = out.list[other.names],
+                                   y = other.val,
+                                   SIMPLIFY = FALSE)
+    
+    # grab the subset of `newval` to write (if any)
+    idx.other.newval = other.names %in% names(newval)
+    if(any(idx.other.newval))
+    {
+      # format the numeric/integer values as character
+      other.newval = newval[names(newval) %in% other.names]
+      other.newval.s = lapply(other.newval, function(num) sprintf('%.3f', num))
+      
+      # compute amount of whitespace to lead with (if any)
+      other.newval.nchar = lapply(other.newval.s, nchar)
+      other.newval.nws = mapply(function(x, y) { y - x },
+                                x = other.newval.nchar,
+                                y = key.all[other.names[idx.other.newval], 'len.entries'],
+                                SIMPLIFY = FALSE)
+      
+      # check for input too large to fit in specified width
+      idx.newval.toobig = sapply(other.newval.nws, function(x) any(x < 0))
+      toobig.names = names(which(idx.newval.toobig))
+      if(any(idx.newval.toobig))
+      {
+        toobig.char = paste(toobig.names, collapse=', ')
+        toobig.max = paste(key.all[toobig.names, 'len.entries'], collapse=', ')
+        print(paste('error: invalid newval for variable(s)', toobig.char))
+        print(paste('width as character exceeded upper limit(s) of', toobig.max))
+      }
+      
+      # add leading whitespace as needed
+      other.newval.spad = mapply(function(x, y) { paste(paste0(strrep(' ', x), y), collapse='') },
+                                 x = other.newval.nws,
+                                 y = other.newval.s,
+                                 SIMPLIFY = FALSE)
+      
+      # add modifications to file text and build output list
+      linetext.new[match.ln[names(other.newval.spad)]] = unlist(other.newval.spad)
+      out.list[names(other.newval.spad)] = mapply(function(x, y) { c(x, list(new=y)) },
+                                                  x = out.list[names(other.newval.spad)],
+                                                  y = other.newval,
+                                                  SIMPLIFY = FALSE)
+      
+    }
+    
+  }
+  
+  # write the changes (if any) to the file 
+  if(length(newval.names) > 0)
+  {
+    writeLines(linetext.new, textpath)
+    out.list = out.list[newval.names]
+  }
+  
+  # return list of current and new parameter values
+  return(out.list)
+}
+
+#' return a list of SWAT text input files and associated variable names 
+my_swat_scan = function(textio.dir)
+{
+  # ARGUMENTS:
+  #
+  # `textio.dir`, character string path to the text input file directory of a SWAT2012 model
+  #
+  # RETURN VALUE:
+  #
+  # A list of all text input configuration files for the SWAT model (all located in the `textio.dir`),
+  # and the SWAT variable names available for reading/writing. List entries are named according
+  # to the file extension (eg. cio, bsn, etc), and are themselves lists of named character vectors:
+  # 
+  #  file = the filename(s) associated to this extension
+  #  link = external filename(s) referenced in this/these files
+  #  scalar = SWAT variable names for single-valued parameters listed in this file
+  #  vector = SWAT variable names for vector-valued parameters listed in this file
+  #
+  # Note that 'link' and 'vector' are included only for relevant files (ie where they are nonempty)
+  # 
+  # DETAILS:
+  #
+  # The first two entries of the return list ('cio' and 'bsn') are global parameter files, which
+  # apply to all subbasins equally. The remainder ('sub', 'hru', 'mgt', 'gw', 'sep'), refer to a set
+  # of files (one per subbasin), which share identically named parameters that can vary at the subbasin
+  # level. These parameters are only listed once (rather than repeated for each subbasin)
+  #
+  
+  # scan all existing files in the directory 
+  all.fn = list.files(textio.dir)
+  
+  ## master watershed file ('file.cio')
+  
+  # open 'file.cio' and parse for standard SWAT variables
+  cio.path = file.path(textio.dir, 'file.cio')
+  cio.raw = readLines(cio.path, warn=FALSE)
+  cio.df = my_swat_readpar(cio.raw)
+  
+  # pull file references (ignoring unassigned ones) and numeric/integer variable names
+  idx.cio.char = (cio.df$type=='character') & (cio.df$value != '')
+  cio.fn.standard = setNames(cio.df$value[idx.cio.char], cio.df$name[idx.cio.char])
+  
+  # define literal strings that precede some special filename entries
+  cio.lb = c(fig='Watershed Configuration',
+             pcp='Precipitation Files', 
+             tmp='Temperature Files',
+             atm='ATMOSPERIC DEPOSITION') # <- this typo intentional!
+  
+  # find these strings and parse the subsequent line number
+  cio.ln = apply(sapply(cio.lb, function(pattern) grepl(pattern, cio.raw)), 2, which)
+  cio.fn.special = setNames(gsub(' ', '', cio.raw[1+cio.ln]), nm=names(cio.ln))
+  
+  # pull all remaining scalar-valued variable names
+  cio.scalar = cio.df$name[!idx.cio.char]
+  
+  # pull vector-valued parameter names
+  cio.vector = names(my_swat_rwvec(cio.path))
+  
+  ## descendants (.bsn, .fig)
+  
+  # open the open basin input (.bsn) file and pull scalars, file references (ignoring unassigned ones)
+  bsn.path = file.path(textio.dir, cio.fn.standard['BSNFILE'])
+  bsn.raw = readLines(bsn.path, warn=FALSE)
+  bsn.df = my_swat_readpar(bsn.raw)
+  bsn.char.idx = (bsn.df$type=='character') & (bsn.df$value != '')
+  bsn.fn.standard = setNames(bsn.df$value[bsn.char.idx], bsn.df$name[bsn.char.idx])
+  bsn.scalar = bsn.df$name[!bsn.char.idx]
+  
+  # open watershed configuration file (.fig) and pull file references
+  fig.raw = readLines(file.path(textio.dir, cio.fn.special['fig']), warn=FALSE)
+  fig.ln = which(grepl('Subbasin: [1-9]+', fig.raw))
+  fig.id = sapply(strsplit(fig.raw[fig.ln], 'Subbasin:'), function(x) as.integer(x[length(x)]))
+  fig.fn = setNames(gsub(' ', '', fig.raw[fig.ln + 1], fixed=TRUE), paste0('sub_', fig.id))
+  sub.n = length(fig.fn)
+  
+  ## scan sub-watershed level files (`sub.n` of them)
+  
+  # in addition to parameters in the .sub files, some are found in linked files 
+  sub.special.toread = c('hru'=T, 'mgt'=T, 'sol'=F, 'chm'=F, 'gw'=T, 'sep'=T)
+  
+  # this pattern grabs the linked filenames
+  sub.regexp = paste(paste0('.', names(sub.special.toread), '\\s*'), collapse='|')
+  
+  # open subbasin files (.sub) in a loop, writing file details into list
+  sub.fn.list = vector(mode='list', length=sub.n) 
+  for(idx.sub in 1:sub.n)
+  {
+    # pull file references
+    sub.raw = readLines(file.path(textio.dir, fig.fn[idx.sub]), warn=FALSE)
+    sub.df =  my_swat_readpar(sub.raw)
+    sub.char.idx = (sub.df$type=='character') & (sub.df$value != '')
+    sub.fn.standard = setNames(sub.df$value[sub.char.idx], sub.df$name[sub.char.idx])
+    
+    # parse special file references
+    sub.special.raw = sub.raw[1+which(grepl('HRU: General', sub.raw))]
+    sub.fn.special = paste(strsplit(sub.special.raw, sub.regexp)[[1]], names(sub.special.toread), sep='.')
+    names(sub.fn.special) = names(sub.special.toread)
+    
+    # copy filenames to list
+    sub.fn.list[[idx.sub]] = c(sub.fn.special, sub.fn.standard)
+    
+  }
+  
+  # flatten list into data frame, appending 'sub' column
+  sub.fn.all = cbind(sub=fig.fn, data.frame(do.call(rbind, sub.fn.list), row.names=names(fig.fn)))
+  
+  # open files corresponding to first subbasin to get scalars (they should all be the same)
+  ext.toread = c('sub', names(sub.special.toread)[sub.special.toread])
+  sub.scalar.list = setNames(vector(mode='list', length=length(ext.toread)), ext.toread) 
+  for(ext in ext.toread)
+  {
+    # scan for SWAT variable names and copy them to the list
+    sub.path = file.path(textio.dir, sub.fn.all[1, ext])
+    sub.df = my_swat_readpar(readLines(sub.path, warn=FALSE))
+    sub.char.idx = (sub.df$type=='character') & (sub.df$value != '')
+    sub.scalar.list[[ext]] = sub.df$name[!sub.char.idx]
+
+  }
+  
+  # organize all sub-watershed files and parameter names into list
+  out.sub = lapply(setNames(nm=ext.toread), function(ext) {
+    list(file=setNames(sub.fn.all[,ext], rownames(sub.fn.all)), 
+         scalar=sub.scalar.list[[ext]])
+  })
+  
+  
+  # pull vector-valued parameter names from .sub files and add to list
+  out.sub$sub$vector = names(my_swat_rwvec(file.path(textio.dir, sub.fn.all[1, 'sub'])))
+  
+  # compile everything for cio 
+  out.cio = list(cio=list(file='file.cio', 
+                          link=c(cio.fn.standard, cio.fn.special), 
+                          scalar=cio.scalar,
+                          vector=cio.vector))
+  
+  # compile everything for bsn
+  out.bsn = list(bsn=list(file=cio.fn.standard['BSNFILE'], 
+                          link=bsn.fn.standard, 
+                          scalar=bsn.scalar))
   
   # finish
-  return(setNames(ln, nm=parname))
+  return(c(out.cio, out.bsn, out.sub))
   
 }
 
-#' Computes Nash–Sutcliffe model efficiency coefficient (NSE)
+#' read/write SWAT configuration text file parameters 
+my_swat_rw = function(textio.dir, param=character(0), textio.scan=list(), subb=integer(0))
+{
+  # ARGUMENTS:
+  #
+  # `textio.dir`, character string path to the text input file directory of a SWAT2012 model
+  # `param`, vector (or list) of either SWAT variable names (character), or numeric values to assign
+  # `textio.scan`, (optional) list, the result of `my_swat_scan(textio.dir)`
+  # `subb`, (optional) integer vector of subbasin IDs
+  #
+  # RETURN VALUE:
+  #
+  # ...
+  # 
+  # DETAILS:
+  #
+  # ...
+  # 
+  
+  # examples 
+  # my_swat_rw(textio.dir)
+  # my_swat_rw(textio.dir, param='IDAL')
+  # my_swat_rw(textio.dir, param=c(IDAL=NA))
+  # my_swat_rw(textio.dir, param='LAT_ORGN')
+  # my_swat_rw(textio.dir, param=c('IDAL', 'LAT_ORGN'))
+  # my_swat_rw(textio.dir, param=c('LAT_ORGN'=1))
+  # my_swat_rw(textio.dir, param=c(IDAL=273, LAT_ORGN=0))
+  # my_swat_rw(textio.dir, param='IPDVAR')
+  # my_swat_rw(textio.dir, param=list(IPDVAR=c(3,5,10,15)))
+  # my_swat_rw(textio.dir, param=list(IPDVAR=c(1,2)))
+  # my_swat_rw(textio.dir, param='RFINC1')
+  # my_swat_rw(textio.dir, param=list(RFINC1=c(0,0,0,0,0,0)))
+  
+  # this argument can be used to prevent repetitive file reads
+  if(length(textio.scan)==0)
+  {
+    # scan directory and read in all config files
+    textio.scan = my_swat_scan(textio.dir)
+  } 
+  
+  # make a vector of available variable names
+  all.parnames = unlist(sapply(textio.scan, function(cfg) c(cfg$scalar, cfg$vector)), use.names=F)
+  
+  # if `param` is unassigned, return a data frame summarizing available SWAT parameters
+  if(length(param)==0)
+  {
+    # print message and return available variable names
+    print('`param` argument specifies the SWAT parameter(s) to read/write') 
+    return(sort(all.parnames))
+  }
+  
+  # if `param` is unnamed, it is treated as a vector/list of parameter names to query
+  input.names = names(param)
+  if(is.null(input.names))
+  {
+    # call the function again with `param` a named list of NAs to prompt read-mode
+    param.new = setNames(as.list(rep(NA, length(param))), unlist(param))
+    return(my_swat_rw(textio.dir, param=param.new, textio.scan=textio.scan, subb=subb))
+    
+  }
+  
+  # convert vectors to lists
+  param = as.list(param)
+  input.names = names(param)
+  
+  # check that names of `param` are all valid SWAT parameter names before proceeding
+  idx.valid = input.names %in% all.parnames
+  if(!all(idx.valid))
+  {
+    print('error: failed to match element(s) of input `param` to SWAT variables:' )
+    print(paste(paste(input.names[!idx.valid], collapse=', '), ' not recognized'))
+    return(NA)
+    
+  }
+  
+  # handle `param` lists with more than one element using recursive call
+  if(length(param)>1)
+  {
+    # apply the function to each list element in `param` using lapply
+    out.list = lapply(seq_along(param), function(idx) {
+      param.singleton = setNames(param[idx], input.names[idx]) 
+      my_swat_rw(textio.dir, param=param.singleton, textio.scan=textio.scan, subb=subb)
+      })
+    
+    # finish with list output
+    return(setNames(out.list, input.names))
+  
+  }
+  
+  # `param` will be of length 1 if we have gotten this far: find its type
+  idx.fn.scalar = sapply(textio.scan, function(cfg) input.names %in% cfg$scalar)
+  idx.fn.vector = sapply(textio.scan, function(cfg) input.names %in% cfg$vector)
+  is.scalar = any(idx.fn.scalar)
+  
+  # build path to container file(s) - always prefer subbasin-level files (which have priority)
+  idx.fn = which(idx.fn.scalar | idx.fn.vector)
+  if(length(idx.fn) == 2)
+  {
+    idx.fn = idx.fn[-1]
+  }
+  fn = textio.scan[[idx.fn]]$file
+  textio.file = file.path(textio.dir, fn)
+  
+  # check if parameter is global or subbasin-level (appearing in multiple files)
+  is.global = length(textio.file) == 1
+  
+  # when a subset of subbasins is specified, only scan the associated subset of files
+  if(length(subb) > 0 & !is.global)
+  {
+    # extract the subbasin IDs
+    subb.all = as.integer(gsub('sub_', '', names(fn)))
+    
+    # check for unmatched input subbasin IDs
+    idx.subb.valid = subb %in% subb.all
+    if(any(!idx.subb.valid))
+    {
+      print(paste('error: subbasin IDs', paste(subb[idx.subb.valid], collapse=', '), 'not found'))
+      return(NA)
+    }
+    
+    # take the subset
+    idx.subb = match(subb, subb.all)
+    fn = fn[idx.subb]
+    textio.file = textio.file[idx.subb]
+  }
+
+  # non-vector and vector cases are handled by separate helper functions
+  if(is.scalar)
+  {
+    # read mode:
+    if(is.na(unlist(param)))
+    {
+      # read in all parameter values (from all selected files)
+      textio.df = lapply(textio.file, function(x) my_swat_readpar(readLines(x, warn=FALSE)))
+      
+      # extract the requested parameter(s)
+      param.idx = textio.df[[1]]$name == input.names
+      param.type = textio.df[[1]]$type[param.idx]
+      param.out = as(sapply(textio.df, function(df) df$value[param.idx]), param.type)
+      
+      # if returning from multiple subbasins, name according to subbasin ID
+      if(!is.global)
+      {
+        names(param.out) = names(fn) 
+        
+      } else {
+        
+        # otherwise set name to SWAT variable name
+        names(param.out) = input.names 
+      }
+      
+      # return the requested parameters 
+      return(param.out)
+      
+      
+    } else {
+      # write mode:
+      
+      # write mode for global simply calls another helper function
+      if(is.global)
+      {
+        return(my_swat_writepar(textio.file, newval=unlist(param)))
+        
+      } else {
+        
+        out.list = lapply(textio.file, function(x) my_swat_writepar(x, newval=unlist(param)))
+        return(setNames(out.list, names(fn)))
+      }
+    }
+    
+  } else {
+    # handle vector-valued parameters
+    
+    # read mode:
+    if(anyNA(unlist(param)))
+    {
+      # read in all vector-valued parameters using a helper function
+      param.out = lapply(textio.file, function(x) my_swat_rwvec(x)[[input.names]]$old)
+      
+      # if returning from multiple subbasins, name according to subbasin ID
+      if(!is.global)
+      {
+        names(param.out) = names(fn) 
+        
+      } else {
+        
+        # otherwise set name to SWAT variable name
+        names(param.out) = input.names 
+      }
+      
+      # return the requested parameters 
+      return(param.out)
+      
+    } else {
+      # write mode:
+      
+      # write mode for global simply calls another helper function
+      if(is.global)
+      {
+        out.rwvec = my_swat_rwvec(textio.file, newval=param)
+        out.df = data.frame(do.call(rbind, out.rwvec[[1]][c('old', 'new')]))
+        return(setNames(list(out.df), input.names))
+        
+      } else {
+        
+        out.rwvec = lapply(textio.file, function(x) my_swat_rwvec(x, newval=param))
+        out.list = lapply(out.rwvec, function(x) data.frame(do.call(rbind, x[[1]][c('old', 'new')]))) 
+        return(setNames(out.list, names(fn)))
+      }
+    }
+    
+  }
+  
+  #print(input.names)
+  
+  
+  # # If the value of `param[[1]]` is NA, we are in read-mode
+  # if(!is.na(param[[1]]))
+  # {
+  #   # coerce to list and call the function again
+  #   return(my_swat_rw(textio.dir, as.list(param), textio.scan=textio.scan))
+  # }
+  
+  
+  
+}
+
+
+
+########## DEPRECATED
+#' list all writeable parameters, or look up the line numbers corresponding to a particular set
+#' my_swat_parln = function(filetext, parname, nextline=FALSE)
+#' {
+#'   # ARGUMENTS:
+#'   #
+#'   # `filetext`, character string vector, the (line by line) raw text from a SWAT config file 
+#'   # `parname`, character string vector, the SWAT variable names (usually all uppercase) to look up
+#'   # `nextline`, boolean indicating to match `parname` exactly (without the '|', see DETAILS)
+#'   #
+#'   # RETURN VALUE:
+#'   #
+#'   # if `parname==''`, return value is a named vector of line numbers for all parameters found in
+#'   # `filetext`. Otherwise, it is a named integer vector of same length as `parname`, matching the
+#'   # input SWAT variable names to the line numbers on which their values can be found in `filetext`.
+#'   # If multiple matches are found for any of the input variables, the function prints an error and
+#'   # returns NA
+#'   #
+#'   # DETAILS:
+#'   #
+#'   # Most SWAT parameters are followed on the same line by a '|' symbol, indicating the beginning
+#'   # of a comment which supplies the variable name and a short explanation. Most of these are floats,
+#'   # a few are integers, and a few are character strings indicating filenames.
+#'   #
+#'   # Other filenames are listed without comment - instead there is a description on the preceding
+#'   # line, and there is no '|' symbol or uppercase variable name to pattern-match. To parse these
+#'   # lines, users should set the `nextline=TRUE`, which looks for exact matches to `parname` in any
+#'   # part of a line's text, and returns the subsequent line number.
+#'   
+#'   # prepare the string literals to search for, handling special case differently
+#'   sl = paste0('| ', parname)
+#'   if(special) { sl = parname }
+#'   
+#'   # for each of these, search all lines for any instances of the string: produces matrix of booleans...
+#'   slmat = sapply(sl, function(pattern) {
+#'     sapply(filetext, function(linetext) grepl(pattern, linetext, fixed=TRUE)) })
+#'   
+#'   # ... where each input parameter name correspond to a column, each row a line number
+#'   ln = apply(as.matrix(slmat), 2, which)
+#'   
+#'   # count the number of matches found for each input parameter name
+#'   if(length(ln) == 0)
+#'   {
+#'     # when none of the `parname` values are found in `filetext`, `ln` becomes `integer(0)`
+#'     n.matches = rep(0, length(parname))
+#'     
+#'   } else {
+#'     
+#'     n.matches = sapply(ln, length)
+#'   }
+#'   
+#'   # if any of the `parname` entries didn't find a match, warn user
+#'   if(any(n.matches==0))
+#'   {
+#'     print('error: the following variables were not found in input text')
+#'     print(parname[n.matches==0])
+#'   }
+#'   
+#'   # error in case of multiple matches
+#'   if(any(n.matches>1))
+#'   {
+#'     print('warning: multiple matches for one or more entries of `parname`. Match counts:')
+#'     print(setNames(apply(slmat, 2, sum), nm=parname))
+#'     print('returning NA')
+#'     return(NA)
+#'   }
+#'   
+#'   # handle special case
+#'   if(special) { ln = ln + 1 }
+#'   
+#'   # handle case of empty input (`parname=''`), which matches all variables
+#'   if(identical(parname, ''))
+#'   {
+#'     # parse the variable names by grabbing line text attribute left by `grepl`
+#'     parname.raw = sapply(strsplit(attr(ln, 'dimnames')[[1]], ':|\\|'), function(xx) xx[[2]])
+#'     parname = gsub(' ', '', parname.raw)
+#'   }
+#'   
+#'   # finish
+#'   return(setNames(as.vector(ln), nm=parname))
+#'   
+#' }
+#' 
+#' #' read/write numeric parameters in SWAT configuration text files
+#' my_swat_rwnum = function(textpath, parname=character(0), newval=numeric(0), type='f')
+#' {
+#'   # ARGUMENTS:
+#'   #
+#'   # `textpath`, character string giving the full path to the swat config file
+#'   # `parname`, vector of character strings giving the SWAT parameter names to query
+#'   # `newval`, (optional) vector of new parameter values, to overwrite the existing ones
+#'   # `type`, character string providing data type: either 'f' = floating point, or 'i' = integer
+#'   #
+#'   # RETURN VALUE:
+#'   #
+#'   # A numeric vector of the same length as `parname` (or `newval`, if `parname` is not supplied; See
+#'   # below). This reports the (numeric) values of the parameters as they are written in the SWAT text
+#'   # file located at `textpath`.
+#'   # 
+#'   # If `newval` is supplied, its values are written to the SWAT text file. When `newval` is unnamed, 
+#'   # the function uses the ordering in `parname` to match values to parameter names. Otherwise, the
+#'   # names of the `newval` entries are interpreted as SWAT variable names, and `parname` is ignored
+#'   # (and can be ommitted).
+#'   
+#'   # set (max) number of decimal places to use in character representations
+#'   dpmax = 6
+#'   
+#'   # set a whitespace suffix for parameters (space separating it from comment)
+#'   suffix.s = strrep(' ', 4)
+#'   
+#'   # give priority to names of `newval` when they are provided in combination with `parname`
+#'   if(!is.null(names(newval))) { parname = names(newval) }
+#'   
+#'   # open the file and parse for relevant line numbers 
+#'   text.raw = readLines(textpath)
+#'   parname.ln = my_swat_parln(text.raw, parname)
+#'   linetext = setNames(text.raw[parname.ln], nm=parname)
+#'   
+#'   # regular expression to trim whitespace and comments
+#'   comment.regexp = '\\|.+'
+#'   
+#'   # visual representation of regexp matches, useful for debugging:
+#'   #library(stringr)
+#'   #str_view_all(linetext, comment.regexp)
+#'   
+#'   # grab string containing the parameter (with whitespace) and parse as numeric
+#'   partxt = sapply(linetext, function(string) strsplit(string, comment.regexp)[[1]])
+#'   parval = sapply(partxt, as.numeric)
+#'   
+#'   # conditional for write-mode
+#'   if(length(newval) > 0)
+#'   {
+#'     # identify position of comment start position (not sure if always pos 20)
+#'     partxt.n = sapply(partxt, nchar)
+#'     par.maxn = partxt.n - nchar(suffix.s)
+#'     
+#'     # for floating point, we round to a known precision level (set by dpmax)
+#'     if(type=='f') { newval.s = format(round(newval, dpmax), nsmall=dpmax) }
+#'     
+#'     # SWAT requires the decimal point be omitted for integer type
+#'     if(type=='i') { newval.s = format(round(newval, dpmax), nsmall=0) }
+#'     
+#'     # truncate (as needed) to stay within max width
+#'     idx.trunc = sapply(newval.s, nchar) > par.maxn
+#'     if(any(idx.trunc))
+#'     {
+#'       newval.s[idx.trunc] = sapply(which(idx.trunc), function(idx) {
+#'         substr(newval.s[idx], 1, par.maxn[idx]) })
+#'       
+#'     }
+#'     
+#'     # pad with leading whitespace to produce strings of exactly max width
+#'     if(any(!idx.trunc))
+#'     {
+#'       newval.s[!idx.trunc] = sapply(which(!idx.trunc), function(idx) {
+#'         paste0(strrep(' ', par.maxn[idx] - nchar(newval.s[idx])), newval.s[idx]) })
+#'       
+#'     }
+#'     
+#'     # warn if truncation produced any precision issues detectable in R (15 decimal places or so)
+#'     idx.imprecise = as.numeric(newval.s) != unname(newval)
+#'     if(any(idx.imprecise))
+#'     {
+#'       print('warning: supplied parameter value(s) required truncation, as follow:')
+#'       print(rbind(original=newval, truncated=as.numeric(newval.s))[, idx.imprecise, drop=FALSE])
+#'       
+#'     }
+#'     
+#'     # add terminal whitespace
+#'     newval.s = paste0(newval.s, suffix.s)
+#'     
+#'     # substitute replacement values into old line strings
+#'     linetext.out =  mapply(gsub, partxt, newval.s, linetext)
+#'     text.raw[parname.ln] = linetext.out
+#'     
+#'     # write changes to SWAT text file
+#'     writeLines(text.raw, textpath)
+#'     
+#'   }
+#'   
+#'   # return (original) parameter values
+#'   return(setNames(parval, nm=parname))
+#' }
+
+#' #' read/write integer vectors in SWAT configuration text files
+#' my_swat_rwvec = function(textpath, parname=character(0), newval=numeric(0))
+#' {
+#'   # ARGUMENTS:
+#'   #
+#'   # `textpath`, character string giving the full path to the swat config file
+#'   # `parname`, vector of character strings giving the SWAT parameter names to query
+#'   # `newval`, (optional) list of new integer vectors, to replace the ones listed in `linetxt`
+#'   #
+#'   # RETURN VALUE:
+#'   #
+#'   # A list of integer vectors, the same length as `parname` (or `newval`, if `parname` is not
+#'   # supplied; See below). This reports the integer vectors as they are written in the SWAT text
+#'   # file located at `textpath`.
+#'   # 
+#'   # If `newval` is supplied, its values are written to the SWAT text file. When `newval` is unnamed, 
+#'   # the function uses the ordering in `parname` to match values to parameter names. Otherwise, the
+#'   # names of `newval` entries are interpreted as SWAT variable names, and `parname` is ignored (and
+#'   # can be ommitted).
+#'   
+#'   # set a whitespace delimiter for vector entries
+#'   delim.s = strrep(' ', 3)
+#'   
+#'   # give preference to names of `newval` when they are provided in combination with `parname`
+#'   if(!is.null(names(newval))) { parname = names(newval) }
+#'   
+#'   # open the file and parse for relevant line numbers 
+#'   text.raw = readLines(textpath)
+#'   parname.ln = my_swat_parln(text.raw, parname, special=TRUE)
+#'   linetext = setNames(text.raw[parname.ln], nm=parname)
+#'   
+#'   # regular expression to identify delimiters
+#'   delim.regexp = '[\\s]+'
+#'   
+#'   # visual representation of regexp matches, useful for debugging:
+#'   #library(stringr)
+#'   #str_view_all(linetext, delim.regexp)
+#'   
+#'   # parse string containing the parameters (with whitespace) as integer
+#'   parval = lapply(linetext, function(txt) unlist(read.table(textConnection(txt)), use.names=FALSE))
+#'   
+#'   # conditional for write-mode
+#'   if(length(newval) > 0)
+#'   {
+#'     # compute lengths of existing parameters
+#'     parval.len = sapply(parval, length)
+#'     newval.len = sapply(newval, length)
+#'     
+#'     # if any of the new parameter vectors are longer, truncate them and warn the user
+#'     idx.over = newval.len > parval.len
+#'     if(any(idx.over))
+#'     {
+#'       print('warning: supplied parameter vectors(s) longer than existing vectors.')
+#'       newval.trunc = mapply(function(x, y) x[1:y], newval[idx.over], parval.len[idx.over])
+#'       newval[idx.over] = newval.trunc
+#'       newval.len = sapply(newval, length)
+#'     }
+#'     
+#'     # pad replacement integer vectors with zeros if necessary
+#'     newval.padded = mapply(function(x, y, z) c(x, rep(0, z-y)), 
+#'                            newval, 
+#'                            newval.len, 
+#'                            parval.len,
+#'                            SIMPLIFY=FALSE)
+#'     
+#'     # coerce to character strings
+#'     newval.s = sapply(newval.padded, function(vec) paste(c('', vec), collapse=delim.s))
+#'     
+#'     # substitute replacement values into old line strings
+#'     text.raw[parname.ln] = newval.s
+#'     
+#'     # write changes to SWAT text file
+#'     writeLines(text.raw, textpath)
+#'     
+#'   }
+#'   
+#'   # return (original) parameter values
+#'   return(setNames(parval, nm=parname))
+#' }
+############
+
+
+#' compute Nash–Sutcliffe model efficiency coefficient (NSE) 
 my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 {
   # compute the standard NSE coefficient
