@@ -3,6 +3,7 @@
 "snotel","data/prepared/snotel_sites.rds","R sf object","sfc object with SNOTEL sensor locations in UYRW"
 "csv_ghcnd","data/source/ghcnd_sites.csv","CSV","metadata list for GHCND sites (unchanged)"
 "ghcnd","data/prepared/ghcnd_sites.rds","R sf object","sfc object with GHCN Daily sensor locations in UYRW"
+"ghcnd_data","data/prepared/ghcnd_data.rds","R list object","list of data frames with GHCN Daily data in UYRW"
 "pars_tmap","data/tmap_get_weatherstations.rds","R list object","parameters for writing png plots using tmap and tm_save"
 "img_weatherstation","graphics/weatherstation_sites.png","png graphic","image of SNOTEL and GHCND site locations in the UYRW"
 "metadata","data/get_weatherstations_metadata.csv","CSV","list files of files written by get_weatherstations.R"
