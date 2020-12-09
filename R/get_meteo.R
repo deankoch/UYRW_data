@@ -708,7 +708,7 @@ if(any(idx.unzipped))
   
 }
 
-#' visualization: make a plot of the three datasets side by side for precip on a common date
+#' visualization: make a plot of the three datasets side by side for tmax on a common date
 
 
 #' create the multi-panel raster image
