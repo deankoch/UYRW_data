@@ -8,4 +8,5 @@
 "pnwnamet_source","data/source/pnwnamet","directory","source NetCDF files from PCIC PNWNAmet"
 "pnwnamet_uyrw","data/prepared/pnwnamet_uyrw.rds","R list object","storage for PNWNAmet data clipped to UYRW"
 "pnwnamet_rasters","data/prepared/pnwnamet_uyrw_rasters","directory","storage for clipped PNWNAmet data as multiband rasters"
+"img_meteo","graphics/meteo_gridded.png","png graphic","image comparing three gridded meteorological datasets for the UYRW"
 "metadata","data/get_meteo_metadata.csv","CSV","list files of files written by get_meteo.R"

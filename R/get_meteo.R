@@ -54,20 +54,25 @@
 #' The Daymet, PNWNAmet, and Livneh source files will require 1GB, 82GB, and 58GB of space, respectively,
 #' after compression. Some of the files must be downloaded uncompressed. Expect these downloads to take
 #' several days in total to complete. This script downloads the full source datasets, then extracts/imports
-#' the relevant subsets containing data on the URYW, writing them into much smaller R data (rds) files. 
+#' the relevant subsets containing data on the URYW, writing them into much smaller R data (rds) files.
+#' These data may be converted directly to SWAT weather input files later on, so wherever possible I have
+#' used the SWAT variable names 'pcp', 'tmin' and 'tmax', 'slr', 'wnd', 'hmd' in prepared outputs.
 #' 
 #' [get_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 #' should be run before this script.
 #' 
 #'
 #' ## libraries
-#' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
+#' [`daymetr`] automates the retrieval of Daymet rasters and [`RColorBrewer`](https://colorbrewer2.org/)
+#' loads some nice colour palettes See the
+#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 #' for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
 #library(R.utils)
 library(daymetr)
 library(stringr)
+library(RColorBrewer)
 
 #'
 #' ## project data
@@ -126,7 +131,13 @@ files.towrite = list(
   c(name='pnwnamet_rasters',
     file=file.path(out.subdir, 'pnwnamet_uyrw_rasters'), 
     type='directory',
-    description='storage for clipped PNWNAmet data as multiband rasters')
+    description='storage for clipped PNWNAmet data as multiband rasters'),
+  
+  # graphic showing example gridded weather data (tmax) for the UYRW
+  c(name='img_meteo',
+    file=file.path(graphics.dir, 'meteo_gridded.png'),
+    type='png graphic',
+    description='image comparing three gridded meteorological datasets for the UYRW')
 
 )
 
@@ -185,7 +196,7 @@ uyrw.buff = 3e3 # meters
 #' 
 
 # set variable names and filenames from PCIC, and file paths for the downloads
-pcic.vn = setNames(nm=c('tmin', 'tmax', 'prcp', 'wind')) # my names
+pcic.vn = setNames(nm=c('tmin', 'tmax', 'pcp', 'wnd')) # SWAT names
 pcic.vars = setNames(c('tasmin', 'tasmax', 'pr', 'wind'), nm=pcic.vn) # source names
 pcic.fn = paste0('PNWNAmet_', pcic.vars, '.nc.nc')
 pcic.paths = setNames(here(meteo.meta['pnwnamet_source', 'file'], pcic.fn), nm=pcic.vn)
@@ -344,7 +355,7 @@ livneh.fn.prefix = 'livneh_NAmerExt_15Oct2014'
 livneh.fn.suffix = 'nc.bz2'
 yrs.tofetch = 1950:2013
 months.tofetch = formatC(1:12, width=2, flag='0')
-livneh.vn = c('prec', 'tmax', 'tmin', 'wind') # my names
+livneh.vn = c('pcp', 'tmax', 'tmin', 'wnd') # SWAT names, in order produced by my_livneh_reader
 
 # construct list of files to download and their URLs
 yrmonth.tofetch = sapply(yrs.tofetch, function(yr) paste0(yr, months.tofetch))
@@ -482,7 +493,8 @@ my_dir(daymet.storage)
 daymet.bbox = st_bbox(uyrw.poly.geo)[c('ymax', 'xmin', 'ymin', 'xmax')]
 
 # select the subset of years/variables to download, and paths to save them
-daymet.vars = setNames(nm=c('tmin', 'tmax', 'srad', 'prcp', 'swe'))
+daymet.vars = setNames(nm=c('tmin', 'tmax', 'srad', 'prcp', 'swe')) # daymet names
+swat.vars = c('tmin', 'tmax', 'slr', 'pcp', 'swe') # SWAT names
 daymet.years = 1980:2019
 daymet.fns.prefix = lapply(daymet.vars, function(varname) paste0(varname, '_daily_', daymet.years))
 daymet.fns = lapply(daymet.vars, function(varname) paste0(daymet.fns.prefix[[varname]], '_ncss.nc'))
@@ -572,7 +584,6 @@ daymet.out.path = here(meteo.meta['daymet_uyrw', 'file'])
 # this directory stores multiband rasters (band=day) for each variable
 daymet.out.raster.dir = here(meteo.meta['daymet_raster', 'file'])
 
-
 # import relevant subset of daymet dataset and write output
 if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
 {
@@ -638,7 +649,7 @@ if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
   
   # create the raster storage directory and write the rasters to disk
   my_dir(daymet.out.raster.dir)
-  daymet.out.rasters = setNames(file.path(daymet.out.raster.dir, paste0(daymet.vn, '.tif')), nm=daymet.vn)
+  daymet.out.rasters = setNames(file.path(daymet.out.raster.dir, paste0(swat.vars, '.tif')), nm=daymet.vn)
   lapply(daymet.vn, function(varname) {
     writeRaster(daymet.stack[[varname]], daymet.out.rasters[varname])
   })
@@ -647,6 +658,9 @@ if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
   daymet.tab = lapply(daymet.vn, function(vn) {
     do.call(rbind, lapply(daymet.in, function(yrmo) yrmo$tab[[vn]]))
   })
+  
+  # rename variables
+  names(daymet.tab) = swat.vars
   
   # create date vector to match rows and bands
   origin.date = as.Date(paste(daymet.years[1], '01', '01', sep='/')) - 1
@@ -693,6 +707,81 @@ if(any(idx.unzipped))
   close(pb)
   
 }
+
+#' visualization: make a plot of the three datasets side by side for precip on a common date
+
+
+#' create the multi-panel raster image
+#' ![gridded reconstructions](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo.png)
+if(!file.exists(here(meteo.meta['img_meteo', 'file'])))
+{
+  # pull the dates vectors for all datasets and print their ranges
+  wdat.names = c('pnwnamet', 'livneh', 'daymet')
+  wdat.paths = setNames(c(pcic.out.path, livneh.out.path, daymet.out.path), wdat.names)
+  dates.meteo = lapply(wdat.paths, function(path) readRDS(path)$dates)
+  dates.range = sapply(dates.meteo, function(dates) paste(format(range(dates), '%Y'), collapse=' to '))
+  
+  # define variable to extract and identify the raster files to open
+  vn.eg = 'tmax'
+  fn.tif = paste0(vn.eg, '.tif')
+  tif.paths = sapply(wdat.names, function(nm) file.path(here(meteo.meta[paste0(nm, '_raster'), 'file']), fn.tif))
+  
+  # set a date to use as example and open this band of the rasterstack for each model 
+  date.eg = as.Date('1987-07-01')
+  vn.tif = lapply(wdat.names, function(nm) raster(tif.paths[nm], band=which(dates.meteo[[nm]]==date.eg)))
+  
+  # create a masking polygon with buffer around perimeter of watershed
+  uyrw.poly.buff = st_buffer(uyrw.poly, uyrw.buff)
+  uyrw.poly.buff.sp = as(uyrw.poly.buff, 'Spatial')
+  uyrw.poly.sp = as(uyrw.poly, 'Spatial')
+  
+  # load hillshade from disk and clip to perimeter, leaving buffer to draw over with tmax data
+  dem.meta = my_metadata('get_dem')
+  hs.tif = raster(here(dem.meta['hillshade', 'file']))
+  hsclip.tif = crop(mask(hs.tif, uyrw.poly.sp), uyrw.poly.buff.sp)
+  
+  # upsample the temperature rasters to same grid as hillshade (for plotting purposes)
+  vn.warped.tif = lapply(vn.tif, function(tif) projectRaster(tif, hsclip.tif, method='ngb'))
+  # Note: gdalwarp can do this much faster, but with only 3 small rasters, `projectRaster` is easier;
+  
+  # load the plotting parameters used in get_basins.R
+  tmap.pars = readRDS(here(my_metadata('get_basins')['pars_tmap', 'file']))
+  
+  # set up two palettes: one for hillshading and one for temperature
+  nc = 1e3
+  hs.palette = gray(0:nc/nc)
+  tmax.palette = rev(brewer.pal('Spectral', n=11))
+  legend.string = 'tmax (C)'
+  tmax.range = apply(sapply(vn.warped.tif, function(tif) cellStats(tif, range)), 1, range)[c(1,4)]
+  tmax.breaks = pretty(tmax.range)
+  
+  # loop to build the three panels
+  tmap.tmax = vector(mode='list', length=length(vn.warped.tif))
+  for(idx.src in 1:length(vn.warped.tif))
+  {
+    title.string = paste0(names(dates.range)[idx.src],' (', dates.range[idx.src], ' daily)\n', date.eg)
+
+    # build the tmap object
+    tmap.tmax[[idx.src]] = tm_shape(hsclip.tif, raster.downsample=T, bbox=st_bbox(uyrw.poly)) +
+        tm_raster(palette=hs.palette, legend.show=FALSE) +
+      tm_shape(vn.warped.tif[[idx.src]], raster.downsample=T) +
+        tm_raster(palette=tmax.palette, title=legend.string, style='cont', alpha=0.9, breaks=tmax.breaks) +
+      tm_shape(uyrw.poly) +
+        tm_borders(col='black') +
+      tmap.pars$layout +
+      tm_layout(main.title=title.string,
+                legend.position = c('right', 'top')) 
+
+  }
+
+  # render the plot
+  tmap_save(tm=tmap_arrange(tmap.tmax), 
+            here(meteo.meta['img_meteo', 'file']), 
+            width=3*tmap.pars$png['w'], 
+            height=tmap.pars$png['h'], 
+            pointsize=tmap.pars$png['pt'])
+}
+
 
 #+ include=FALSE
 # Development code
