@@ -15,7 +15,9 @@ be run before this script.
 ## libraries
 
 [`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
-is used to fetch the USGS data. See the [get\_helperfun.R
+is used to fetch the USGS data and
+[`RColorBrewer`](https://colorbrewer2.org/) for colour palettes. See the
+[get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
 for other required libraries
 
@@ -23,6 +25,7 @@ for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
 library(dataRetrieval)
+library(RColorBrewer)
 #?library(waterData)
 ```
 
