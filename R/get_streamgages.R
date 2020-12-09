@@ -41,6 +41,12 @@ files.towrite = list(
     type='R sf object', 
     description='sfc object with USGS sensor locations in UYRW'),
   
+  # USGS data tables 
+  c(name='USGS_data',
+    file=file.path(out.subdir, 'USGS_data.rds'),
+    type='R list object',
+    description='list of data frames with USGS daily streamflow values in UYRW'),
+  
   # parameter code descriptions for NWIS time-series data
   c(name='USGS_paramcodes',
     file=file.path(data.dir, 'USGS_paramcodes.csv'), 
@@ -74,6 +80,18 @@ uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 uyrw.waterbody = readRDS(here(basins.meta['waterbody', 'file']))
 uyrw.mainstem = readRDS(here(basins.meta['mainstem', 'file']))
 uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
+
+#' The dates associated with daily mean USGS data are provided in the local time zone. However, for
+#' non-daily data (which have an associated time of day), time/date info is provided in UTM by default 
+#' (eg. for the UYRW, this is an offset of +7 hours). For convenience, we override this default and
+#' request all data in US/Mountain time: 
+
+tz.uyrw = 'US/Mountain'
+
+#' Some USGS records of discharge are given in imperial units, others in metric. After downloading the raw
+#' data, we will convert all measurements to a common unit (the one used in SWAT), defined here:
+
+unit.discharge = 'm^3/s'
 
 #'
 #' ## Find sites
@@ -128,9 +146,9 @@ if(!file.exists(here(streamgages.meta['USGS_sites', 'file'])))
   
 }
 
-#' This dataset is quite large, with over 8500 location-times indexed. Mostly these are one-time measurements.
-#' Time-series data at regular (daily) intervals will be more useful, when it comes to fitting a hydrology model.
-#' Parse the USGS data to find 88 time-series entries: 
+#' This dataset is quite large, with over 8500 location-times indexed. However these are mostly one-time
+#' measurements, and the number of distinct locations is <400. Time-series data at regular (daily) intervals
+#' will be most useful when it comes to fitting a hydrology model, and there are 88 such records.
 # 
 idx.ts = usgs.sf$data_type_cd %in% c('dv', 'iv', 'id')
 sum(idx.ts)
@@ -139,11 +157,12 @@ sum(idx.ts)
 #' more information about what these `data_type` codes mean). 
 #' 
 
-#' Information on parameter codes can also be downloaded using the Water Services REST interface
+#' Information on parameter codes ('parm_nm') can also be downloaded using the Water Services REST interface
+#' or from [the USGS website](https://help.waterdata.usgs.gov/codes-and-parameters/parameters).
 if(!file.exists(here(streamgages.meta['USGS_paramcodes', 'file'])))
 {
-  # query the meaning of the parameter column codes corresponding to time series in our area
-  uyrw.paramcodes = unique(usgs.sf[idx.ts,]$parm_cd)
+  # query the meaning of the parameter column codes relevant to our area
+  uyrw.paramcodes = unique(usgs.sf$parm_cd)
   paramcodes.url = 'https://help.waterdata.usgs.gov/code/parameter_cd_nm_query'
   paramcodes.query = paste0(paramcodes.url, '?parm_nm_cd=', uyrw.paramcodes, '&fmt=rdb')
   paramcodes.list = lapply(paramcodes.query, function(urlstring) read.csv(url(urlstring), comment.char='#', sep='\t')[-1,])
@@ -159,64 +178,183 @@ if(!file.exists(here(streamgages.meta['USGS_paramcodes', 'file'])))
 }
 
 #'
-#' ## Download streamflow time series
+#' ## Download streamflow time series data
 #' 
+#' This chunk uses the `DataRetrieval` package, which downloads from the
+#' [USGS Water Services](https://waterservices.usgs.gov/). We will likely come back to this web service for
+#' other data types since they also offer: time series of sediment discharge, temperature, turbidity, snow
+#' depth, and precipitation, among others. For now we download only the streamflow discharge data.
+#' 
+#' Aim to run this chunk at night to minimize your impact on the waterdata.usgs.gov (see their best
+#' practices FAQ [here](https://help.waterdata.usgs.gov/faq/automated-retrievals)). Big requests may lead
+#' to timeout errors if the server is busy, in which case the code will fail with `discharge.dat` incomplete.
+#' 
+#' If this happens, don't re-run the script. Wait an hour or so then resume the script by adjusting the
+#' indexing vector of the `for` loop to start at whichever value of `idx.site` you left off (instead of `1`).
+#' Earlier sites should still be there in `discharge.dat` unless you wipe it after the error.
 
+if(!file.exists(here(streamgages.meta['USGS_data', 'file'])))
+{
+  # determine which parameter codes correspond to streamflow:
+  discharge.df = paramcodes.df %>% filter(group=='Physical', grepl('[Dd]ischarge', parm_nm))
+  
+  # note that '30208', '30209' appear to duplicate the times/dates in '00060', '00061', yet they
+  # consistently underestimate the flow. This might be a unit conversion problem? 
+  # Keep only the former:
+  discharge.df = discharge.df %>% filter(parameter_cd %in% c('00060', '00061'))
+
+  # find the subset of usgs records containing these data
+  usgs.discharge.sf = usgs.sf %>% filter(parm_cd %in% discharge.df$parameter_cd)
+  
+  print(unique(usgs.discharge.sf$data_type_cd))
+  # we have three data types in this region:
+  # 'qw' (water-quality related)
+  # 'dv' (daily)
+  # 'uv' (regular but not dv, often sub-daily)
+
+  # find all relevant site codes, and the total number of days in the record at each site
+  site.codes = unique(usgs.discharge.sf$site_no)
+  n.sites = length(site.codes)
+  n.obs = usgs.discharge.sf %>% 
+    group_by(site_no) %>% 
+    summarize(n=sum(as.integer(count_nu))) %>% 
+    pull(n)
+  
+  # download the data and store as nested list of dataframes - one top level entry per site
+  discharge.dat = setNames(vector(mode='list', length=n.sites), site.codes)
+  print(paste0('downloading ', sum(n.obs), ' days of records (across ', n.sites, ' sites)...'))
+  for(idx.site in 60:n.sites)
+  {
+    # pull site-specific info
+    site.no = site.codes[idx.site]
+    site.sf = usgs.discharge.sf %>% filter(site_no==site.no)
+    site.string = paste0(site.sf$station_nm[1], ' (#', site.no, ') ...')
+    
+    # create data list for this site and loop to download records by data type
+    progress.string = paste0('[progress: ', idx.site, '/', n.sites, '] ')
+    job.string = paste0('downloading ', n.obs[idx.site], ' streamflow record(s) from: ', site.string)
+    print(paste0(progress.string, job.string))
+    discharge.dat.entry = vector(mode='list', length=nrow(site.sf))
+    for(idx.entry in 1:nrow(site.sf))
+    {
+      # determine data type (this determines which web service to use)
+      site.dtype = site.sf$data_type_cd[idx.entry]
+      site.pcode = site.sf$parm_cd[idx.entry]
+      site.start = site.sf$begin_date[idx.entry]
+      
+      # in the code below I use the default endDate argument '', shorthand for maximum, whereas
+      # startDate is specified based on the metadata in `usgs.sf`. This should download the complete
+      # time series of each site/paramcode
+      
+      # water quality
+      if(site.dtype == 'qw')
+      {
+        # download the raw data from water quality service (specifying UTM time zone)
+        nwis.raw = renameNWISColumns(readNWISqw(siteNumbers=site.no, 
+                                                parameterCd=site.pcode,
+                                                expanded=FALSE,
+                                                startDate=site.start,
+                                                endDate='',
+                                                tz=tz.uyrw))
+        
+        # much of the data frame has NA or irrelevant fields - tidy up
+        nwis.varname = paste0('p', site.pcode)  
+        names.tidier = c('date', 'time', 'flow')
+        nwis.tidier = setNames(nwis.raw[, c('sample_dt', 'sample_tm', nwis.varname)], names.tidier)
+      }
+      
+      # daily values
+      if(site.dtype == 'dv')
+      {
+        # download the raw data (daily mean) from water quality service 
+        nwis.raw = renameNWISColumns(readNWISdv(siteNumbers=site.no, 
+                                                parameterCd=site.pcode,
+                                                startDate=site.start,
+                                                endDate='',))
+        
+        # tidy up
+        names.tidier = c('date', 'flow')
+        nwis.tidier = setNames(nwis.raw[, c('Date', 'Flow')], names.tidier)
+      }
+      
+      # unit values
+      if(site.dtype == 'uv')
+      {
+        # download the raw data (daily mean) from water quality service 
+        nwis.raw = renameNWISColumns(readNWISuv(siteNumbers=site.no, 
+                                                parameterCd=site.pcode,
+                                                startDate=site.start,
+                                                endDate='',
+                                                tz=tz.uyrw))
+        
+        # tidy up, separating dates and (UTM) times, for consistency with 'qw' values 
+        nwis.tidier = nwis.raw %>% 
+          mutate(date=format(dateTime, '%Y-%m-%d')) %>%
+          mutate(time=format(dateTime, '%H:%M:%S')) %>%
+          select(date, time, Flow_Inst) %>%
+          as.data.frame()
+        
+        # tidy up
+        names.tidier = c('date', 'time', 'flow')
+        nwis.tidier = setNames(nwis.tidier[, c('date', 'time', 'Flow_Inst')], names.tidier)
+      }
+      
+      # convert units to standard metric (if necessary)
+      units.src = attr(nwis.raw, 'variableInfo')[['unit']]
+      nwis.tidier$flow = units::set_units(nwis.tidier$flow, units.src, mode='standard') %>%
+        units::set_units(unit.discharge, mode='standard')
+
+      # copy to list 
+      discharge.dat.entry[[idx.entry]] = nwis.tidier
+    }
+    
+    # add completed list entry to full storage list along with corresponding slice of sf object
+    discharge.dat[[idx.site]] = list(sf=site.sf, dat=discharge.dat.entry)
+  }
+  
+  # put data in a list along with point feature geometry and metadata, save to disk
+  discharge.list = list(sf=usgs.discharge.sf, dat=discharge.dat)
+  saveRDS(discharge.list, here(streamgages.meta['USGS_data', 'file']))
+  
+} else {
+  
+  # load from disk
+  discharge.list = readRDS(here(streamgages.meta['USGS_data', 'file']))
+  
+} 
 
 #'
 #' ## visualization
 #' 
+#' plot information about the locations and the time periods associated with each record
 
-#' Some data-preparation work will allow us to plot information about both the locations and the time
-#' periods associated with each station dataset
-#' 
-# make a copy of the time-series data
-usgs.ts.sf = usgs.sf[idx.ts,]
-
-# these correspond to 21 unique locations
-uyrw.sitecodes = unique(usgs.ts.sf$site_no)
-length(uyrw.sitecodes)
-
-# find all entries corresponding to streamflow
-paramcode.streamflow = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Stream flow, mean. daily']
-idx.streamflow = usgs.ts.sf$parm_cd == paramcode.streamflow
-
-# TO DO : find temperature time series
-
-# find all entries corresponding to turbidity and suspended sediment
-paramcode.turbidity = paramcodes.df$parameter_cd[paramcodes.df$SRSName == 'Turbidity']
-paramcode.sediment = paramcodes.df$parameter_cd[paramcodes.df$SRSName %in% c('Suspended sediment concentration (SSC)', 'Suspended sediment discharge')]
-idx.turbidity = usgs.ts.sf$parm_cd == paramcode.turbidity
-idx.sediment = usgs.ts.sf$parm_cd %in%  paramcode.sediment
-
-# 32 entries: 20 are of streamflow, 6 are of turbidity, 6 are of suspended sediment
-idx.all = idx.streamflow | idx.turbidity | idx.sediment
-sum(idx.all)
-sum(idx.streamflow)
-sum(idx.turbidity)
-sum(idx.sediment)
-
-# find the end-years and durations as integers
-usgs.ts.sf$endyear = as.integer(sapply(strsplit(usgs.ts.sf$end_date,'-'), function(xx) xx[1]))
-usgs.ts.startyear = as.integer(sapply(strsplit(usgs.ts.sf$begin_date,'-'), function(xx) xx[1]))
-usgs.ts.sf$duration = usgs.ts.sf$endyear - usgs.ts.startyear
-
-#' Set up aesthetic parameters
-#' 
-
-# add dummy columns for indicating the variable recorded
-usgs.ts.sf$plotlabel_sf = 'streamflow'
-usgs.ts.sf$plotlabel_tb = 'turbidity'
-usgs.ts.sf$plotlabel_ss = 'suspended sediment'
-
-# add columns for duration and end-year of time series for precipitation
-usgs.ts.sf$endyear[usgs.ts.sf$endyear == 2020] = NA
+# add some fields to use in plotting
+discharge.sf = discharge.list$sf %>% 
+  mutate(startyear = as.integer(format(as.Date(begin_date), '%Y'))) %>%
+  mutate(endyear = as.integer(format(as.Date(end_date), '%Y'))) %>%
+  mutate(duration = 1 + as.integer(as.Date(end_date) - as.Date(begin_date))) %>%
+  mutate(singleton = duration == 1) %>%
+  mutate(singleton_text = 'sub-daily or one-time')
 
 # load the plotting parameters used in get_weatherstations.R
 tmap.pars = readRDS(here(my_metadata('get_weatherstations')['pars_tmap', 'file']))
 
-# adjust with a better highlight colour for the blue background
-tmap.pars$dots$tm_symbols$colorNA = 'orange'
+# configuration for plotting the locations of time series data
+tmap.pars$dots = tm_dots(size='duration',
+                         col='endyear',
+                         shape=16,
+                         palette=brewer.pal('YlOrRd', n=9)[3:9],
+                         scale=3,
+                         style='cont',
+                         alpha=0.7, 
+                         contrast=0.7, 
+                         title.size='duration (days)',
+                         legend.size.is.portrait=TRUE,
+                         shapes.legend.fill='grey20',
+                         shapes.legend=1,
+                         sizes.legend=c(1, 500, 5000, 25000),
+                         perceptual=TRUE,
+                         title='daily values until')
 
 #' Plot the streamgage data, using shapes to indicate the variable type, sizes to indicate
 #' duration of the time series, and colours to indicate their end-dates:
@@ -225,23 +363,19 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
 {
   # build the tmap plot object
   tmap.streamgage = tm_shape(uyrw.poly) +
-                      tm_polygons(col='skyblue', border.col='yellowgreen') +
-                    tm_shape(uyrw.waterbody) +
-                      tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
-                    tm_shape(uyrw.mainstem) +
-                      tm_lines(col='dodgerblue4', lwd=2) +
-                    tm_shape(uyrw.flowline) +
-                      tm_lines(col='dodgerblue3') +
-                    tm_shape(usgs.ts.sf[idx.streamflow,]) +
-                      tm_dots(col='plotlabel_sf', palette='black', size=0.5, shape=1, title='') +
-                    tm_shape(usgs.ts.sf[idx.sediment,]) +
-                      tm_dots(col='plotlabel_ss', palette='black', size=0.5, shape=2, title='') +
-                    tm_shape(usgs.ts.sf[idx.turbidity,]) +
-                      tm_dots(col='plotlabel_tb', palette='black', size=0.5, shape=6, title='') +
-                    tm_shape(usgs.ts.sf[idx.all,]) +
-                      tmap.pars$dots +
-                    tmap.pars$layout +
-                    tm_layout(main.title='NWIS daily discharge records in the UYRW')
+      tm_polygons(col='skyblue', border.col='yellowgreen') +
+    tm_shape(uyrw.waterbody) +
+      tm_polygons(col='deepskyblue3', border.col='deepskyblue4') +
+    tm_shape(uyrw.mainstem) +
+      tm_lines(col='dodgerblue4', lwd=2) +
+    tm_shape(uyrw.flowline) +
+      tm_lines(col='dodgerblue3') +
+    tm_shape(discharge.sf[discharge.sf$singleton,]) +
+      tm_dots(col='singleton_text', palette='purple', size=0.3, shape=17, title='') +
+    tm_shape(discharge.sf) +
+      tmap.pars$dots +
+    tmap.pars$layout +
+    tm_layout(main.title='NWIS daily discharge records in the UYRW')
   
   # render the plot
   tmap_save(tm=tmap.streamgage, 
@@ -250,31 +384,6 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
-
-#+ include=FALSE
-# Development code
-
-
-#' example data  
-#' 
-
-# grab the mill creek data
-idx.millcreek =grepl('mill creek', usgs.ts.sf$station_nm, ignore.case=TRUE)
-print(usgs.ts.sf[idx.millcreek,])
-
-# inputs to downloader function
-siteNumber = usgs.ts.sf$site_no[idx.millcreek]
-parameterCd = usgs.ts.sf$parm_cd[idx.millcreek]
-startDate = usgs.ts.sf$begin_date[idx.millcreek]
-endDate = usgs.ts.sf$end_date[idx.millcreek]
-
-# see https://help.waterdata.usgs.gov/code/stat_cd_nm_query?stat_nm_cd=%25&fmt=html&inline=true for stats codes
-statCd = paste0('0000', 1:9)
-statCd = paste0('0000', 3)
-
-# download and parse data
-flow.millcreek = renameNWISColumns(readNWISdv(siteNumber, parameterCd, startDate, endDate, statCd))
-flow.attr = attr(flow.millcreek, 'variableInfo')
 
 
 #my_markdown('get_streamgages')
