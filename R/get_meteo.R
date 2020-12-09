@@ -712,7 +712,7 @@ if(any(idx.unzipped))
 
 
 #' create the multi-panel raster image
-#' ![gridded reconstructions](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo.png)
+#' ![gridded reconstructions](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo_gridded.png)
 if(!file.exists(here(meteo.meta['img_meteo', 'file'])))
 {
   # pull the dates vectors for all datasets and print their ranges

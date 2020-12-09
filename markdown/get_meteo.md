@@ -718,7 +718,7 @@ if(any(idx.unzipped))
 
 visualization: make a plot of the three datasets side by side for tmax
 on a common date create the multi-panel raster image ![gridded
-reconstructions](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo.png)
+reconstructions](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo_gridded.png)
 
 ``` r
 if(!file.exists(here(meteo.meta['img_meteo', 'file'])))
