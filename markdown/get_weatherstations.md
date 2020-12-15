@@ -1,7 +1,7 @@
 get\_weatherstations.R
 ================
 Dean Koch
-2020-12-03
+2020-12-14
 
 **Mitacs UYRW project**
 
@@ -55,15 +55,19 @@ weatherstations.meta = my_metadata('get_weatherstations', files.towrite, overwri
 print(weatherstations.meta[, c('file', 'type')])
 ```
 
-    ##                                                     file          type
-    ## csv_snotel                  data/source/snotel_sites.csv           CSV
-    ## snotel                    data/prepared/snotel_sites.rds   R sf object
-    ## csv_ghcnd                    data/source/ghcnd_sites.csv           CSV
-    ## ghcnd                      data/prepared/ghcnd_sites.rds   R sf object
-    ## ghcnd_data                  data/prepared/ghcnd_data.rds R list object
-    ## pars_tmap              data/tmap_get_weatherstations.rds R list object
-    ## img_weatherstation     graphics/weatherstation_sites.png   png graphic
-    ## metadata           data/get_weatherstations_metadata.csv           CSV
+    ##                                                               file          type
+    ## snotel_sites                          data/source/snotel_sites.csv           CSV
+    ## snotel_sf                           data/prepared/snotel_sites.rds   R sf object
+    ## snotel_src                                      data/source/snotel     directory
+    ## snotel_data                          data/prepared/snotel_data.rds R list object
+    ## ghcnd_sites                            data/source/ghcnd_sites.csv           CSV
+    ## ghcnd_sf                             data/prepared/ghcnd_sites.rds   R sf object
+    ## ghcnd_src                                        data/source/ghcnd     directory
+    ## ghcnd_data                            data/prepared/ghcnd_data.rds R list object
+    ## pars_tmap                        data/tmap_get_weatherstations.rds R list object
+    ## img_weatherstation               graphics/weatherstation_sites.png   png graphic
+    ## img_weatherstation_snotel graphics/weatherstation_sites_snotel.png   png graphic
+    ## metadata                     data/get_weatherstations_metadata.csv           CSV
 
 This list of files and descriptions is now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_weatherstations_metadata.csv)
@@ -88,13 +92,13 @@ the `snotel_info` function in `snotelr` downloads a CSV containing site
 IDs and coordinates
 
 ``` r
-if(!file.exists(here(weatherstations.meta['csv_snotel', 'file'])))
+if(!file.exists(here(weatherstations.meta['snotel_sites', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
   snotel_info(path=here(src.subdir))
   
   # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
-  file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(weatherstations.meta['csv_snotel', 'file']))
+  file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(weatherstations.meta['snotel_sites', 'file']))
   
 }
 ```
@@ -103,10 +107,10 @@ Load this CSV, omit stations not in UYRW, and convert it to a `sf`
 object, then save to disk
 
 ``` r
-if(!file.exists(here(weatherstations.meta['snotel', 'file'])))
+if(!file.exists(here(weatherstations.meta['snotel_sf', 'file'])))
 {
-   # load the site info table into a data frame and extract coordinates
-  snotel.df = read.csv(here(weatherstations.meta['csv_snotel', 'file']), header=TRUE)
+  # load the site info table into a data frame and extract coordinates
+  snotel.df = read.csv(here(weatherstations.meta['snotel_sites', 'file']), header=TRUE)
   sites.coords.matrix = as.matrix(snotel.df[, c('longitude', 'latitude')])
   
   # extract the coordinates and convert to sfc object, adding attribute columns to get sf object
@@ -118,14 +122,105 @@ if(!file.exists(here(weatherstations.meta['snotel', 'file'])))
   snotel.sf = st_intersection(snotel.sf, uyrw.padded.poly)
   
   # save to disk
-  saveRDS(snotel.sf, here(weatherstations.meta['snotel', 'file']))
+  saveRDS(snotel.sf, here(weatherstations.meta['snotel_sf', 'file']))
   
 } else {
   
   # load from disk 
-  snotel.sf = readRDS(here(weatherstations.meta['snotel', 'file']))
+  snotel.sf = readRDS(here(weatherstations.meta['snotel_sf', 'file']))
   
 }
+```
+
+## download SNOTEL data
+
+The `snotelr` package uses the USDA NRCS [Report
+Generator](https://wcc.sc.egov.usda.gov/reportGenerator/) to fetch
+SNOTEL network data.
+
+SNOTEL contains data on snow, as well as precipitation and temperature.
+Some of these time series appear to be cross-listed on GHCND, however in
+many cases we have quite different measurements despite matching
+locations and timestamps (perhaps due to different instruments, or
+different data-cleaning methodologies)
+
+Note: If running this on windows, you may need to click through a
+firewall warning to allow `snotelr` to proceed
+
+``` r
+# create the storage directory
+snotel.src.dir = here(weatherstations.meta['snotel_src', 'file'])
+my_dir(snotel.src.dir)
+
+# build list of files to write
+snotel.id = snotel.sf$site_id
+snotel.fn = file.path(snotel.src.dir, paste0('snotel_', snotel.id, '.csv'))
+
+# proceed only with files not already downloaded
+if(!all(file.exists(snotel.fn)))
+{
+  # build list of missing files
+  idx.todl = !file.exists(snotel.fn)
+  
+  # download all missing station data to disk in a loop
+  pb = txtProgressBar(max=sum(idx.todl), style=3)
+  for(idx.dl in 1:sum(idx.todl))
+  {
+    idx.fn = which(idx.todl)[idx.dl]
+    snotel_download(site_id=snotel.id[idx.fn], path=snotel.src.dir, internal=FALSE)
+    setTxtProgressBar(pb, idx.dl)
+  }
+  close(pb)
+  
+} 
+```
+
+## process SNOTEL data
+
+These data should already be in metric units (degC, mm), and we label
+them as such in the chunk below. Afterwards, function `snotel_phenology`
+can be applied to the (data frame) elements of `snotel.list` to compute
+dates of first/last snowmelt, etc
+
+``` r
+snotel.path = here(weatherstations.meta['snotel_data', 'file'])
+if(!file.exists(snotel.path))
+{
+  # load all station data into memory
+  snotel.all = setNames(lapply(snotel.fn, read.csv), basename(snotel.fn))
+  
+  # remove the first few fields, which are identical across all rows. This info is already in `snotel.sf`
+  field.rm = apply(snotel.all[[1]], 2, function(colvals) all(duplicated(colvals)[-1])) 
+  snotel.list = lapply(snotel.all, function(df) df[,!field.rm])
+  
+  # coerce dates column to Date type, add units to each measurement field
+  for(idx.df in 1:length(snotel.list))
+  {
+    # copy the data frame
+    snotel.df = snotel.list[[idx.df]]
+    
+    # make the unit/type changes
+    snotel.df$date = as.Date(snotel.df$date)
+    snotel.df$snow_water_equivalent = units::set_units(snotel.df$snow_water_equivalent, 'mm')
+    snotel.df$precipitation_cumulative = units::set_units(snotel.df$precipitation_cumulative, 'mm')
+    snotel.df$temperature_max = units::set_units(snotel.df$temperature_max, '°C')
+    snotel.df$temperature_min = units::set_units(snotel.df$temperature_min, '°C')
+    snotel.df$temperature_mean = units::set_units(snotel.df$temperature_mean, '°C')
+    snotel.df$precipitation = units::set_units(snotel.df$precipitation, 'mm')
+    
+    # overwrite the list entry with updated values
+    snotel.list[[idx.df]] = snotel.df
+  }
+  
+  # save to disk
+  saveRDS(snotel.list, here(weatherstations.meta['snotel_data', 'file']))
+  
+} else {
+  
+  # load from disk
+  snotel.list = readRDS(here(weatherstations.meta['snotel_data', 'file']))
+  
+} 
 ```
 
 ## Find NOAA Global Historical Climatology Network (GHCN) Daily sites
@@ -134,14 +229,14 @@ the `ghcnd_stations` function in `rnoaa` downloads a table of site IDs
 and coordinates
 
 ``` r
-if(!file.exists(here(weatherstations.meta['csv_ghcnd', 'file'])))
+if(!file.exists(here(weatherstations.meta['ghcnd_sites', 'file'])))
 {
   # download the metadata table and load into R (slow, 1-2min)
   ghcnd.df = ghcnd_stations()
-
+  
   # save a copy as csv in the /data/source folder
-  write.csv(ghcnd.df, here(weatherstations.meta['csv_ghcnd', 'file']))
-
+  write.csv(ghcnd.df, here(weatherstations.meta['ghcnd_sites', 'file']))
+  
 }
 ```
 
@@ -157,11 +252,11 @@ better inform the SWAT+ weather generator (which uses spatial
 interpolation).
 
 ``` r
-if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
+if(!file.exists(here(weatherstations.meta['ghcnd_sf', 'file'])))
 {
-
+  
   # load the site info table into a data frame
-  ghcnd.df = read.csv(here(weatherstations.meta['csv_ghcnd', 'file']), header=TRUE)
+  ghcnd.df = read.csv(here(weatherstations.meta['ghcnd_sites', 'file']), header=TRUE)
   
   # find all unique station IDs, extracting coordinates from the first entry in the table for each station 
   ghcnd.IDs = unique(ghcnd.df$id)
@@ -199,31 +294,117 @@ if(!file.exists(here(weatherstations.meta['ghcnd', 'file'])))
   ghcnd.sf$snowtel_id = apply(st_distance(ghcnd.sf, snotel.sf), 1, function(xx) ifelse(!any(xx<1), NA, snotel.sf$site_id[xx<1]))
   
   # save to disk
-  saveRDS(ghcnd.sf, here(weatherstations.meta['ghcnd', 'file']))
+  saveRDS(ghcnd.sf, here(weatherstations.meta['ghcnd_sf', 'file']))
   
   
 } else {
   
   # load from disk
-  ghcnd.sf = readRDS(here(weatherstations.meta['ghcnd', 'file']))
+  ghcnd.sf = readRDS(here(weatherstations.meta['ghcnd_sf', 'file']))
   
 } 
 ```
 
-## download station data
+## download GHCN station data
 
-see
+See
 [here](https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ncdc:C00861/html)
-for documentation on the dataset and its variable names.
+for documentation on the dataset and its variable names. This chunk
+downloads each station dataset into memory then saves a copy to disk in
+the source data directory (as CSV spreadsheet).
 
 ``` r
-if(!file.exists(here(weatherstations.meta['ghcnd_data', 'file'])))
+# create the storage directory if needed
+ghcnd.dir = here(weatherstations.meta['ghcnd_src', 'file'])
+my_dir(ghcnd.dir)
+
+# make a list of files to write
+ghcnd.fn = paste0(ghcnd.sf$id, '.csv')
+ghcnd.path = file.path(ghcnd.dir, ghcnd.fn) 
+idx.missing = !file.exists(ghcnd.path)
+
+# download only those files missing from the storage directory
+if(any(idx.missing))
 {
-  # this call may take some time to download all station data listed in `ghcnd.sf`
-  ghcnd.list = lapply(setNames(nm=ghcnd.sf$id), meteo_pull_monitors)
+  # loop over stations not found in storage
+  for(idx.station in which(idx.missing))
+  {
+    # download from NOAA then write to CSV
+    ghcnd.df = meteo_pull_monitors(ghcnd.sf$id[idx.station])
+    write.csv(ghcnd.df, ghcnd.path[idx.station], row.names=FALSE)
+  }
+  
+}
+```
+
+## process GHCN station data
+
+documentation on units can be found
+[here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt)
+
+``` r
+ghcnd.out.path = here(weatherstations.meta['ghcnd_data', 'file'])
+if(!file.exists(ghcnd.out.path))
+{
+  # load all station data into memory
+  ghcnd.list = setNames(lapply(ghcnd.path, read.csv), basename(ghcnd.path))
+  
+  # units for some important volume fields (see link above for info on others)
+  ghcnd.units.mm = c('prcp', # all precipitation (10ths of mm)
+                     'snow', # snowfall (mm)
+                     'snwd', # snow depth (mm)
+                     'wesf', # water equivalent of snowfall (10ths of mm)
+                     'wesd', # water equivalent of snow on ground (10ths of mm)
+                     'mdpr', # multiday precipitation total (10ths of mm, see DAPR)
+                     'mdsf') # multiday snowfall total (10ths of mm, see DASF) 
+  
+  # units for temperature fields
+  ghcnd.units.degC = c('tmax', # temperature maximum (10ths of degC)
+                       'tobs', # observed temperature (10ths of degC)
+                       'tmin') # temperature minimum (10ths of degC)
+  
+  # units for day counts
+  ghcnd.units.days = c('dapr', # number of days counted in MDPR
+                       'dasf') # number of days counted in MDSF
+  
+  # all the fields to copy, in addition to 'date'
+  ghcnd.colnames = c('date', ghcnd.units.mm, ghcnd.units.degC, ghcnd.units.days)
+  
+  # coerce dates column to Date type, add units for important measurement fields
+  for(idx.df in 1:length(ghcnd.list))
+  {
+    # copy the data frame, keeping only the relevant fields above 
+    ghcnd.df = ghcnd.list[[idx.df]]
+    ghcnd.df = ghcnd.df[, colnames(ghcnd.df) %in% c(ghcnd.colnames)]
+    
+    # drop any empty rows (no non-NA values except date)
+    ghcnd.df = ghcnd.df[!apply(is.na(ghcnd.df[, colnames(ghcnd.df)!='date']), 1, all), ]
+    
+    # make the date type change
+    ghcnd.df$date = as.Date(ghcnd.df$date)
+    
+    # add units for volume measurements (most are integer, in units of 10ths of a mm)
+    idx.mm = setNames(colnames(ghcnd.df) %in% ghcnd.units.mm, colnames(ghcnd.df))
+    for(idx.vn in which(idx.mm)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], 'mm')/10 }
+    
+    # change back the two variables not given in 10ths
+    idx.whole = setNames(colnames(ghcnd.df) %in% c('snow', 'snwd'), colnames(ghcnd.df))
+    for(idx.vn in which(idx.whole)) { ghcnd.df[,idx.vn] = ghcnd.df[,idx.vn]*10 }
+    
+    # add units for temperatures (supplied as integer, in units of 10ths of a degree)
+    idx.degC = setNames(colnames(ghcnd.df) %in% ghcnd.units.degC, colnames(ghcnd.df))
+    for(idx.vn in which(idx.degC)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], '°C')/10 }
+    
+    # add units for day counts
+    idx.days = setNames(colnames(ghcnd.df) %in% ghcnd.units.days, colnames(ghcnd.df))
+    for(idx.vn in which(idx.days)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], 'days') }
+    
+    # overwrite the list entry with updated values
+    ghcnd.list[[idx.df]] = ghcnd.df
+  }
   
   # save to disk
-  saveRDS(ghcnd.list, here(weatherstations.meta['ghcnd_data', 'file']))
+  saveRDS(ghcnd.list, ghcnd.out.path)
   
 } else {
   
@@ -314,21 +495,21 @@ if(!file.exists(here(weatherstations.meta['img_weatherstation', 'file'])))
   
   # build the tmap plot object
   tmap.precip = tm_shape(uyrw.padded.poly) +
-                  tm_polygons(col='gray', border.col=NA) +
-                tm_shape(uyrw.poly) +
-                  tm_polygons(col='greenyellow', border.col='yellowgreen') +
-                tm_shape(uyrw.waterbody) +
-                  tm_polygons(col='yellowgreen', border.col='yellowgreen') +
-                tm_shape(uyrw.mainstem) +
-                  tm_lines(col='yellowgreen', lwd=2) +
-                tm_shape(uyrw.flowline) +
-                  tm_lines(col='yellowgreen') +
-                tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
-                  tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
-                tm_shape(precip.sf) +
-                  tmap.pars$dots + 
-                tmap.pars$layout +
-                tm_layout(main.title='GHCN (daily) precipitation records in the UYRW')
+    tm_polygons(col='gray', border.col=NA) +
+    tm_shape(uyrw.poly) +
+    tm_polygons(col='greenyellow', border.col='yellowgreen') +
+    tm_shape(uyrw.waterbody) +
+    tm_polygons(col='yellowgreen', border.col='yellowgreen') +
+    tm_shape(uyrw.mainstem) +
+    tm_lines(col='yellowgreen', lwd=2) +
+    tm_shape(uyrw.flowline) +
+    tm_lines(col='yellowgreen') +
+    tm_shape(precip.sf[!is.na(precip.sf$snowtel_id),]) +
+    tm_dots(col='constant', palette='black', size=0.5, shape=6, title='') +
+    tm_shape(precip.sf) +
+    tmap.pars$dots + 
+    tmap.pars$layout +
+    tm_layout(main.title='GHCN (daily) precipitation records in the UYRW')
   
   # render/write the plot
   tmap_save(tm=tmap.precip, 
@@ -337,4 +518,7 @@ if(!file.exists(here(weatherstations.meta['img_weatherstation', 'file'])))
             height=tmap.pars$png['h'], 
             pointsize=tmap.pars$png['pt'])
 }
+
+
+#my_markdown('get_weatherstations')
 ```

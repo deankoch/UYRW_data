@@ -2224,6 +2224,7 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
       
       # append comment lines and write to disk
       writeLines(c(l1.string, l2.string, l3.string, l4.string, ts.lines), con=wstn.path[vn])
+      setTxtProgressBar(pb, idx.vn)
       
     }
     close(pb) 
