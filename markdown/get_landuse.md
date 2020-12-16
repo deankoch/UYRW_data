@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2020-10-21
+2020-12-16
 
 **Mitacs UYRW project**
 
@@ -15,7 +15,7 @@ code, providing an inventory of typical plant assemblages that we can
 use to assign SWAT+ plant growth paramaters.
 
 This code fetches the data, warps to our reference coordinate system,
-and prepares SWAT+ AW input files.
+and prepares input files required by SWAT and SWAT+
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 should be run before this script.
@@ -59,16 +59,16 @@ landuse.meta = my_metadata('get_landuse', files.towrite, overwrite=TRUE)
 print(landuse.meta[, c('file', 'type')])
 ```
 
-    ##                                                      file          type
-    ## landuse_source                   data/source/GAP_LANDFIRE     directory
-    ## landuse_csv                     data/prepared/landuse.csv           CSV
-    ## landuse_tif                     data/prepared/landuse.tif       GeoTIFF
-    ## swat_landuse_lookup data/prepared/swat_landuse_lookup.csv           CSV
-    ## swat_landuse_tif           data/prepared/swat_landuse.tif       GeoTIFF
-    ## pars_tmap                       data/tmap_get_landuse.rds R list object
-    ## img_landuse                          graphics/landuse.png   png graphic
-    ## img_swat_landuse                graphics/swat_landuse.png   png graphic
-    ## metadata                    data/get_landuse_metadata.csv           CSV
+    ##                                                          file          type
+    ## landuse_source                       data/source/GAP_LANDFIRE     directory
+    ## landuse_csv                         data/prepared/landuse.csv           CSV
+    ## landuse_tif                         data/prepared/landuse.tif       GeoTIFF
+    ## swat_landuse_lookup data/prepared/swatplus_landuse_lookup.csv           CSV
+    ## swat_landuse_tif               data/prepared/swat_landuse.tif       GeoTIFF
+    ## pars_tmap                           data/tmap_get_landuse.rds R list object
+    ## img_landuse                              graphics/landuse.png   png graphic
+    ## img_swat_landuse                    graphics/swat_landuse.png   png graphic
+    ## metadata                        data/get_landuse_metadata.csv           CSV
 
 Filenames (with descriptions) are now stored as a [.csv
 file](https://github.com/deankoch/UYRW_data/blob/master/data/get_landuse_metadata.csv)
@@ -186,15 +186,28 @@ parameter sets for agricultural crops (eg. `alfalfa`), and a collection
 of generic classes for wild plant assemblages (eg.
 `deciduous_broadleaf_forest`).
 
-We use these to parametrize HRUs based on BVC information about land use
-derived from the LANDFIRE/GAP dataset. This section maps [NVC
-biogeography
+We will use these codes to parametrize HRUs based on BVC information
+about land use derived from the LANDFIRE/GAP dataset. This section maps
+[NVC biogeography
 classifications](http://usnvc.org/data-standard/natural-vegetation-classification/)
-to entries of the SWAT plant growth database, generating the landuse
+to entries of the SWAT+ plant growth database, generating the landuse
 GeoTIFF raster and lookup table required by QSWAT+.
 
+The raster will also work with SWAT, but the lookup table will not. At
+this time, the plant growth parameter set that ships with SWAT is a
+smaller subset of the one included in SWAT+, and is coded differently
+(requiring 4-letter uppercase codes). The plant codes assigned by this
+chunk will therefore not be recognized when running QSWAT. SWAT Users
+will need to import the missing parameters from the `plants_plt`
+database in SWAT+ (into ‘QSWATRef2012.mdb’), and convert the codes in
+their lookup table. The script ‘make\_qswat’ does this automatically,
+later on.
+
 ``` r
-if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup'), 'file']))))
+# define files to write in this chunk and proceed only if they don't exist
+swat.lookup.path = here(landuse.meta['swatplus_landuse_lookup', 'file'])
+swat.landuse.tif.path = here(landuse.meta['swat_landuse_tif', 'file'])
+if(any(!file.exists(c(swat.lookup.path, swat.landuse.tif.path))))
 {
   # copy relevant fields of land use table, omitting 'Open Water' which is dealt with separately by SWAT+
   nvc.df = landuse.tab %>% filter(NVC_DIV != 'Open Water') %>% select(Value, NVC_DIV, NVC_MACRO, NVC_GROUP)
@@ -202,10 +215,9 @@ if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup
   # append SWAT+ plant codes using a helper function
   nvc.df = my_plants_plt(nvc.df)
   
-  # build and write the output CSV
+  # build and write the output CSV for QSWAT+
   swatcodes.unique = unique(nvc.df$swatcode)
   swat.lookup = data.frame(Value=1:length(swatcodes.unique), Landuse=swatcodes.unique)
-  swat.lookup.path = here(landuse.meta['swat_landuse_lookup', 'file'])
   write.csv(swat.lookup, swat.lookup.path, row.names=FALSE)
   
   # build the reclassification matrix for the raster (mapping open water to NA)
@@ -216,13 +228,13 @@ if(any(!file.exists(here(landuse.meta[c('swat_landuse_tif', 'swat_landuse_lookup
   # build the raster, crop and mask to UYRW, and write the output GeoTIFF
   swat.landuse.tif = reclassify(landuse.tif, rcl)
   swat.landuse.tif = mask(crop(swat.landuse.tif, as(uyrw.poly, 'Spatial')), as(uyrw.poly, 'Spatial'))
-  writeRaster(swat.landuse.tif, here(landuse.meta['swat_landuse_tif', 'file']), overwrite=TRUE, NAflag=tif.na.val)
+  writeRaster(swat.landuse.tif, swat.landuse.tif.path, overwrite=TRUE, NAflag=tif.na.val)
   
 } else {
   
   # load from disk 
-  swat.landuse.tif = raster(here(landuse.meta['swat_landuse_tif', 'file']))
-  swat.lookup = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
+  swat.landuse.tif = raster(swat.landuse.tif.path)
+  swat.lookup = read.csv(swat.lookup.path)
 }
 ```
 
