@@ -1,3 +1,4 @@
 "","file","type","description"
-"swat_weatherstn","data/prepared/qswat/millcreek/UYRW_weather_data","directory","directory for writing SWAT weather input text files"
+"swat_weatherstn_TEMP","data/prepared/qswat/millcreek/UYRW_weather_data","directory","directory for writing SWAT weather input text files"
+"swat_weatherstn","data/prepared/qswat/millcreek2/UYRW_weather_data","directory","directory for writing SWAT weather input text files"
 "metadata","data/run_qswat_metadata.csv","CSV","list files of files written by run_qswat.R"

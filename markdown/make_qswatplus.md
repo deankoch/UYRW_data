@@ -1,7 +1,7 @@
 make\_qswatplus.R
 ================
 Dean Koch
-2020-12-16
+2020-12-17
 
 **Mitacs UYRW project**
 
@@ -142,7 +142,7 @@ if(any(!file.exists(c(dem.path, landuse.path, soils.path))))
   # crop/mask the rasters and write to new location
   dem.tif = raster(here(dem.meta['swat_dem', 'file']))
   landuse.tif = raster(here(landuse.meta['swat_landuse_tif', 'file']))
-  soils.tif = raster(here(soils.meta['swat_tif', 'file']))
+  soils.tif = raster(here(soils.meta['swat_soils_tif', 'file']))
   swat.dem.tif = mask(crop(dem.tif , subb.poly.sp), subb.poly.sp)
   swat.landuse.tif = mask(crop(landuse.tif , subb.poly.sp), subb.poly.sp)
   swat.soils.tif = mask(crop(soils.tif , subb.poly.sp), subb.poly.sp)
@@ -253,7 +253,9 @@ should be no need to import a custom usersoil database
 ``` r
 # For now we use Ben Livneh's climatic reconstruction 
 #wdat.in = readRDS(here(meteo.meta['livneh_uyrw', 'file']))
+```
 
+``` r
 wstn.dir = makeqswat.meta['swat_weatherstn', 'file']
 if(!dir.exists(wstn.dir))
 {
