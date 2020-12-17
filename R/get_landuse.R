@@ -61,17 +61,17 @@ files.towrite = list(
     type='GeoTIFF',
     description='GAP/LANDFIRE land classification raster, maps to landuse_csv'),
   
-  # lookup table for integer codes in the SWAT+ land use raster
-  c(name='swat_landuse_lookup',
-    file=file.path(out.subdir, 'swatplus_landuse_lookup.csv'), 
-    type='CSV',
-    description='swat_landuse_tif integer code lookup table, maps to plants_plt SWAT+ dataset'), 
-  
   # SWAT+ plant codes raster for the watershed, based on NVC biogeography class 
   c(name='swat_landuse_tif',
     file=file.path(out.subdir, 'swat_landuse.tif'), 
     type='GeoTIFF',
     description='SWAT/SWAT+ land use classification, maps to swat_landuse_lookup'),
+  
+  # lookup table for integer codes in the SWAT+ land use raster
+  c(name='swat_landuse_lookup',
+    file=file.path(out.subdir, 'swatplus_landuse_lookup.csv'), 
+    type='CSV',
+    description='swat_landuse_tif integer code lookup table, maps to plants_plt SWAT+ dataset'), 
   
   # aesthetic parameters for plotting
   c(name='pars_tmap',
@@ -218,7 +218,7 @@ if(any(!file.exists(here(landuse.meta[c('landuse_tif', 'landuse_csv'), 'file']))
 #' 
 
 # define files to write in this chunk and proceed only if they don't exist
-swat.lookup.path = here(landuse.meta['swatplus_landuse_lookup', 'file'])
+swat.lookup.path = here(landuse.meta['swat_landuse_lookup', 'file'])
 swat.landuse.tif.path = here(landuse.meta['swat_landuse_tif', 'file'])
 if(any(!file.exists(c(swat.lookup.path, swat.landuse.tif.path))))
 {

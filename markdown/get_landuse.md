@@ -63,8 +63,8 @@ print(landuse.meta[, c('file', 'type')])
     ## landuse_source                       data/source/GAP_LANDFIRE     directory
     ## landuse_csv                         data/prepared/landuse.csv           CSV
     ## landuse_tif                         data/prepared/landuse.tif       GeoTIFF
-    ## swat_landuse_lookup data/prepared/swatplus_landuse_lookup.csv           CSV
     ## swat_landuse_tif               data/prepared/swat_landuse.tif       GeoTIFF
+    ## swat_landuse_lookup data/prepared/swatplus_landuse_lookup.csv           CSV
     ## pars_tmap                           data/tmap_get_landuse.rds R list object
     ## img_landuse                              graphics/landuse.png   png graphic
     ## img_swat_landuse                    graphics/swat_landuse.png   png graphic
@@ -205,7 +205,7 @@ later on.
 
 ``` r
 # define files to write in this chunk and proceed only if they don't exist
-swat.lookup.path = here(landuse.meta['swatplus_landuse_lookup', 'file'])
+swat.lookup.path = here(landuse.meta['swat_landuse_lookup', 'file'])
 swat.landuse.tif.path = here(landuse.meta['swat_landuse_tif', 'file'])
 if(any(!file.exists(c(swat.lookup.path, swat.landuse.tif.path))))
 {
