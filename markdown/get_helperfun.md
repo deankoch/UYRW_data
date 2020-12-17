@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2020-12-14
+2020-12-16
 
 **Mitacs UYRW project**
 
@@ -164,6 +164,9 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   # define the CSV filename, and define a flag that will indicate to wipe it replace with a default if requested
   csv.relpath = file.path(data.dir, paste0(script.name, '_metadata.csv'))
   csv.wipe = FALSE
+  
+  # create the directory if necessary
+  my_dir(dirname(here(csv.relpath)))
   
   # prepare the default one-row data.frame 
   entry.names = c('name', 'file', 'type', 'description')

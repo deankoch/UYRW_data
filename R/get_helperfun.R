@@ -111,6 +111,9 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   csv.relpath = file.path(data.dir, paste0(script.name, '_metadata.csv'))
   csv.wipe = FALSE
   
+  # create the directory if necessary
+  my_dir(dirname(here(csv.relpath)))
+  
   # prepare the default one-row data.frame 
   entry.names = c('name', 'file', 'type', 'description')
   entry.default = c(name='metadata', file=csv.relpath, type='CSV', description=paste0('list files of files written by ', script.name, '.R'))
