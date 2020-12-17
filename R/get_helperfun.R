@@ -2184,7 +2184,6 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
   if(tolower(form)=='swat')
   {
     # Note that the first 4 lines of these files are treated as comments by SWAT
-    l1.string = paste('Station ', paste(svn[[vn]], collapse=','))
     l2.string = paste(c('Lati  ', substring(as.character(coords.tab[['lat']]), 1, 4)), collapse=' ')
     l3.string = paste(c('Long  ', substring(as.character(coords.tab[['long']]), 1, 4)), collapse=' ')
     l4.string = paste(c('Elev  ', substring(as.character(coords.tab[['elev']]), 1, 4)), collapse=' ')
@@ -2201,6 +2200,7 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
     {
       # print name of the variable to write
       vn = vn.in[idx.vn]
+      l1.string = paste('Station ', paste(svn[[vn]], collapse=','))
       print(paste('writing', basename(wstn.path[vn]), 'to directory', exdir))
       
       # handle temperature data, which requires concatentation of two variables
