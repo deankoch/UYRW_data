@@ -54,6 +54,16 @@ for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
 library(gdalUtilities)
+```
+
+    ## 
+    ## Attaching package: 'gdalUtilities'
+
+    ## The following object is masked from 'package:sf':
+    ## 
+    ##     gdal_rasterize
+
+``` r
 library(FedData)
 library(rvest)
 ```
@@ -93,7 +103,8 @@ print(soils.meta[, c('file', 'type')])
     ## ssurgo_incomplete_sfc data/prepared/ssurgo_incomplete_sfc.rds    R sfc object
     ## soils_merged_sf             data/prepared/soils_merged_sf.rds     R sf object
     ## soils_merged_tab           data/prepared/soils_merged_tab.rds   R list object
-    ## swat_tif                          data/prepared/swat_soil.tif         GeoTIFF
+    ## swat_soils_tif                    data/prepared/swat_soil.tif         GeoTIFF
+    ## swat_soils_lookup         data/prepared/swat_soils_lookup.csv             CSV
     ## img_soils                                  graphics/soils.png     png graphic
     ## metadata                          data/get_soils_metadata.csv             CSV
 
@@ -531,14 +542,14 @@ This chunk rasterizes that polygon data so that it can be loaded by
 QSWAT+
 
 ``` r
-if(!file.exists(here(soils.meta['swat_tif', 'file'])))
+if(!file.exists(here(soils.meta['swat_soils_tif', 'file'])))
 {
   # pull mukey values and build the usersoil table using a helper function
   soils.mukeys = sort(unique(as.integer(soils.merged.sf$MUKEY)))
   usersoil = my_usersoil(soils.merged.tab, soils.mukeys)
   
   # rasterize the MUKEY data and write geotiff to disk
-  soils.tif.path = here(soils.meta['swat_tif', 'file'])
+  soils.tif.path = here(soils.meta['swat_soils_tif', 'file'])
   soils.tif.prelim = gRasterize(as(soils.merged.sf, 'Spatial'), dem.tif, field='MUKEY', soils.tif.path)
   
   # the MUKEY attribute was a character string, so we have to reclassify to integer

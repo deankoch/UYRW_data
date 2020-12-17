@@ -117,10 +117,16 @@ files.towrite = list(
     description='merged STATSGO2/SSURGO tabular data for the UYRW area (a list of data frames)'), 
   
   # geotiff mapping rows of soil data table for SWAT+ to locations in the watershed
-  c(name='swat_tif',
+  c(name='swat_soils_tif',
     file=file.path(out.subdir, 'swat_soil.tif'), 
     type='GeoTIFF',
     description='map unit (mukey) raster for SWAT+, matching entries in swatplus_soils.sqlite'), 
+  
+  # lookup table for 'swat_soils_tif'
+  c(name='swat_soils_lookup',
+    file=file.path(out.subdir, 'swat_soils_lookup.csv'), 
+    type='CSV',
+    description='integer code for swat_soils_tif, maps to `usersoil` table in SWAT+ database'), 
   
   # graphic showing soils for the UYRW
   c(name='img_soils',
@@ -551,14 +557,14 @@ if(any(!file.exists(here(soils.meta[c('ssurgo_incomplete_sfc', 'soils_merged_sf'
 #' 
 #' This chunk rasterizes that polygon data so that it can be loaded by QSWAT+ 
 #' 
-if(!file.exists(here(soils.meta['swat_tif', 'file'])))
+if(!file.exists(here(soils.meta['swat_soils_tif', 'file'])))
 {
   # pull mukey values and build the usersoil table using a helper function
   soils.mukeys = sort(unique(as.integer(soils.merged.sf$MUKEY)))
   usersoil = my_usersoil(soils.merged.tab, soils.mukeys)
   
   # rasterize the MUKEY data and write geotiff to disk
-  soils.tif.path = here(soils.meta['swat_tif', 'file'])
+  soils.tif.path = here(soils.meta['swat_soils_tif', 'file'])
   soils.tif.prelim = gRasterize(as(soils.merged.sf, 'Spatial'), dem.tif, field='MUKEY', soils.tif.path)
   
   # the MUKEY attribute was a character string, so we have to reclassify to integer

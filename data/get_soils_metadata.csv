@@ -9,6 +9,7 @@
 "ssurgo_incomplete_sfc","data/prepared/ssurgo_incomplete_sfc.rds","R sfc object","areas in URYW with incomplete SSURGO coverage, derived from ssurgo_sf and ssurgo_tab"
 "soils_merged_sf","data/prepared/soils_merged_sf.rds","R sf object","merged STATSGO2/SSURGO soil mapping units for UYRW"
 "soils_merged_tab","data/prepared/soils_merged_tab.rds","R list object","merged STATSGO2/SSURGO tabular data for the UYRW area (a list of data frames)"
-"swat_tif","data/prepared/swat_soil.tif","GeoTIFF","map unit (mukey) raster for SWAT+, matching entries in swatplus_soils.sqlite"
+"swat_soils_tif","data/prepared/swat_soil.tif","GeoTIFF","map unit (mukey) raster for SWAT+, matching entries in swatplus_soils.sqlite"
+"swat_soils_lookup","data/prepared/swat_soils_lookup.csv","CSV","integer code for swat_soils_tif, maps to `usersoil` table in SWAT+ database"
 "img_soils","graphics/soils.png","png graphic","image of map units with SSURGO/STATSGO2 data in the UYRW"
 "metadata","data/get_soils_metadata.csv","CSV","list files of files written by get_soils.R"
