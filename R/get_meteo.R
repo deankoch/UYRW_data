@@ -177,6 +177,10 @@ basins.meta = my_metadata('get_basins')
 crs.list = readRDS(here(basins.meta['crs', 'file']))
 uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 
+# load DEM
+dem.meta = my_metadata('get_dem')
+dem.tif = raster(here(dem.meta['dem', 'file']))
+
 # prepare a mask in geographical coordinates
 uyrw.poly.geo = st_transform(uyrw.poly, crs=crs.list$epsg.geo)
 
@@ -282,16 +286,22 @@ if(any(!file.exists(c(pcic.out.path, pcic.out.rasters))))
   origin.date = as.Date(getZ(nc.r)) - 1
   pcic.dates = as.Date(1:n.days, origin=origin.date)
 
+  # extract elevations at gridpoints, set their units and names 
+  elevation.vals = extract(dem.tif, pcic.list$coords_sf)
+  elevation.vals = units::set_units(setNames(elevation.vals, rownames(pcic.list$coords)), 'm')
+  
   # assemble everything into a list
   pcic.list = list(dates=pcic.dates,
                    tables=climdata.list,
                    coords=coords.tab,
-                   coords_sf=pts.sf)
+                   coords_sf=pts.sf,
+                   elevation=elevation.vals)
 
   # write the tabular and shapefile data to disk
   saveRDS(pcic.list, file=pcic.out.path)
   
 } 
+
 
 #' Finally, we zip the source files to save storage space. This step reduces storage requirements
 #' by about one half (to 111GB)
@@ -462,11 +472,16 @@ if(any(!file.exists(c(livneh.out.path, livneh.out.rasters))))
   # ... we have a random date in the 1980s labeled as 1900-01-01! Safer to use an epoch...
   livneh.dates = as.Date(1:length(livneh.dates.char), origin=livneh.dates.test[1]-1)
   
+  # extract elevations at gridpoints, set their units and names 
+  elevation.vals = extract(dem.tif, livneh.list$coords_sf)
+  elevation.vals = units::set_units(setNames(elevation.vals, rownames(livneh.list$coords)), 'm')
+  
   # assemble everything into a list
   livneh.list = list(dates=livneh.dates,
                      tables=livneh.tab,
                      coords=livneh.coords,
-                     coords_sf=livneh.sf)
+                     coords_sf=livneh.sf,
+                     elevation=elevation.vals)
   
   # write the tabular and shapefile data to disk
   saveRDS(livneh.list, file=livneh.out.path)
@@ -666,17 +681,22 @@ if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
   origin.date = as.Date(paste(daymet.years[1], '01', '01', sep='/')) - 1
   daymet.dates = as.Date(1:nlayers(daymet.stack[[varname]]), origin=origin.date)
   
+  # extract elevations at gridpoints, set their units and names 
+  elevation.vals = extract(dem.tif, daymet.list$coords_sf)
+  elevation.vals = units::set_units(setNames(elevation.vals, rownames(daymet.list$coords)), 'm')
+  
   # assemble everything into a list
   daymet.list = list(dates=daymet.dates,
                      tables=daymet.tab,
                      coords=daymet.coords,
-                     coords_sf=daymet.sf)
+                     coords_sf=daymet.sf,
+                     elevation=elevation.vals)
   
   # write the tabular and shapefile data to disk
   saveRDS(daymet.list, file=daymet.out.path)
   
-  
 } 
+
 
 #' Now that the UYRW subset of the Daymet data has been extracted and copied, we can zip the
 #' source NetCDF files to reduce their size. We get a very good compression ratio (~5-25%),
