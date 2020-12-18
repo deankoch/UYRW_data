@@ -327,5 +327,22 @@ if(!dir.exists(wstn.dir))
 
 }
 
+
+#+ eval=FALSE
+# development code
+
+# try opening the channel variables output file
+txtio.subdir = 'qswat/Scenarios/Default/TxtInOut'
+textio.dir =  here(swat.dir, txtio.subdir)
+out.path = file.path(textio.dir, 'channel_sd_day.txt')
+my_read_output(out.path)
+my_read_output(out.path, varname='all')
+xx = my_read_output(out.path, varname=c('precip', 'flo_in', 'flo_out'))
+
+
+#
+
+#
+
 #+ eval=FALSE
 #my_markdown('make_qswatplus')
