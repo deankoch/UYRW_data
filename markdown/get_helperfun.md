@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2020-12-16
+2020-12-17
 
 **Mitacs UYRW project**
 
@@ -1138,7 +1138,160 @@ my_plants2swat = function(crop_in, swatplus_db)
 
 Convenience functions below are for handling I/O text files associated
 with SWAT2012 simulations, and for managing parameters and system calls
-to the SWAT executables reads simulation output text files: output.rch,
+to the SWAT executables reads daily simulation output text files from
+SWAT+
+
+``` r
+my_read_output = function(out.path, varname=character(0), set.units=TRUE, add.dates=TRUE)
+{
+  # ARGUMENTS:
+  #
+  # `out.path`, character string, full path to one of the SWAT+ output (.txt) files
+  # `varname`, character string vector, names of the variables to load (or 'all')
+  # `set.units`, boolean indicating whether to assign units to output columns
+  # `add.dates`, boolean indicating whether to append a Date object column
+  #
+  # RETURN VALUE:
+  #
+  # If `varname` is unspecified, returns a list containing the time period and variable
+  # names available, as well as the vector of unique geometry ID codes (`set.units`, and
+  # `add.dates` are ignored in this case).
+  #
+  # If `varname` is a string, or vector of strings, returns a data frame containing the 
+  # numerical data from any and all matching variable names. 
+  #
+  # DETAILS:
+  # 
+  # Any unmatched string(s) in `varname` are ignored, with the exception of `varname='all'`,
+  # which prompts the function to return all available variables.
+  #
+  # Three indexing variables are included in every data frame: 'jday' (Julian day in year),
+  # 'yr' (year), and 'gis_id' (ID code for this feature in QSWAT+ shapefiles). For non-
+  # indexing variables, the columns of the data frames are of type Unit, with units assigned
+  # based on the headers data of the output text file.
+  #
+  # `add.dates==TRUE` consolidates the 'jday', 'mon', 'day', 'yr' columns into a single 
+  # vector of Date objects (ie they are omitted from the data frame). 
+  #
+  
+  # line numbers of the headers for variable names and units
+  ln.header = c(varname=2, unit=3)
+  
+  # scan the headers line to get all listed output variable names
+  out.varname = scan(out.path, what=character(), skip=ln.header['varname']-1, nlines=1)
+  out.unit = scan(out.path, what=character(), skip=ln.header['unit']-1, nlines=1)
+  n.varname = length(out.varname)
+  
+  # the first few columns are keys for location/time - their names appear on the units line
+  n.key = length(out.unit) - n.varname
+  is.key = 1:length(out.unit) %in% 1:n.key
+  key.varname = out.unit[is.key]
+  out.unit = out.unit[!is.key]
+  
+  # replace unusual units with strings that R can understand and name them to match variables
+  out.unit[out.unit == 'ha-m'] = 'ha m'
+  out.unit[out.unit %in% c('kgN', 'kgP')] = 'kg'
+  names(out.unit) = out.varname
+  
+  # build a list of column types for keys, then for the rest of the data matrix
+  key.class = c(rep('integer', n.key-1), 'character')
+  out.class = rep('numeric', n.varname)
+  
+  # complete set of column classes and names
+  load.what = c(key.class, out.class)
+  all.varname = c(key.varname, out.varname)
+  
+  # three of the key columns will be imported even when they aren't specified in `varname`
+  key.include = c('jday', 'yr', 'gis_id')
+  
+  # two special `varname` assignments prompt the function to parse all available variables 
+  if(all(varname == 'all') | length(varname)==0)
+  {
+    # default behaviour with `varname` unassigned is to scan for info about a simulation
+    if(length(varname)==0)
+    {
+      # retrieve important key columns only (ignore numerical data)
+      varname = key.include
+      return.data = FALSE
+      
+    } else {
+      
+      # this mode reads the entire file returning all data
+      varname = all.varname
+      return.data = TRUE
+      
+    }
+    
+  } else {
+    
+    # important keys are appended to any supplied variable name arguments
+    varname = unique(c(key.include, varname))
+    return.data = TRUE
+    
+  }
+  
+  # load the requested columns and efficiently skip the others using `fread`
+  load.idx = all.varname %in% varname
+  load.varname = all.varname[load.idx]
+  dat.out = as.data.frame(setNames(fread(out.path, 
+                                         header=FALSE, 
+                                         skip=max(ln.header),  
+                                         colClasses=load.what, 
+                                         drop=which(!load.idx)), load.varname))
+  
+  # collect info from key columns
+  n.obs = nrow(dat.out)
+  gis.ids = unique(dat.out$gis_id)
+  start.date = as.Date(paste(dat.out$yr[1], dat.out$jday[1], sep='-'), format='%Y-%j')
+  end.date = as.Date(paste(dat.out$yr[n.obs], dat.out$jday[n.obs], sep='-'), format='%Y-%j')
+  dates = c(first=start.date, last=end.date)
+  n = c(n_obs=n.obs, n_days=n.obs/length(gis.ids))
+  
+  # return this information in default mode
+  if(!return.data)
+  {
+    # return the info in a list
+    return(list(n=n, dates=dates, name=all.varname, gis_ids=gis.ids))
+    
+  }
+  
+  # pull column names before making final changes
+  dat.names = names(dat.out)
+  
+  # units are assigned to the state variables if requested
+  if(set.units)
+  {
+    # loop over column names matching non-key (ie state variable) values
+    for(idx.col in which(!(dat.names %in% key.varname)))
+    {
+      # units were read from headers line
+      unit.col = out.unit[names(dat.out)[idx.col]]
+      dat.out[,idx.col] = units::set_units(dat.out[,idx.col], unit.col, mode='standard')
+    }
+  }
+  
+  # assign dates if requested 
+  include.names = dat.names
+  if(add.dates)
+  {
+    # define the sequence of dates appearing in the dataset
+    ts.dates = seq(start.date, end.date, 'day')
+    
+    # this should be equivalent to `as.Date(paste(yr, mon, day, sep='-')`, but faster
+    all.dates = rep(ts.dates, each=n['n_obs']/n['n_days'])
+    
+    # append to `dat.out` as new column
+    dat.out = setNames(cbind(all.dates, dat.out), c('date', dat.names))
+    
+    # omit redundant columns
+    include.names = names(dat.out)[!(names(dat.out) %in% c('jday', 'mon', 'day', 'yr'))]
+  }
+  
+  return(dat.out[, include.names])
+}
+```
+
+reads simulation output text files from SWAT2012: output.rch,
 output.sub, output.hru
 
 ``` r
@@ -2278,8 +2431,8 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
   n.coords = nrow(coords)
   
   # contruct table of geographic (lat/long) coordinates, append elevations
-  coords.tab = setNames(data.frame(coords.geo, row.names=coords$name), c('long', 'lat'))
-  coords.tab$elev = wdat$elevation[include]
+  coords.tab = setNames(data.frame(coords.geo, row.names=coords$name), c('LONG', 'LAT'))
+  coords.tab$ELEVATION = wdat$elevation[include]
   
   # check for input matching SWAT variable names
   vn.idx = sapply(vn.list, function(nm) all(nm %in% names(wdat$tables)))
@@ -2304,9 +2457,9 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
   if(tolower(form)=='swat')
   {
     # Note that the first 4 lines of these files are treated as comments by SWAT
-    l2.string = paste(c('Lati  ', substring(as.character(coords.tab[['lat']]), 1, 4)), collapse=' ')
-    l3.string = paste(c('Long  ', substring(as.character(coords.tab[['long']]), 1, 4)), collapse=' ')
-    l4.string = paste(c('Elev  ', substring(as.character(coords.tab[['elev']]), 1, 4)), collapse=' ')
+    l2.string = paste(c('Lati  ', substring(as.character(coords.tab[['LAT']]), 1, 4)), collapse=' ')
+    l3.string = paste(c('Long  ', substring(as.character(coords.tab[['LONG']]), 1, 4)), collapse=' ')
+    l4.string = paste(c('Elev  ', substring(as.character(coords.tab[['ELEV']]), 1, 4)), collapse=' ')
     
     # define paths to the output files (one per variable)
     wstn.path = sapply(vn.in, function(vn) file.path(exdir, paste0(vn, suffix, '.txt')))
@@ -2365,9 +2518,9 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
     wdat.wstn = lapply(setNames(nm=vn.in), function(vn) { 
       cbind(ID=1:n.coords, 
             NAME=svn[[vn]], 
-            LAT=coords.tab['lat'],
-            LONG=coords.tab['long'],
-            ELEVATION=coords.tab['elev'])
+            LAT=coords.tab['LAT'],
+            LONG=coords.tab['LONG'],
+            ELEVATION=coords.tab['ELEVATION'])
     })
     
     # define paths to the output files (with time series stored separately from station location info)
