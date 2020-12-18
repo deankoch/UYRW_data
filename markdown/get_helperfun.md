@@ -2393,8 +2393,6 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
   # output, and therefore the mapping (of columns to subbasins) in *.sub files should be adjusted
   # accordingly. By default all the data are written.
   #
-  # It seems that SWAT+ Editor will fail to 
-  #
   
   # missing data field (NA) is coded as "-99.0"
   na.value = -99
