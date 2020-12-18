@@ -3,6 +3,7 @@
 .RData
 .Ruserdata
 README.html
+R/deprecated
 data/prepared
 data/source
 data/demo
