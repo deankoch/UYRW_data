@@ -308,9 +308,12 @@ if(!file.exists(landuse.lookup.dest))
 wstn.dir = makeqswat.meta['swat_weatherstn', 'file']
 if(!dir.exists(wstn.dir))
 {
-
   # testing PNWNAMet data
   wdat.in = readRDS(here(meteo.meta['pnwnamet_uyrw', 'file']))
+  
+  # add in NA values (-99.0) for humidity (SWAT+ Editor bugfix)
+  wdat.in$tables$hmd = wdat.in$tables$tmax
+  wdat.in$tables$hmd[] = NA
   
   # create the weather station data directory
   my_dir(wstn.dir)
@@ -331,18 +334,80 @@ if(!dir.exists(wstn.dir))
 #+ eval=FALSE
 # development code
 
-# try opening the channel variables output file
-txtio.subdir = 'qswat/Scenarios/Default/TxtInOut'
-textio.dir =  here(swat.dir, txtio.subdir)
-out.path = file.path(textio.dir, 'channel_sd_day.txt')
-my_read_output(out.path)
-my_read_output(out.path, varname='all')
-xx = my_read_output(out.path, varname=c('precip', 'flo_in', 'flo_out'))
+if(0)
+{
+  # AFTER RUNNING QSWAT+, SWAT+EDITOR, SWAT EXECUTABLE
+  
+  # try opening the channel variables output file and printing the contents
+  txtio.subdir = 'millcreek/Scenarios/Default/TxtInOut'
+  textio.dir =  here(swat.dir, txtio.subdir)
+  out.path = file.path(textio.dir, 'channel_sd_day.txt')
+  my_read_output(out.path)
 
+  # data retrieval with proper units appears to work with all other output files
+  head(my_read_output(out.path=file.path(textio.dir, 'deposition_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'channel_sd_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'channel_sd_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'channel_sdmorph_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'channel_sdmorph_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'aquifer_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'aquifer_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_aqu_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_aqu_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_cha_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_cha_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_ls_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_ls_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_nb_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_nb_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_psc_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_psc_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_pw_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_pw_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_res_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_res_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_sd_cha_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_sd_cha_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_sd_chamorph_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_sd_chamorph_yr.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_wb_day.txt'), varname='all'))
+  head(my_read_output(out.path=file.path(textio.dir, 'basin_wb_yr.txt'), varname='all'))
+  
 
+  xx = my_read_output(out.path, varname=c('precip', 'flo_in', 'flo_out'))
+  yy = xx %>% filter(gis_id==2)
+  
+  plot(yy$date, yy$flo_out, pch='')
+  lines(yy$date, yy$flo_out)
+}
 #
 
-#
+# # load the usersoil table
+# usersoil.path = here(out.subdir, 'usersoil.csv')
+# usersoil = read.csv(usersoil.path)
+# 
+# # load the the mukeys list for the study area
+# mukeys = unique(raster(soils.path))
+# 
+# # index all the relevant mukeys, check that none are missing from usersoil table
+# mukeys.all = unique(usersoil$MUID)
+# if(!all(mukeys %in% mukeys.all)) {print('CRITICAL ERROR: raster mukey missing from usersoil')}
+# idx.usersoil = usersoil$MUID %in% mukeys
+# 
+# # make a copy of the relevant rows of the usersoil table, copying MUID into SNAM
+# swat.usersoil = usersoil %>% 
+#   filter(idx.usersoil) %>%
+#   select(-HYDGRP_ORIG, -Notes) %>%
+#   mutate(SNAM = MUID)
+# 
+# # create the lookup table for the raster
+# swat.soil.lookup = swat.usersoil %>%
+#   mutate(SOIL_ID=MUID) %>%
+#   select(SOIL_ID, SNAM)
+# 
+# # finally, write the lookup table 
+# swat.usersoil.path = here(swat.dir, 'millcreek_soil.csv')
+# write.csv(swat.soil.lookup, swat.usersoil.path, row.names=FALSE)
 
 #+ eval=FALSE
 #my_markdown('make_qswatplus')
