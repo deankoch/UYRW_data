@@ -277,7 +277,8 @@ if(!file.exists(here(makeqswat.meta['swat_outlets', 'file'])))
   
   # add required fields for QSWAT/QSWAT+
   n.pts = length(outlets.swat)
-  outlets.swat = st_sf(data.frame(ID=1:n.pts, RES=0, INLET=0, PTSOURCE=0), geom=outlets.swat)
+  outlets.df = data.frame(ID=as.integer(1:n.pts), INLET=as.integer(0), RES=as.integer(0), PTSOURCE=as.integer(0))
+  outlets.swat = st_sf(outlets.df, geom=outlets.swat)
   
   # write to disk as ESRI shapefile
   st_write(outlets.swat, here(makeqswat.meta['swat_outlets', 'file']), append=FALSE)
@@ -336,7 +337,73 @@ if(!dir.exists(wstn.dir))
 
 if(0)
 {
-  # AFTER RUNNING QSWAT+, SWAT+EDITOR, SWAT EXECUTABLE
+  # TRY SETTING UP A SWAT+ AW config
+  
+  # scan all files in source directory
+  src.fn = list.files(swat.dir)
+  
+  # make a new folder for this workflow
+  wf.subdir = 'data'
+  wf.dir = here(file.path(swat.dir, wf.subdir))
+  my_dir(wf.dir)
+  
+  # make subdirectories
+  wf.rasters.dir = file.path(wf.dir, 'rasters')
+  wf.shape.dir = file.path(wf.dir, 'shapefiles')
+  wf.tables.dir = file.path(wf.dir, 'tables')
+  my_dir(wf.rasters.dir)
+  my_dir(wf.shape.dir)
+  my_dir(wf.tables.dir)
+  
+  # copy the rasters
+  file.copy(dem.path, file.path(wf.rasters.dir, 'dem.tif'))
+  file.copy(landuse.path, file.path(wf.rasters.dir, 'landuse.tif'))
+  file.copy(soils.path, file.path(wf.rasters.dir, 'soils.tif'))
+
+  # copy streams shapefiles
+  streams.src = tools::file_path_sans_ext(basename(makeqswat.meta['swat_streams', 'file']))
+  streams.fn = src.fn[grepl(streams.src, src.fn, fixed=TRUE)]
+  streams.path = here(file.path(swat.dir, streams.fn))
+  file.copy(streams.path, file.path(wf.shape.dir, streams.fn))
+  
+  # copy outlets shapefiles
+  outlets.src = tools::file_path_sans_ext(basename(makeqswat.meta['swat_outlets', 'file']))
+  outlets.fn = src.fn[grepl(outlets.src, src.fn, fixed=TRUE)]
+  outlets.path = here(file.path(swat.dir, outlets.fn))
+  file.copy(outlets.path, file.path(wf.shape.dir, outlets.fn))
+  
+  # copy landuse table 
+  landuse.lookup = read.csv(here(landuse.meta['swat_landuse_lookup', 'file']))
+  #landuse.lookup$Landuse = toupper(landuse.lookup$Landuse)
+  colnames(landuse.lookup) = c('LANDUSE_ID', 'SWAT_CODE')
+  landuse.lookup.path = file.path(wf.tables.dir, 'landuse_lookup.csv')
+  write.csv(landuse.lookup, file=landuse.lookup.path, row.names=F)
+  
+  # copy usersoil table after pruning and copying MUID field to SNAM 
+  usersoil.ref = read.csv(here(out.subdir, 'usersoil.csv'))
+  usersoil.path = file.path(wf.tables.dir, 'usersoil.csv')
+  usersoil.out = usersoil.ref[usersoil.ref$MUID %in% unique(raster(soils.path)),]
+  usersoil.out$SNAM = usersoil.out$MUID
+  write.csv(usersoil.out, file=usersoil.path, row.names=F)
+  
+  # workaround for QSWAT+ bug not prompting for csv file
+  # soils.sql = dbConnect(RSQLite::SQLite(), here(swat.dir, 'test', 'test.sqlite'))
+  # dbWriteTable(soils.sql, 'usersoil', usersoil.out, overwrite=TRUE)
+  # dbDisconnect(soils.sql)
+  
+  test.sql = dbConnect(RSQLite::SQLite(), 'C:/SWAT/SWATPlus/Workflow/test/tester/tester.sqlite')
+  dbListTables(test.sql)
+  dbReadTable(test.sql, 'plants_plt')$name
+  
+  # make a soils lookup csv
+  soilcsv.path = file.path(wf.tables.dir, 'soil_lookup.csv')
+  write.csv(data.frame(SOIL_ID=usersoil.out$SNAM, SNAM=usersoil.out$SNAM), file=soilcsv.path, row.names=F)
+  
+}
+
+if(0)
+{
+  # AFTER RUNNING QSWAT+, SWAT+EDITOR, SWAT SIMULATION EXECUTABLE
   
   # try opening the channel variables output file and printing the contents
   txtio.subdir = 'millcreek/Scenarios/Default/TxtInOut'
