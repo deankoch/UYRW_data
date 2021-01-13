@@ -38,7 +38,7 @@ can be done automatically (and much more quickly) via PyQGIS scripts, such as th
 [SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html) by Celray
 James. An example that is customized for the UYRW_data project is linked below:
 
-* [run_qswatplus](https://github.com/deankoch/UYRW_data/tree/master/python)
+* [run_qswatplus](https://github.com/deankoch/UYRW_data/tree/master/python) (standalone) PyQGIS script for creating a SWAT+ model
 
 We may open a new repository for this kind of python code, including parameter calibration scripts androutines for splitting large watersheds into smaller ones that can be calibrated sequentially. Check back for more scripts and figures as we add to this list in the coming weeks.
 
