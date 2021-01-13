@@ -1,6 +1,6 @@
 ## about us
 
-We are a team of mathematicians, statisticians, and ecologists, conducting a multi-year research project to develop an operational forecasting system for streamflow and water quality on the [Upper Yellowstone River](http://fwp.mt.gov/mtoutdoors/images/Storyimages/2017/UpperYellowstoneMap.jpg) (UYR) and its tributaries. Our system will be based on [SWAT-MODFLOW](https://www.sciencedirect.com/science/article/abs/pii/S136481521930893X?via%3Dihub), a hybrid of the [SWAT2012](https://swat.tamu.edu/software/swat-editor/) (Soil-Water-Assessment Tool) model for surface water dynamics and [MODFLOW](https://www.usgs.gov/mission-areas/water-resources/science/modflow-and-related-programs?qt-science_center_objects=0#qt-science_center_objects) (Modular Finite-Difference Flow) for groundwater dynamics. 
+We are a team of mathematicians, statisticians, and ecologists, conducting a multi-year research project to develop an operational forecasting system for streamflow and water quality on the [Upper Yellowstone River](http://fwp.mt.gov/mtoutdoors/images/Storyimages/2017/UpperYellowstoneMap.jpg) (UYR) and its tributaries. Our system will be based on [SWAT+/gflow](https://www.mdpi.com/2306-5338/7/4/75), a hybrid of the [SWAT+](https://swat.tamu.edu/software/plus/) (Soil-Water-Assessment Tool) model for surface water dynamics, and gflow, physically-based groundwater flow module developed by Ryan Bailey to replace the current SWAT+ aquifer module. 
 
 ## R code
 
@@ -27,19 +27,26 @@ fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.scie
 * [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
 fetches three different gridded meteorological reconstructions of Northwestern North America
 
-This script does some intermediate steps required to succesfully load the data into QSWAT3 and build a watershed
+This script does some intermediate steps required to successfully load the data into QSWAT+3 and build a watershed
 model:
 
-* [make_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswat.md) prepares QSWAT3 inputs
+* [make_qswatplus](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswatplus.md) prepares QSWAT+3 inputs
 
+After running the above, the user can load the prepared raster and geometry data files into QSWAT+
+(a plugin for QGIS), and construct a SWAT+ model from there. Alternatively, SWAT+ model construction
+can be done automatically (and much more quickly) via PyQGIS scripts, such as those provided in the
+[SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html) by Celray
+James. An example that is customized for the UYRW_data project is linked below:
 
+* [run_qswatplus](https://github.com/deankoch/UYRW_data/tree/master/python)
 
-Check back for more scripts and figures as we add to this list in the coming weeks.
+We may open a new repository for this kind of python code, including parameter calibration scripts androutines for splitting large watersheds into smaller ones that can be calibrated sequentially. Check back for more scripts and figures as we add to this list in the coming weeks.
 
-Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's [Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
+Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's
+[Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
 
 <!--- These scripts prepare the data structure needed to run the
-[SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
+
 python codebase from Celray James and Chris George. SWAT+ AW replaces the QSWAT+ GUI as the
 main tool for setting up a SWAT+ watershed model, as part of an effort towards reproducible
 catchment modelling science
