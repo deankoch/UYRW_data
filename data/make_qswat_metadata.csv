@@ -1,4 +1,6 @@
 "","file","type","description"
+"soils_mdb","data/source/swat_soils.mdb","MDB database","soil parameter tables"
+"usersoil","data/prepared/usersoil_swat2012.csv","CSV","usersoil table from mdb database on SWAT2012 website, cropped to URYW area codes"
 "swat_source","data/prepared/qswat","directory","QSWAT I/O directory"
 "swat_proj","data/prepared/qswat/millcreek","directory","QSWAT project directory"
 "swat_qgz","data/prepared/qswat/millcreek.qgz","QGIS project file","QGIS project file for QSWAT3 worflow"

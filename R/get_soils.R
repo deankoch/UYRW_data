@@ -463,6 +463,41 @@ if(any(!file.exists(here(soils.meta[c('statsgo_sf', 'statsgo_tab'), 'file']))))
 
 }
 
+#' ## usersoil.csv (work in progress)
+#' 
+#' This chunk copies the SSURGO_Soils ('usersoil') table from the MS Access soil reference
+#' database that is used with SWAT2012 ('SWAT_US_SSURGO_Soils.mdb'), exporting it as CSV.
+#' This includes data for STATSGO2 mukeys. Since the dataset is very large, only the mukeys
+#' identified above as part of the URYW region are copied.  
+#' 
+#' QSWAT+ stores the same data in its SQLite soils reference database ('swatplus_soils.sqlite'),
+#' but it is indexed differently (split over several tables). QSWAT+ has an option to import
+#' this data automatically, or it can use a usersoil table like the one copied here. SWAT+AW,
+#' however, requires the usersoil table, which is why we save a copy here.
+#'  
+
+# Save a copy of the usersoil table from the mdb database
+usersoil.path = here(out.subdir, 'usersoil.csv')
+swatmdb.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb' 
+if(0)
+{
+  # open the database to extract the (very large) usersoil table
+  mdb.string = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};'
+  swatmdb.con = odbcDriverConnect(paste0(mdb.string, 'DBQ=', swatmdb.path))
+  usersoil.ref = sqlFetch(swatmdb.con, 'SSURGO_Soils')
+  odbcClose(swatmdb.con)
+  
+  # prune to remove entries whose mukeys aren't found in the study area
+  ssurgo.mukeys = unique(as.integer(ssurgo.sf$MUKEY))
+  statsgo.mukeys = unique(as.integer(statsgo.sf$MUKEY))
+  idx.keep = usersoil.ref$MUID %in% c(ssurgo.mukeys, statsgo.mukeys)
+  
+  # write to disk as CSV
+  write.csv(usersoil.ref[idx.keep,], file=usersoil.path, row.names=F)
+  
+ 
+}
+
   
 #'
 #' ## SSURGO vs STATSGO coverage
