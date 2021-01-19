@@ -14,9 +14,7 @@
 
 #'
 #' ## libraries
-#' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the USGS data,
-#' [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html) provides a wrapper
-#' for GDAL calls to warp the DEM,
+#' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the USGS data
 #' and [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html) provides
 #' a palette for the terrain map.
 #' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
@@ -24,7 +22,6 @@
 library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
-library(gdalUtilities)
 library(colorspace)
 
 #'

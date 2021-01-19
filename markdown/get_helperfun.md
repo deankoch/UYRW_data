@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2020-12-18
+2021-01-19
 
 **Mitacs UYRW project**
 
@@ -65,6 +65,13 @@ efficiently load large I/O files.
 
 ``` r
 library(data.table)
+```
+
+[`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
+GDAL wrapper
+
+``` r
+library(gdalUtilities)
 ```
 
 ## project data
@@ -260,9 +267,9 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
 ```
 
 My R scripts are commented using a roxygen2 syntax that is interpretable
-by `rmarkdown`. This convenience function renders the markdown file for
-a given R script and writes to a file of the same name (but with a .md
-extension).
+by `rmarkdown`, for conversion to markdown via pandoc. This convenience
+function renders the markdown file for a given R script and writes to a
+file of the same name (but with a .md extension).
 
 ``` r
 my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
@@ -1489,6 +1496,80 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
   }
   
   return(nse)
+}
+```
+
+run the TauDEM workflow to compute watershed geometry given a DEM
+
+``` r
+my_taudem = function(dem, odir, streams=NULL, burn.depth=10)
+{
+  # ARGUMENTS:
+  #
+  # `dem`: raster object, a digital elevation model (units of meters)
+  # `odir`: path to the directory to write output files
+  # `streams`: sf object, the line geometry for drainage reinforcement ('burn-in')
+  # `bdepth`: numeric (in meters), the vertical height to subtract from the DEM for burn-in
+  #
+  # RETURN VALUE:
+  #
+  # A named vector of character strings supplying paths to the TauDEM output files
+  # 
+  # DETAILS:
+  #
+  # Note that any point 
+
+  # create the output directory if necessary
+  my_dir(odir)
+  
+  # copy DEM and burn-in streams if necessary 
+  dem.ipath = file.path(odir, 'dem_in.tif')
+  if(is.null(streams))
+  {
+    # write an unmodified copy of the DEM to the output directory
+    writeRaster(dem, dem.ipath, 
+                options=c('COMPRESS=NONE, TFW=YES'),
+                format='GTiff', 
+                overwrite=TRUE)
+    
+  } else {
+    
+    # assign units to burn-in depth
+    burn.depth = units::set_units(burn.depth, m)
+    
+    # set path to write in output directory
+    streams.ipath = file.path(odir, 'streams_toburn.tif')
+    
+    
+    
+    streams = st_geometry(streams[st_is(streams, 'LINESTRING'),])
+    
+    # make sure the streams network contains only LINESTRING geometries, drop attributes
+    streams = st_cast(st_geometry(streams[!st_is(streams, 'POINT'),]), 'LINESTRING')
+    
+    # convert streams to `Spatial`, add unit dummy field, rasterize
+    streams.sp = as(streams, 'Spatial')
+    streams.sp$dummy = rep(1, length(streams.sp))
+    gRasterize(streams.sp, dem, field='dummy', filename=streams.ipath)
+    
+    # find cell numbers of non-NA cells in the streams raster 
+    streams.idx = Which(!is.na(raster(streams.ipath)), cells=TRUE) 
+    
+    # extract elevations at all cells intersecting with a stream
+    streams.elev = units::set_units(extract(dem, streams.idx), m)
+    
+    # decrement these elevations and write burned DEM file as uncompressed GeoTIFF
+    dem[streams.idx] = as.vector(streams.elev - burn.depth)
+    writeRaster(dem, dem.ipath, 
+                options=c('COMPRESS=NONE, TFW=YES'),
+                format='GTiff', 
+                overwrite=TRUE)
+    
+  }
+
+  
+  # 
+  
 }
 
 # # print all available SWAT+ plant codes containing the following keywords

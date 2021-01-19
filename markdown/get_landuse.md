@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2020-12-16
+2021-01-19
 
 **Mitacs UYRW project**
 
@@ -22,11 +22,9 @@ should be run before this script.
 
 ## libraries
 
-[`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
-provides a wrapper for GDAL calls to warp the land use raster, and the
-base package
+The base package
 [`grid`](https://stat.ethz.ch/R-manual/R-devel/library/grid/html/grid-package.html)
-allows more control over plot layouts.
+allows more control over plot layouts, and
 [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
 provides some predefined color palettes for plotting. See the
 [get\_helperfun.R
@@ -37,7 +35,6 @@ for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
 library(raster)
-library(gdalUtilities)
 library(grid)
 library(colorspace)
 ```

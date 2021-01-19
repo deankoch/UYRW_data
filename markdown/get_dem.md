@@ -1,7 +1,7 @@
 get\_dem.R
 ================
 Dean Koch
-2020-10-21
+2021-01-19
 
 **Mitacs UYRW project**
 
@@ -14,9 +14,7 @@ should be run before this script.
 ## libraries
 
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
-is used to fetch the USGS data,
-[`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
-provides a wrapper for GDAL calls to warp the DEM, and
+is used to fetch the USGS data and
 [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
 provides a palette for the terrain map. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
@@ -25,10 +23,26 @@ for other required libraries
 ``` r
 library(here)
 source(here('R/get_helperfun.R'))
+```
+
+    ## 
+    ## Attaching package: 'gdalUtilities'
+
+    ## The following object is masked from 'package:sf':
+    ## 
+    ##     gdal_rasterize
+
+``` r
 library(FedData)
-library(gdalUtilities)
 library(colorspace)
 ```
+
+    ## 
+    ## Attaching package: 'colorspace'
+
+    ## The following object is masked from 'package:raster':
+    ## 
+    ##     RGB
 
 ## project data
 

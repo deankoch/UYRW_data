@@ -22,10 +22,9 @@
 
 #'
 #' ## libraries
-#' [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html) provides a wrapper
-#' for GDAL calls to warp the land use raster, and the base package
+#' The base package
 #' [`grid`](https://stat.ethz.ch/R-manual/R-devel/library/grid/html/grid-package.html) allows more control
-#' over plot layouts.
+#' over plot layouts, and
 #' [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
 #' provides some predefined color palettes for plotting.
 #' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
@@ -33,7 +32,6 @@
 library(here)
 source(here('R/get_helperfun.R'))
 library(raster)
-library(gdalUtilities)
 library(grid)
 library(colorspace)
 

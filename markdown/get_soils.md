@@ -1,7 +1,7 @@
 get\_soils.R
 ================
 Dean Koch
-2021-01-15
+2021-01-19
 
 **Mitacs UYRW project**
 
@@ -35,8 +35,6 @@ ongoing.
 
 ## libraries
 
-[`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html)
-provides a wrapper for GDAL calls to rasterize the mapunit polygons,
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
 is used to fetch the [NRCS
 SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
@@ -53,17 +51,6 @@ for other required libraries
 ``` r
 library(here)
 source(here('R/get_helperfun.R'))
-library(gdalUtilities)
-```
-
-    ## 
-    ## Attaching package: 'gdalUtilities'
-
-    ## The following object is masked from 'package:sf':
-    ## 
-    ##     gdal_rasterize
-
-``` r
 library(FedData)
 library(rvest)
 ```

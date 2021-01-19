@@ -31,8 +31,6 @@
 
 #'
 #' ## libraries
-#' [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html) provides a wrapper
-#' for GDAL calls to rasterize the mapunit polygons,
 #' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the
 #' [NRCS SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 #' soils data,
@@ -45,7 +43,6 @@
 #' for other required libraries
 library(here)
 source(here('R/get_helperfun.R'))
-library(gdalUtilities)
 library(FedData)
 library(rvest)
 library(RSQLite)
