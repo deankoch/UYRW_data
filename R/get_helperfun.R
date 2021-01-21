@@ -80,7 +80,7 @@ tif.na.val = -32767
 #' of the table. To call up the table for a specific script, simply use `my_metadata(script.name)`.
 #' 
 # creates and/or adds to a data frame of metadata documenting a given script, and (optionally) writes it to disk as a CSV file 
-my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data')
+my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data', v=TRUE)
 {
   # ARGUMENTS:
   #
@@ -89,6 +89,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   # `data.dir` is the subdirectory of the project folder in which to write the CSV file: /data/`script.name`_metadata.csv 
   # `use.file` is a boolean indicating whether to read/write the CSV file
   # `overwrite` allows an existing CSV file to be modified 
+  # `v` boolean, set FALSE to suppress console message
   #
   # RETURN VALUE:
   #
@@ -194,7 +195,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
     if(overwrite)
     {
       # CSV file is written to disk
-      print(paste('writing to', csv.relpath))
+      if(v) print(paste('> writing metadata to:', csv.relpath))
       write.csv(output.df, here(csv.relpath))
       return(output.df)
       
@@ -1394,13 +1395,17 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 }
 
 #' run the TauDEM workflow to compute watershed geometry given a DEM
-my_taudem = function(dem, odir, streams=NULL, burn.depth=10)
+my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf=NULL, bdepth=10)
 {
   # ARGUMENTS:
   #
   # `dem`: raster object, a digital elevation model (units of meters)
-  # `odir`: path to the directory to write output files
-  # `streams`: sf object, the line geometry for drainage reinforcement ('burn-in')
+  # `odir`: relative path to the output directory
+  # `nstream`: integer, stream delineation threshold
+  # `nchan`: integer, channel delineation threshold
+  # `nproc`: integer, the number of cores to use with MSMPI
+  # `outlet.sf`: sf object, (optional) point geometry for outlets, with integer attribute `id`
+  # `bsf`: sf object, (optional) line geometry for drainage reinforcement ('burn-in')
   # `bdepth`: numeric (in meters), the vertical height to subtract from the DEM for burn-in
   #
   # RETURN VALUE:
@@ -1409,58 +1414,484 @@ my_taudem = function(dem, odir, streams=NULL, burn.depth=10)
   # 
   # DETAILS:
   #
-  # Note that any point 
-
-  # create the output directory if necessary
-  my_dir(odir)
+  # This attempts to replicate the behaviour of TauDEM in QSWAT+, but with the option of 
+  # using drop analysis to determine the stream threshold.
+  #
+  # based on: https://hydrology.usu.edu/taudem/taudem5/TauDEMRScript.txt and QSWAT+
+  # Requires TauDEM binaries to be installed to the path hardcoded below as `exe.dir`.
+  # get TauDEM installer from: from http://hydrology.usu.edu/taudem/taudem5.0/downloads.html
+  # learn about the algorithm here: https://hydrology.usu.edu/taudem/taudem2.0/taudem.html#Overview
+  #
+  # `nstream` and `nchan` are the contributing area thresholds (in # of cells) above which a
+  # cell is included in the stream (resp., channel) network. If `nchan` is zero or negative, 
+  # TauDEM will attempt to find the smallest feasible value (producing the most detailed
+  # feasible network) by drop analysis, based on the constant drop law of Broscoe (1959). If
+  # `nstream` is zero or negative, it is assigned to 10X to the value of `nchan` (similar to
+  # the defaults set in SWAT+) 
+  #
+  # Note that any non-line geometry in `bsf` will be ignored, and any assigned value for
+  # `bdepth` will be ignored if `bsf` is not supplied (since there is nothing to burn).
+  # Non-point geometries in `outlet.sf` will be ignored, and if `outlet.sf` is unassigned, the
+  # main outlet of the watershed (in terms of area drained) is computed and set.
   
-  # copy DEM and burn-in streams if necessary 
-  dem.ipath = file.path(odir, 'dem_in.tif')
-  if(is.null(streams))
+  
+  # path to TauDEM binaries
+  exe.dir = normalizePath('C:/SWAT/SWATEditor/TauDEM5Bin')
+  
+  # prefix for shell commands pointing to TauDEM directory and MS MPI
+  sps = paste('pushd', exe.dir, '&&', 'mpiexec -n', nproc)
+  
+  # define the files written by the TauDEM workflow
+  files.towrite = list(
+    
+    # DEM (source)
+    c(name='dem',
+      file=file.path(odir, 'dem_in.tif'), 
+      type='GeoTIFF',
+      description='input DEM (after burn-in, if `bsf` present)'),
+    
+    # outlet
+    c(name='outlet',
+      file=file.path(odir, 'outlet.shp'), 
+      type='ESRI shapefile',
+      description='points representing outlets of interest'),
+    
+    # snapped outlet
+    c(name='outlet_snap',
+      file=file.path(odir, 'outlet_snap.shp'), 
+      type='ESRI shapefile',
+      description='outlets after snap to stream network derived from `ad8`'),
+    
+    # pit-removed DEM
+    c(name='fel',
+      file=file.path(odir, 'taudem_fel.tif'), 
+      type='raster',
+      description='`dem` after pits (artifacts) raised to their pour point'),
+    
+    # D8 descent direction 
+    c(name='p',
+      file=file.path(odir, 'taudem_p.tif'), 
+      type='GeoTIFF',
+      description='steepest 8-point descent direction (discrete; 1=E, 2=NE, 3=N, etc)'),
+    
+    # D8 slope
+    c(name='sd8',
+      file=file.path(odir, 'taudem_sd8.tif'), 
+      type='GeoTIFF',
+      description='slope grid corresponding to `p`, reported as tan(angle)'),
+    
+    # D-infinity descent direction
+    c(name='ang',
+      file=file.path(odir, 'taudem_ang.tif'), 
+      type='GeoTIFF',
+      description='counter-clockwise angle (rad) from east (continuous)'),
+    
+    # D-infinity slope
+    c(name='slp',
+      file=file.path(odir, 'taudem_slp.tif'), 
+      type='GeoTIFF',
+      description='slope grid corresponding to `ang`, reported as tan(angle)'),
+    
+    # D8 contributing area
+    c(name='ad8',
+      file=file.path(odir, 'taudem_ad8.tif'), 
+      type='GeoTIFF',
+      description='contributing area of upslope neighbours, from `p` (discrete)'),
+    
+    # D-infinity contributing area
+    c(name='sca',
+      file=file.path(odir, 'taudem_sca.tif'), 
+      type='GeoTIFF',
+      description='contributing area of upslope neighbours, from `ang` (continuous)'),
+    
+    # streams from threshold
+    c(name='sst',
+      file=file.path(odir, 'taudem_sst.tif'), 
+      type='GeoTIFF',
+      description='stream network, delineated from `ad8` with threshold `nstream`'),
+    
+    # channels from threshold
+    c(name='sch',
+      file=file.path(odir, 'taudem_sch.tif'), 
+      type='GeoTIFF',
+      description='channels network, delineated from `ad8` with threshold `nchan`'),
+    
+    # stream network ordering
+    c(name='gord',
+      file=file.path(odir, 'taudem_gord.tif'), 
+      type='GeoTIFF',
+      description='Strahler network order for flow network derived from `p`'),
+    
+    # longest upslope length
+    c(name='plen',
+      file=file.path(odir, 'taudem_plen.tif'), 
+      type='GeoTIFF',
+      description='path length from furthest cell draining into each cell'),
+    
+    # sum total upslope length
+    c(name='tlen',
+      file=file.path(odir, 'taudem_tlen.tif'), 
+      type='GeoTIFF',
+      description='total length of all paths draining into each cell'),
+    
+    # list of links in channel network tree
+    c(name='tree',
+      file=file.path(odir, 'taudem_tree.dat'), 
+      type='plaintext file',
+      description=' text file with list of links in channel network tree'),
+    
+    # list of coordinates in channel network tree
+    c(name='coord',
+      file=file.path(odir, 'taudem_coord.dat'), 
+      type='plaintext file',
+      description='text file with list of coordinates in channel network tree'),
+
+    # watershed stream network shapefile
+    c(name='demnet',
+      file=file.path(odir, 'taudem_demnet.shp'), 
+      type='ESRI shapefile',
+      description='channel network shapefile resulting from StreamNet'),
+    
+    # watershed stream network raster
+    c(name='w',
+      file=file.path(odir, 'taudem_w.tif'), 
+      type='GeoTIFF',
+      description='watershed identifier raster from StreamNet'),
+    
+    # stream network ordering
+    c(name='ord',
+      file=file.path(odir, 'taudem_ord.tif'), 
+      type='GeoTIFF',
+      description='Strahler network order raster from StreamNet')
+    
+  )
+  
+  # save the table as csv (creating output directory)
+  print(paste('> running TauDEM in output directory', odir))
+  taudem.meta = my_metadata('taudem', files.towrite, overwrite=TRUE, data.dir=odir)
+  
+  # copy DEM and, if necessary, create burn-in streams raster 
+  if(is.null(bsf))
   {
+    print(' > writing DEM...')
+    
     # write an unmodified copy of the DEM to the output directory
-    writeRaster(dem, dem.ipath, 
+    writeRaster(dem, here(taudem.meta['dem', 'file']), 
                 options=c('COMPRESS=NONE, TFW=YES'),
                 format='GTiff', 
                 overwrite=TRUE)
     
   } else {
     
+    print(' > rasterizing streams for burn-in...')
+    
+    # create metadata list entry for burn-in streams raster
+    bsf.entry = c(name='bsf',
+                  file=file.path(odir, 'streams_toburn.tif'), 
+                  type='GeoTIFF',
+                  description='rasterized stream input, used for burn-in via `bsf`')
+    
+    # rewrite the metadata table csv
+    taudem.meta = my_metadata('taudem', list(bsf.entry), overwrite=TRUE, data.dir=odir, v=F)
+    
     # assign units to burn-in depth
-    burn.depth = units::set_units(burn.depth, m)
+    bdepth = units::set_units(bdepth, m)
     
-    # set path to write in output directory
-    streams.ipath = file.path(odir, 'streams_toburn.tif')
-    
-    
-    
-    streams = st_geometry(streams[st_is(streams, 'LINESTRING'),])
-    
-    # make sure the streams network contains only LINESTRING geometries, drop attributes
-    streams = st_cast(st_geometry(streams[!st_is(streams, 'POINT'),]), 'LINESTRING')
+    # make sure the streams network contains only LINESTRING geometries, drop any attributes
+    bsf = st_geometry(bsf[st_is(bsf, 'LINESTRING'),])
     
     # convert streams to `Spatial`, add unit dummy field, rasterize
-    streams.sp = as(streams, 'Spatial')
-    streams.sp$dummy = rep(1, length(streams.sp))
-    gRasterize(streams.sp, dem, field='dummy', filename=streams.ipath)
+    bsf.sp = as(bsf, 'Spatial')
+    bsf.sp$dummy = rep(1, length(bsf.sp))
+    gRasterize(bsf.sp, dem, field='dummy', filename=here(taudem.meta['bsf', 'file']))
     
     # find cell numbers of non-NA cells in the streams raster 
-    streams.idx = Which(!is.na(raster(streams.ipath)), cells=TRUE) 
+    bsf.idx = Which(!is.na(raster(here(taudem.meta['bsf', 'file']))), cells=TRUE) 
     
     # extract elevations at all cells intersecting with a stream
-    streams.elev = units::set_units(extract(dem, streams.idx), m)
+    bsf.elev = units::set_units(extract(dem, bsf.idx), m)
     
-    # decrement these elevations and write burned DEM file as uncompressed GeoTIFF
-    dem[streams.idx] = as.vector(streams.elev - burn.depth)
-    writeRaster(dem, dem.ipath, 
+    # decrement these elevations before writing DEM file as uncompressed GeoTIFF
+    print('  > writing DEM...')
+    dem[bsf.idx] = as.vector(bsf.elev - bdepth)
+    writeRaster(dem, here(taudem.meta['dem', 'file']), 
                 options=c('COMPRESS=NONE, TFW=YES'),
                 format='GTiff', 
                 overwrite=TRUE)
     
   }
-
   
-  # 
+  # load the DEM and compute the number of cells
+  dem = raster(here(taudem.meta['dem', 'file']))
+  ncell = length(dem) 
+  
+  # compute area in km^2 of single grid cell (assumes projection units of 'm')
+  cell.area = units::set_units(prod(res(dem))/1e6, km^2)
+  dem.area = ncell*cell.area
+  
+  # drop analysis is skipped when `achan` threshold argument is provided
+  do.dropanalysis = FALSE
+  
+  # handle unassigned channel delineation threshold
+  if(! nchan > 0)
+  {
+    # zero or negative `achan` triggers drop analysis
+    do.dropanalysis = TRUE
+    
+    # set a range of thresholds to test by drop analysis
+    achan.min = max(units::set_units(0.1, km^2), 2*cell.area)
+    achan.max = min(units::set_units(100, km^2), dem.area/10)
+    
+    # corresponding number of cells
+    nchan.min = as.integer(achan.min/cell.area) + 1
+    nchan.max = as.integer(achan.max/cell.area) + 1
+    
+  }
+  
+  # handle unassigned stream delineation threshold
+  if(! nstream > 0)
+  {
+    # set default initial threshold (if `achan` provided, set to 10X that)
+    astream = ifelse(do.dropanalysis, units::set_units(1, km^2), 10*achan)
+    
+    # corresponding number of cells
+    nstream = as.integer(astream/cell.area) + 1
+    
+  }
+  
+
+  # normalize paths for use in windows shell
+  np = normalizePath(here(taudem.meta[,'file']), mustWork=FALSE)
+  names(np) = rownames(taudem.meta)
+  
+  ## begin TauDEM worflow
+  
+  # 1. pit removal (in: `dem`; out: `fel`)
+  print(' > removing pits...')
+  arg = paste('-z', np['dem'], '-fel', np['fel'])
+  shell(paste(sps, 'PitRemove', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 2. D8 geometry (in: `fel`; out: `sd8`, `p`)
+  print(' > computing D8 flow directions and slopes...')
+  arg = paste('-fel', np['fel'], '-sd8', np['sd8'], '-p', np['p'])
+  shell(paste(sps, 'D8Flowdir', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 4. D8 contributing areas (in: `p`; out: `ad8`)
+  print(' > computing D8 contributing area...')
+  arg = paste('-p', np['p'], '-ad8', np['ad8'], '-nc')
+  shell(paste(sps, 'AreaD8', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # if no outlet argument supplied, find main outlet using `ad8`...
+  if(is.null(outlet.sf))
+  {
+    ad8 = raster(np['ad8'])
+    outlet.sf = st_sfc(st_point(xyFromCell(ad8, which.max(getValues(ad8)))), crs=st_crs(dem))
+    outlet.sf = st_sf(data.frame(id=1), geom=outlet.sf, crs=st_crs(dem))
+    print('  > main outlet detected from AD8 and written to outlet.shp')
+    
+  } else {
+    
+    # ...otherwise discard any non-point geometry from user input
+    outlet.sf = outlet.sf[st_is(outlet.sf, 'POINT'),]
+    
+    # add the `id` attribute if missing
+    if(is.null(outlet.sf$id))
+    {
+      outlet.sf$id = 1:nrow(outlet.sf)
+    }
+    
+    # discard all other attributes
+    outlet.sf = outlet.sf[, names(outlet.sf) %in% c('geometry', 'id')]
+    
+  }
+  
+  # 3. D-infinity geometry (in: `fel`; out: `ang`, `slp`)
+  print(' > computing D-infinity flow directions and slopes...')
+  arg = paste('-fel', np['fel'], '-ang', np['ang'], '-slp', np['slp'])
+  shell(paste(sps, 'DinfFlowdir', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 5. D-infinity contributing areas (in: `ang`; out: `sca`)
+  print(' > computing D-infinity contributing area...')
+  arg = paste('-ang', np['ang'], '-sca', np['sca'], '-nc')
+  shell(paste(sps, 'AreaDinf', arg), ignore.stderr=T,  ignore.stdout=T)
+
+  # 6. initial stream delineation (in: `ad8`; out: `sst`)
+  print(paste(' > delineating streams with threshold of', nstream, 'cells...'))
+  arg = paste('-ssa', np['ad8'], '-src', np['sst'], '-thresh', nstream)
+  shell(paste(sps, 'Threshold', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # write outlet point(s) as shapefile
+  print(' > writing outlets shapefile...')
+  st_write(outlet.sf, np['outlet'], append=FALSE, quiet=TRUE)
+  
+  # 7. snap outlets (in: `p`, `sst`, `outlet`; out: `outlet_snap`)
+  print('  > snapping outlets along D8 to nearest stream...')
+  arg = paste('-p', np['p'], '-src', np['sst'], '-o', np['outlet'], '-om', np['outlet_snap'])
+  shell(paste(sps, 'MoveOutletsToStreams', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+
+  # 8. drop analysis (if requested)
+  if(do.dropanalysis)
+  {
+    print(' > starting drop analysis')
+    
+    # create metadata table entry for drop analysis output files
+    drop.entry = list(
+      
+      c(name='drop',
+        file=file.path(odir, 'drop_analysis.txt'), 
+        type='plaintext file',
+        description='stream drop statistics, derived from `ssa` for various thresholds'),
+      
+      # candidate stream source pixels from Peuker-Douglas method
+      c(name='ss',
+        file=file.path(odir, 'taudem_ss.tif'), 
+        type='GeoTIFF',
+        description='stream skeleton delineated from `fel` by Peuker-Douglas algorithm'),
+      
+      # accumulated candidate stream source cells from Peuker-Douglas
+      c(name='ssa',
+        file=file.path(odir, 'taudem_ssa.tif'), 
+        type='GeoTIFF',
+        description='contributing area of stream source cells, from `ss`')
+      
+      )
+    
+    # rewrite the metadata table csv and update names list
+    taudem.meta = my_metadata('taudem', drop.entry, overwrite=TRUE, data.dir=odir, v=F)
+    np = normalizePath(here(taudem.meta[,'file']), mustWork=FALSE)
+    names(np) = rownames(taudem.meta)
+    
+    # 8a. Douglas-Peucker stream delineation (in: `fel`; out: `ss`)
+    print('  > delineating streams using Douglas-Peucker algorithm...')
+    arg = paste('-fel', np['fel'], '-ss', np['ss'])
+    shell(paste(sps, 'PeukerDouglas', arg), ignore.stderr=T,  ignore.stdout=T)
+    
+    # 8b. recompute D8 areas for drop analysis (in: `p`, `ss`, `outlet_snap`; out: `ssa`)
+    print('  > computing D8 contributing area from Peuker-Douglas stream sources...')
+    arg = paste('-p', np['p'], '-o', np['outlet_snap'], '-wg', np['ss'],  '-ad8', np['ssa'], '-nc')
+    shell(paste(sps, 'AreaD8', arg), ignore.stderr=T,  ignore.stdout=T)
+    
+    # 8c. set reasonable default search interval and perform drop analysis
+    drop.pars = paste(nchan.min, nchan.max, 100, 0)
+    arg1 = paste('-p', np['p'], '-fel', np['fel'], '-ad8', np['ad8'], '-ssa', np['ssa'])
+    arg2 = paste('-drp', np['drop'], '-o', np['outlet_snap'], '-par', drop.pars)
+    shell(paste(sps, 'Dropanalysis', arg1, arg2), ignore.stderr=T,  ignore.stdout=T)
+    
+    # set channels threshold to optimum found in drop analysis
+    drop.txt = readLines(np['drop'])
+    nchan.string = strsplit(drop.txt[length(drop.txt)], 'Optimum Threshold Value: ')[[1]][2]
+    nchan = as.integer(nchan.string) + 1
+    achan = nchan * cell.area
+    print(paste('  > drop analysis optimum:', nchan, 'cells, around', round(achan, 3), 'km^2'))
+    
+    # set streams threshold to 10X this value (following example of defaults from QSWAT+)
+    nstream = 10 * nchan
+    astream = nstream * cell.area
+    
+    # create metadata table entry for thresholds
+    threshold.entry = list(
+      
+      c(name='nstream',
+        file=NA, 
+        type='integer (optimum from drop analysis X10)',
+        description=paste('stream threshold:', nstream)),
+      
+      c(name='nchan',
+        file=NA, 
+        type='integer (optimum from drop analysis)',
+        description=paste('channel threshold:', nchan))
+      
+    )
+    
+  } else {
+    
+    
+    # create metadata table entry for thresholds
+    threshold.entry = list(
+      
+      c(name='nstream',
+        file=NA, 
+        type='integer (from user input)',
+        description=paste('stream threshold:', nstream)),
+      
+      c(name='nchan',
+        file=NA, 
+        type='integer (optimum from drop analysis)',
+        description=paste('channel threshold:', nchan))
+      
+    )
+    
+  }
+  
+  # rewrite the metadata table csv to include threshold values and update names list
+  taudem.meta = my_metadata('taudem', threshold.entry, overwrite=TRUE, data.dir=odir, v=F)
+  np = normalizePath(here(taudem.meta[,'file']), mustWork=FALSE)
+  names(np) = rownames(taudem.meta)
+  
+  # 9. recompute D8 areas with snapped outlets (in: `p`, `outlet_snap`; out: `ad8`)
+  print(' > computing D8 contributing area...')
+  arg = paste('-p', np['p'], '-ad8', np['ad8'], '-o', np['outlet_snap'], '-nc')
+  shell(paste(sps, 'AreaD8', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 11. channel delineation (in: `ad8`, `nchan`; out: `sch`)
+  print(paste('  > delineating channels with threshold of', nchan, 'cells...'))
+  arg = paste('-ssa', np['ad8'], '-src', np['sch'], '-thresh', nchan)
+  shell(paste(sps, 'Threshold', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 12. repeat stream delineation with new threshold (in: `ad8`, `nstream`; out: `sst`)
+  print(paste('  > delineating streams with threshold of', nstream, 'cells...'))
+  arg = paste('-ssa', np['ad8'], '-src', np['sst'], '-thresh', nstream)
+  shell(paste(sps, 'Threshold', arg), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 10. run GridNet with snapped outlets (in: `p`, `outlet_snap`; out:  `gord`, `plen`, `tlen`)
+  print('  > running GridNet...')
+  arg1 = paste('-p', np['p'], '-plen', np['plen'], '-tlen', np['tlen'], '-gord', np['gord'])
+  arg2 = paste('-o', np['outlet_snap'])
+  shell(paste(sps, 'GridNet', arg1, arg2), ignore.stderr=T,  ignore.stdout=T)
+  
+  # 13. run StreamNet (in: `fel`, `p`, `ad8`, `outlet_snap`, `sst`; 
+  # out: `tree`, `coord`, `demnet`, `w`, `ord`)
+  print('  > running StreamNet...')
+  arg1 = paste('-fel', np['fel'], '-p', np['p'], '-ad8', np['ad8'], '-ord', np['ord'])
+  arg2 = paste('-o', np['outlet_snap'], '-src', np['sst'], '-tree', np['tree'])
+  arg3 = paste('-coord', np['coord'], '-net', np['demnet'], '-w', np['w'])
+  shell(paste(sps, 'StreamNet', arg1, arg2, arg3), ignore.stderr=T,  ignore.stdout=T)
+
+  # # write projection info for `demnet` and `outlet_snap` (it's the same as for `outlet`)
+  # file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['demnet']))
+  # file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['outlet_snap']))
+  
+  # return table of file paths
+  return(taudem.meta)
+  #return(np)
+}
+
+#' calls gdal_polygonize.py from OSGEO4W (replacement for raster::rasterToPolygons)
+my_gdal_polygonize = function(w.path, shp.path)
+{
+  
+  # paths (these may be platform dependent)
+  osgeo4w.path = 'C:/Program Files/QGIS 3.10'
+  envir.path = file.path(osgeo4w.path, 'bin/o4w_env.bat')
+  pyqgis.path = file.path(osgeo4w.path, 'apps/Python37')
+  py.path = file.path(pyqgis.path, 'Scripts/gdal_polygonize.py')
+  
+  
+  # gdal_polygonize arguments 
+  tif.str = paste0('"', normalizePath(w.path), '"')
+  shp.str = paste0('"', normalizePath(shp.path, mustWork=FALSE), '"')
+  args.str = paste('-8', tif.str, '-f "ESRI Shapefile"', shp.str, '-q')
+  
+  # shell command strings
+  quiet.str = '@echo off'
+  osgeo.str = paste0('set OSGEO4W_ROOT=', normalizePath(osgeo4w.path))
+  envir.str = paste('call', paste0('"', normalizePath(envir.path), '"'))
+  cd.str = paste('pushd', paste0('"', normalizePath(pyqgis.path), '"'))
+  py.str = paste('python', paste0('"', normalizePath(py.path), '"'), args.str)
+  
+  # paste them together and execute
+  shell(paste(quiet.str, osgeo.str, envir.str, cd.str, py.str, sep=' && '))
   
 }
 
