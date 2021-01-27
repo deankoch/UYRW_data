@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2021-01-21
+2021-01-26
 
 **Mitacs UYRW project**
 
@@ -1503,14 +1503,13 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 run the TauDEM workflow to compute watershed geometry given a DEM
 
 ``` r
-my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf=NULL, bdepth=10)
+my_taudem = function(dem, odir, nstream=0, nproc=8, outlet.sf=NULL, bsf=NULL, bdepth=10)
 {
   # ARGUMENTS:
   #
   # `dem`: raster object, a digital elevation model (units of meters)
   # `odir`: relative path to the output directory
   # `nstream`: integer, stream delineation threshold
-  # `nchan`: integer, channel delineation threshold
   # `nproc`: integer, the number of cores to use with MSMPI
   # `outlet.sf`: sf object, (optional) point geometry for outlets, with integer attribute `id`
   # `bsf`: sf object, (optional) line geometry for drainage reinforcement ('burn-in')
@@ -1527,15 +1526,13 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   #
   # based on: https://hydrology.usu.edu/taudem/taudem5/TauDEMRScript.txt and QSWAT+
   # Requires TauDEM binaries to be installed to the path hardcoded below as `exe.dir`.
-  # get TauDEM installer from: from http://hydrology.usu.edu/taudem/taudem5.0/downloads.html
-  # learn about the algorithm here: https://hydrology.usu.edu/taudem/taudem2.0/taudem.html#Overview
+  # get TauDEM installer from: http://hydrology.usu.edu/taudem/taudem5.0/downloads.html,
+  # read about it here: https://hydrology.usu.edu/taudem/taudem2.0/taudem.html#Overview
   #
-  # `nstream` and `nchan` are the contributing area thresholds (in # of cells) above which a
-  # cell is included in the stream (resp., channel) network. If `nchan` is zero or negative, 
+  # `nstream` is the contributing area threshold (in # of cells) above which a cell is
+  # included in the stream (resp., channel) network. If `nstream` is zero or negative, 
   # TauDEM will attempt to find the smallest feasible value (producing the most detailed
-  # feasible network) by drop analysis, based on the constant drop law of Broscoe (1959). If
-  # `nstream` is zero or negative, it is assigned to 10X to the value of `nchan` (similar to
-  # the defaults set in SWAT+) 
+  # feasible network) by drop analysis, based on the constant drop law of Broscoe (1959).
   #
   # Note that any non-line geometry in `bsf` will be ignored, and any assigned value for
   # `bdepth` will be ignored if `bsf` is not supplied (since there is nothing to burn).
@@ -1618,12 +1615,6 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
       type='GeoTIFF',
       description='stream network, delineated from `ad8` with threshold `nstream`'),
     
-    # channels from threshold
-    c(name='sch',
-      file=file.path(odir, 'taudem_sch.tif'), 
-      type='GeoTIFF',
-      description='channels network, delineated from `ad8` with threshold `nchan`'),
-    
     # stream network ordering
     c(name='gord',
       file=file.path(odir, 'taudem_gord.tif'), 
@@ -1660,17 +1651,23 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
       type='ESRI shapefile',
       description='channel network shapefile resulting from StreamNet'),
     
-    # watershed stream network raster
+    # stream network ordering
+    c(name='ord',
+      file=file.path(odir, 'taudem_ord.tif'), 
+      type='GeoTIFF',
+      description='Strahler network order raster from StreamNet'),
+    
+    # subbasin membership raster
     c(name='w',
       file=file.path(odir, 'taudem_w.tif'), 
       type='GeoTIFF',
       description='watershed identifier raster from StreamNet'),
     
-    # stream network ordering
-    c(name='ord',
-      file=file.path(odir, 'taudem_ord.tif'), 
-      type='GeoTIFF',
-      description='Strahler network order raster from StreamNet')
+    # subbasins polygon geometry
+    c(name='subb',
+      file=file.path(odir, 'subbasins.shp'), 
+      type='ESRI shapefile',
+      description='polygonized subbasins, derived from `w`')
     
   )
   
@@ -1737,30 +1734,25 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   cell.area = units::set_units(prod(res(dem))/1e6, km^2)
   dem.area = ncell*cell.area
   
-  # drop analysis is skipped when `achan` threshold argument is provided
+  # drop analysis is skipped when `nstream` threshold argument is provided
   do.dropanalysis = FALSE
-  
-  # handle unassigned channel delineation threshold
-  if(! nchan > 0)
-  {
-    # zero or negative `achan` triggers drop analysis
-    do.dropanalysis = TRUE
-    
-    # set a range of thresholds to test by drop analysis
-    achan.min = max(units::set_units(0.1, km^2), 2*cell.area)
-    achan.max = min(units::set_units(100, km^2), dem.area/10)
-    
-    # corresponding number of cells
-    nchan.min = as.integer(achan.min/cell.area) + 1
-    nchan.max = as.integer(achan.max/cell.area) + 1
-    
-  }
   
   # handle unassigned stream delineation threshold
   if(! nstream > 0)
   {
-    # set default initial threshold (if `achan` provided, set to 10X that)
-    astream = ifelse(do.dropanalysis, units::set_units(1, km^2), 10*achan)
+    # zero or negative `nstream` triggers drop analysis
+    do.dropanalysis = TRUE
+    
+    # set a range of thresholds to test by drop analysis
+    nstream.min = max(units::set_units(0.1, km^2), 2*cell.area)
+    nstream.max = min(units::set_units(100, km^2), dem.area/10)
+    
+    # corresponding number of cells
+    nstream.min = as.integer(nstream.min/cell.area) + 1
+    nstream.max = as.integer(nstream.max/cell.area) + 1
+    
+    # set default initial threshold (if `nstream` provided, set to 10X that)
+    astream = units::set_units(1, km^2)
     
     # corresponding number of cells
     nstream = as.integer(astream/cell.area) + 1
@@ -1775,7 +1767,7 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   ## begin TauDEM worflow
   
   # 1. pit removal (in: `dem`; out: `fel`)
-  print(' > removing pits...')
+  print('  > removing pits...')
   arg = paste('-z', np['dem'], '-fel', np['fel'])
   shell(paste(sps, 'PitRemove', arg), ignore.stderr=T,  ignore.stdout=T)
   
@@ -1799,17 +1791,11 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
     
   } else {
     
-    # ...otherwise discard any non-point geometry from user input
-    outlet.sf = outlet.sf[st_is(outlet.sf, 'POINT'),]
+    # ...otherwise discard any non-point geometry and attributes from user input
+    outlet.sf = st_geometry(outlet.sf[st_is(outlet.sf, 'POINT'),])
     
-    # add the `id` attribute if missing
-    if(is.null(outlet.sf$id))
-    {
-      outlet.sf$id = 1:nrow(outlet.sf)
-    }
-    
-    # discard all other attributes
-    outlet.sf = outlet.sf[, names(outlet.sf) %in% c('geometry', 'id')]
+    # add the `id` attribute
+    outlet.sf = st_sf(data.frame(id = 1:length(outlet.sf)), geometry=outlet.sf)
     
   }
   
@@ -1837,7 +1823,9 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   arg = paste('-p', np['p'], '-src', np['sst'], '-o', np['outlet'], '-om', np['outlet_snap'])
   shell(paste(sps, 'MoveOutletsToStreams', arg), ignore.stderr=T,  ignore.stdout=T)
   
-
+  # write projection info for `outlet_snap` (it's the same as for `outlet`)
+  file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['outlet_snap']))
+  
   # 8. drop analysis (if requested)
   if(do.dropanalysis)
   {
@@ -1881,55 +1869,33 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
     shell(paste(sps, 'AreaD8', arg), ignore.stderr=T,  ignore.stdout=T)
     
     # 8c. set reasonable default search interval and perform drop analysis
-    drop.pars = paste(nchan.min, nchan.max, 100, 0)
+    drop.pars = paste(nstream.min, nstream.max, 100, 0)
     arg1 = paste('-p', np['p'], '-fel', np['fel'], '-ad8', np['ad8'], '-ssa', np['ssa'])
     arg2 = paste('-drp', np['drop'], '-o', np['outlet_snap'], '-par', drop.pars)
     shell(paste(sps, 'Dropanalysis', arg1, arg2), ignore.stderr=T,  ignore.stdout=T)
     
     # set channels threshold to optimum found in drop analysis
     drop.txt = readLines(np['drop'])
-    nchan.string = strsplit(drop.txt[length(drop.txt)], 'Optimum Threshold Value: ')[[1]][2]
-    nchan = as.integer(nchan.string) + 1
-    achan = nchan * cell.area
-    print(paste('  > drop analysis optimum:', nchan, 'cells, around', round(achan, 3), 'km^2'))
-    
-    # set streams threshold to 10X this value (following example of defaults from QSWAT+)
-    nstream = 10 * nchan
+    nstream.string = strsplit(drop.txt[length(drop.txt)], 'Optimum Threshold Value: ')[[1]][2]
+    nstream = as.integer(nstream.string) + 1
     astream = nstream * cell.area
+    print(paste('  > drop analysis optimum:', nstream, 'cells, around', round(astream, 3), 'km^2'))
     
-    # create metadata table entry for thresholds
-    threshold.entry = list(
-      
-      c(name='nstream',
-        file=NA, 
-        type='integer (optimum from drop analysis X10)',
-        description=paste('stream threshold:', nstream)),
-      
-      c(name='nchan',
-        file=NA, 
-        type='integer (optimum from drop analysis)',
-        description=paste('channel threshold:', nchan))
-      
-    )
+    # create metadata table entry for threshold
+    threshold.entry = list(c(name='nstream',
+                             file=NA, 
+                             type='integer (optimum from drop analysis)',
+                             description=paste('stream threshold:', nstream)))
     
   } else {
     
     
     # create metadata table entry for thresholds
-    threshold.entry = list(
-      
-      c(name='nstream',
-        file=NA, 
-        type='integer (from user input)',
-        description=paste('stream threshold:', nstream)),
-      
-      c(name='nchan',
-        file=NA, 
-        type='integer (optimum from drop analysis)',
-        description=paste('channel threshold:', nchan))
-      
-    )
-    
+    threshold.entry = list(c(name='nstream',
+                             file=NA, 
+                             type='integer (from user input)',
+                             description=paste('stream threshold:', nstream)))
+
   }
   
   # rewrite the metadata table csv to include threshold values and update names list
@@ -1942,23 +1908,18 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   arg = paste('-p', np['p'], '-ad8', np['ad8'], '-o', np['outlet_snap'], '-nc')
   shell(paste(sps, 'AreaD8', arg), ignore.stderr=T,  ignore.stdout=T)
   
-  # 11. channel delineation (in: `ad8`, `nchan`; out: `sch`)
-  print(paste('  > delineating channels with threshold of', nchan, 'cells...'))
-  arg = paste('-ssa', np['ad8'], '-src', np['sch'], '-thresh', nchan)
-  shell(paste(sps, 'Threshold', arg), ignore.stderr=T,  ignore.stdout=T)
-  
-  # 12. repeat stream delineation with new threshold (in: `ad8`, `nstream`; out: `sst`)
+  # 10. repeat stream delineation with new threshold (in: `ad8`, `nstream`; out: `sst`)
   print(paste('  > delineating streams with threshold of', nstream, 'cells...'))
   arg = paste('-ssa', np['ad8'], '-src', np['sst'], '-thresh', nstream)
   shell(paste(sps, 'Threshold', arg), ignore.stderr=T,  ignore.stdout=T)
   
-  # 10. run GridNet with snapped outlets (in: `p`, `outlet_snap`; out:  `gord`, `plen`, `tlen`)
+  # 11. run GridNet with snapped outlets (in: `p`, `outlet_snap`; out:  `gord`, `plen`, `tlen`)
   print('  > running GridNet...')
   arg1 = paste('-p', np['p'], '-plen', np['plen'], '-tlen', np['tlen'], '-gord', np['gord'])
   arg2 = paste('-o', np['outlet_snap'])
   shell(paste(sps, 'GridNet', arg1, arg2), ignore.stderr=T,  ignore.stdout=T)
   
-  # 13. run StreamNet (in: `fel`, `p`, `ad8`, `outlet_snap`, `sst`; 
+  # 12. run StreamNet (in: `fel`, `p`, `ad8`, `outlet_snap`, `sst`; 
   # out: `tree`, `coord`, `demnet`, `w`, `ord`)
   print('  > running StreamNet...')
   arg1 = paste('-fel', np['fel'], '-p', np['p'], '-ad8', np['ad8'], '-ord', np['ord'])
@@ -1966,13 +1927,16 @@ my_taudem = function(dem, odir, nstream=0, nchan=0, nproc=8, outlet.sf=NULL, bsf
   arg3 = paste('-coord', np['coord'], '-net', np['demnet'], '-w', np['w'])
   shell(paste(sps, 'StreamNet', arg1, arg2, arg3), ignore.stderr=T,  ignore.stdout=T)
 
-  # # write projection info for `demnet` and `outlet_snap` (it's the same as for `outlet`)
-  # file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['demnet']))
-  # file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['outlet_snap']))
+  # write projection info for `demnet` (it's the same as for `outlet`)
+  file.copy(gsub('.shp', '.prj', np['outlet']), gsub('.shp', '.prj', np['demnet']))
+  
+  # 13. run gdal_polygonize to create subbasins shapefile
+  print('   > polygonizing subbasins...')
+  my_gdal_polygonize(np['w'], np['subb'])
   
   # return table of file paths
   return(taudem.meta)
-  #return(np)
+  
 }
 ```
 
@@ -1980,32 +1944,548 @@ calls gdal\_polygonize.py from OSGEO4W (replacement for
 raster::rasterToPolygons)
 
 ``` r
-my_gdal_polygonize = function(w.path, shp.path)
+my_gdal_polygonize = function(infile, outfile)
 {
+  # ARGUMENTS:
+  #
+  # `infile`: string, full path to input GeoTIFF, whose values indicate polygon membership
+  # `outfile`: string, full path to desired output ESRI shapefile (with extension '.shp')
+  #
+  # RETURN VALUE:
+  #
+  # None
+  # 
+  # DETAILS:
+  #
+  # This function is an R wrapper for the python script 'gdal_polygonize.py', one of the
+  # processing algorithms that that ships with QGIS3. It assumes the OSGEO4W long term release
+  # of QGIS3 is installed in the standard location for 64bit Windows 10. On other platforms it
+  # should be possible to modify paths (`osgeo4w.path`, `envir.path`, `pyqgis.path`, `py.path`)
+  # and shell command strings (`quiet.str`, `osgeo.str`, `envir.str`, `cd.str`) make things work.
+  #
+  # my_gdal_polygonize does the same thing as raster::rasterToPolygons(), but much faster. It
+  # is meant to convert the raster `w` from TauDEM, the output of StreamNet indicating subbasin
+  # membership, into a multipolygon geometry. This is the only use case I have tested.
+  #
+  # Note that this will overwrite all elements of `outfile` without warning (ie. the 'shp',
+  # 'dbf', 'shx', 'prj' files with the same basename as `outfile`), so double check your paths.
+  #
   
-  # paths (these may be platform dependent)
+  # paths (these are platform dependent)
   osgeo4w.path = 'C:/Program Files/QGIS 3.10'
   envir.path = file.path(osgeo4w.path, 'bin/o4w_env.bat')
   pyqgis.path = file.path(osgeo4w.path, 'apps/Python37')
   py.path = file.path(pyqgis.path, 'Scripts/gdal_polygonize.py')
   
+  # identify the four files associated with an ESRI shape"file"
+  ext.esri = c('shp', 'dbf', 'shx', 'prj')
+  outfile.nm = basename(outfile)
+  outfile.fns = sapply(ext.esri, function(ext) gsub('.shp', paste0('.', ext), outfile.nm))
+  outfile.paths = file.path(dirname(outfile), outfile.fns)
   
-  # gdal_polygonize arguments 
-  tif.str = paste0('"', normalizePath(w.path), '"')
-  shp.str = paste0('"', normalizePath(shp.path, mustWork=FALSE), '"')
+  # delete `outfile` and friends if they exist on disk already 
+  idx.exists = file.exists(outfile.paths)
+  if(any(idx.exists))
+  {
+    unlink(outfile.paths[idx.exists])
+  }
+  
+  # arguments to gdal_polygonize.py 
+  tif.str = paste0('"', normalizePath(infile), '"')
+  shp.str = paste0('"', normalizePath(outfile, mustWork=FALSE), '"')
   args.str = paste('-8', tif.str, '-f "ESRI Shapefile"', shp.str, '-q')
   
-  # shell command strings
+  # command to suppress verbose output of TauDEM
   quiet.str = '@echo off'
+  
+  # command to set up environmental variables and search paths for python 
   osgeo.str = paste0('set OSGEO4W_ROOT=', normalizePath(osgeo4w.path))
   envir.str = paste('call', paste0('"', normalizePath(envir.path), '"'))
+  
+  # command to change directory to Python 3 exe (the one that ships with QGIS) 
   cd.str = paste('pushd', paste0('"', normalizePath(pyqgis.path), '"'))
+  
+  # the python call
   py.str = paste('python', paste0('"', normalizePath(py.path), '"'), args.str)
   
-  # paste them together and execute
+  # paste these command strings together and execute
   shell(paste(quiet.str, osgeo.str, envir.str, cd.str, py.str, sep=' && '))
   
 }
+```
+
+snap point(s) (sfc) to nearest stream reach(es) in demnet, returning
+LINKNO (int)
+
+``` r
+my_demnet_snap = function(p, demnet, quiet=FALSE)
+{
+  # ARGUMENTS:
+  #
+  # `p`: sfc point, the location(s) to snap
+  # `demnet`: sf object, the channel network shapefile produced by StreamNet in TauDEM
+  # `quiet`: boolean, suppresses message about snap length if TRUE
+  #
+  # RETURN VALUE:
+  #
+  # list with two named entries:
+  
+  # `link`: integer vector, the 'LINKNO' from TauDEM for nearest stream reach line segment
+  # `dist`: numeric vector (with units), distance to the line segment
+  # 
+  
+  # snap the input point to the nearest line geometry and find its ID
+  idx.snap = st_nearest_feature(p, demnet)
+  linkno.snap = demnet$LINKNO[idx.snap]
+  
+  # find the snap distances
+  d.snap = st_distance(p, demnet[idx.snap,], by_element=TRUE)
+  
+  # finish, printing message if requested
+  distance.msg = paste0(round(d.snap,3), as.character(units(d.snap)))
+  if(!quiet) print(paste('snap distance', distance.msg))
+  return(list(link=linkno.snap, dist=d.snap)) 
+}
+```
+
+find all upstream line segments in a channel network line geometry
+collection
+
+``` r
+my_upstream = function(root, demnet, linkno=NULL, quiet=FALSE)
+{
+  # ARGUMENTS:
+  #
+  # `root`: sf or sfc POINT(s), the location on/near the channel network to start from 
+  # `demnet`: sf object, the channel network shapefile produced by StreamNet in TauDEM
+  # `quiet`: boolean, suppresses message about snap length if TRUE
+  #
+  # RETURN VALUE:
+  #
+  # A copy of the `demnet` sf object containing only the line segments upstream of `root`,
+  # with a new attribute 'isroot' indicating the line segment on which `root` is located;
+  # Or, if `root` contains more than one point, a list of such objects, one for each point.
+  # 
+  
+  if(is.null(linkno))
+  {
+    # drop attributes of `root`, keeping only geometry
+    root = st_geometry(root)
+    root.n = length(root)
+    
+    # handle vectorized my_upstream calls
+    if(root.n > 1)
+    {
+      # print progress bar and make storage list for output
+      pb = txtProgressBar(min=1, max=root.n, style=3)
+      demnet.out = vector(mode='list', length=root.n)
+      
+      # loop over each point in `root`, returning results in list
+      for(idx.out in 1:root.n)
+      {
+        demnet.out[[idx.out]] = my_upstream(root[idx.out], demnet, linkno, quiet)
+        setTxtProgressBar(pb, idx.out)
+      }
+      close(pb)
+      return(demnet.out)
+
+    }
+    
+    # snap the input point to the nearest line geometry and find its ID
+    linkno.snap = my_demnet_snap(root, demnet, quiet)$link
+    
+    # recursive call to follow stream network upstream of this channel
+    linkno.all = my_upstream(root, demnet, linkno.snap)
+    
+    # return the subset of demnet
+    demnet.out = demnet[demnet$LINKNO %in% linkno.all,]
+    demnet.out$isroot = rep(FALSE, nrow(demnet.out))
+    demnet.out$isroot[demnet.out$LINKNO==linkno.snap] = TRUE
+    return(demnet.out)
+    
+  
+  } else {
+    
+    # lookup both upstream links
+    idx.linkno = demnet$LINKNO==linkno
+    up.linkno = c(demnet$USLINKNO1[idx.linkno], demnet$USLINKNO2[idx.linkno])
+    
+    # -1 denotes an endpoint (leaf) in the tree...
+    idx.leaf = up.linkno==-1
+    
+    # recursive call to collect upstream branches along 1st link
+    up.res1 = NULL
+    if(!idx.leaf[1])
+    {
+      up.res1 = my_upstream(root, demnet, up.linkno[1])
+    }
+    
+    # recursive call to collect upstream branches along 2nd link
+    up.res2 = NULL
+    if(!idx.leaf[2])
+    {
+      up.res2 = my_upstream(root, demnet, up.linkno[2])
+    }
+    
+    # combine results 
+    return(c(linkno, up.linkno[!idx.leaf], up.res1, up.res2))
+    
+  }
+  
+}
+
+# given a (contiguous) subset of links in demnet, compute the catchment boundary and its in/outlets
+my_make_catchment = function(demnet, subb, linkno)
+{
+  # ARGUMENTS:
+  #
+  # `demnet`: sf LINESTRING object, the channel network shapefile from TauDEM's StreamNet
+  # `subb`: sf MULTIPOLYGON object, subbasins shapefile with attribute 'DN' mapping to demnet$LINKNO
+  # `linkno`: integer vector, link numbers in the catchment of interest (mapping to `demnet$LINKNO`) 
+  #
+  # RETURN VALUE:
+  #
+  # A list of two geometry objects:
+  #
+  #   'poly': MULTIPOLYGON, the catchment boundary polygon
+  #   'io': sf POINT, inlet/outlet points where channel network crosses catchment boundary
+  # 
+  # DETAILS:
+  #
+  # This function dissolves all catchment polygons in `subb` associated with the IDs provided
+  # in `linkno`, producing an sfc polygon representing the catchment boundary for that subset of
+  # the channel network. It also intersects this boundary with any stream reaches (in `demnet`)
+  # that cross it, producing an sf object with the following attributes:
+  #
+  #   'inlet': boolean indicator, either FALSE (outlet) or TRUE (inlet)
+  #   'ilink': integer, the associated (`demnet`) stream reach inside the catchment
+  #   'olink1': integer, the associated (`demnet`) stream reach outside the catchment
+  #   'olink2': integer (or NA), a possible 2nd associated stream reach outside the catchment
+  #
+  # Note that we can have two outlinks because it is possible for two stream channels to converge
+  # at exactly that point where the network enters the catchment boundary. For most inlets this
+  # won't be the case, and 'outlink2' will be NA.
+  
+  # find all catchment polygons for the channel network on the subset
+  idx.subb = subb$DN %in% linkno
+  
+  # dissolve them into a single catchment boundary (LINESTRING, changed later)
+  poly = st_cast(st_make_valid(st_union(st_geometry(subb[idx.subb,]))), 'MULTILINESTRING')
+  
+  # pull (cropped) demnet for this catchment and copy two components of full `demnet`
+  demnet.sfc = st_geometry(demnet)
+  dn.link = demnet$LINKNO
+  dn.subb = demnet[dn.link %in% linkno, ]
+  
+  # identify downstream channels leaving catchment (two segments: i=inside, o=outside)
+  dslink.unique = unique(dn.subb$DSLINKNO)
+  out.olink = dslink.unique[!dslink.unique %in% dn.subb$LINKNO]
+  out.ilink = dn.subb$LINKNO[match(out.olink, dn.subb$DSLINKNO)]
+  outlet.n = length(out.ilink)
+  
+  # compile outlets data into dataframe, apply intersection function along rows
+  inlet.b = rep(FALSE, outlet.n)
+  o.df = data.frame(inlet=inlet.b, ilink=out.ilink, olink1=out.olink, olink2=rep(NA, outlet.n))
+  o.sfc = apply(o.df, 1, function(x) st_intersection(st_union(demnet.sfc[dn.link %in% x[2:3]]),poly))
+  
+  # upstream channels are more complicated, since we can have (potentially) two outside links
+  uslink1.unique = unique(dn.subb$USLINKNO1)
+  uslink2.unique = unique(dn.subb$USLINKNO2)
+  in.olink1 = uslink1.unique[!uslink1.unique %in% c(dn.subb$LINKNO, -1)]
+  in.olink2 = uslink2.unique[!uslink2.unique %in% c(dn.subb$LINKNO, -1)]
+  in.ilink1 = dn.subb$LINKNO[match(in.olink1, dn.subb$USLINKNO1)]
+  in.ilink2 = dn.subb$LINKNO[match(in.olink2, dn.subb$USLINKNO2)]
+  
+  # compile into vectors and find unique within-watershed link numbers
+  in.olink = c(in.olink1, in.olink2)
+  in.ilink = c(in.ilink1, in.ilink2)
+  in.ilink.unique = unique(in.ilink)
+  inlet.n = length(in.ilink.unique)
+  
+  # skip when no inlets found
+  if(inlet.n > 0)
+  {
+    # make an outlink data frame with one row per within-watershed link
+    olink.list = lapply(in.ilink.unique, function(link) in.olink[link==in.ilink])
+    olink.mat = t(sapply(olink.list, function(link) if(length(link)==2) {link} else {c(link, NA)}))
+    olink.df = data.frame(olink1=olink.mat[,1], olink2=olink.mat[,2])
+    
+  } else {
+    
+    olink.df = NULL
+  }
+
+  # compile inlets/outlets data into dataframe, apply intersection function along rows
+  i.df = cbind(data.frame(inlet=rep(TRUE, inlet.n), ilink=in.ilink.unique), olink.df)
+  i.sfc = apply(i.df, 1, function(x) st_intersection(st_union(demnet.sfc[dn.link %in% x[2:3]]), poly))
+  
+  # merge inlets/outlets data with attributes (as sf), recast `poly`, and finish
+  io.sf = st_sf(rbind(o.df, i.df), geometry=do.call(c, c(o.sfc, i.sfc)))
+  return(list(poly=st_cast(poly,'MULTIPOLYGON'), io=io.sf))
+  
+}
+
+# delineate a set of mutually exclusive catchment polygons based on suggested outlet points
+my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `pts`: sf or sfc POINT(s), the suggested outlet location(s)
+  # `demnet`: sf LINESTRING, the channel network shapefile from TauDEM's StreamNet
+  # `subb`: sf MULTIPOLYGON, subbasins shapefile with attribute 'DN' mapping to demnet$LINKNO
+  # `linklist`: (internal) list of integer vectors, subsets of `demnet$LINKNO` upstream of `pts`
+  # `areamin`: numeric (in km^2), the minimum desired catchment size
+  #
+  # RETURN VALUE:
+  #
+  # named list with entries 'pts', 'linklist', 'poly', 'io'; each is a list with one entry per
+  # catchment (eg. the nth catchment has associated data pts[[n]], linklist[[n]], poly[[n]], and
+  # io[[n]]). The entries of these lists are described below:
+  #
+  #   pts[[n]]: sf POINTS object, the subset of input points mapping to the catchment
+  #   linklist[[n]]: integer vector, the upstream channel network as a subset of `demnet$LINKNO` 
+  #   poly[[n]]: sfc MULTIPOLYGON, the catchment boundary
+  #   io[[n]]: sf POINTS object, the inlets and outlets to the catchment (see `my_make_catchment`)
+  # 
+  # DETAILS:
+  # 
+  # This is an iterative algorithm for delineating catchments given a set of suggested outlet
+  # locations (in `pts`), and the output of TauDEM (where `subb` is the polygonized `w` raster).
+  # Input points may be gage locations, or any other point of interest in `demnet`. The output is
+  # a partitioning of `demnet` into catchments (linked together by inlet/outlet points) that aims
+  # to place all of the suggested points in `pts` at the main outlet of a catchment.
+  #
+  # For each input point, the algorithm computes the full upstream channel network. From this set
+  # it identifies catchments that contain no other input points apart from their main outlets (ie
+  # leaf nodes). These catchments are recorded, then their channel networks and outlet points are
+  # clipped from `demnet` and `pts`. The algorithm then calls itself with the cropped channel
+  # network and `pts` list, eventually terminating when every channel upstream of the most
+  # downstream location in `pts` has been assigned to a catchment.
+  #
+  # Note: `pts` locations are first snapped to the channel network, and are merged (ie treated as
+  # identical) whenever they snap to the same channel in `demnet`. 
+  #
+  # Any catchments smaller than `areamin` (if supplied) will be merged with a neighbour (where
+  # upstream neighbours are always preferred, and if more than one upstream neighbour exists, the
+  # one with smallest area is preferred). The output number of catchments may therefore by less
+  # than `pts`, and the exact number depends on both the spatial arrangement of `pts`, the area
+  # threshold (`areamin`), and the detail level in `demnet`.
+  #
+
+  
+  # this initial step is slow - skip it by supplying precomputed list in `linklist`
+  if(is.null(linklist))
+  {
+    # flag for initial call vs recursive calls
+    is.initial = TRUE
+    
+    # snap all `pts` locations to stream reaches in demnet, add 'demnet_link' attribute
+    pts.snap = my_demnet_snap(pts, demnet, quiet=TRUE)
+    pts['demnet_link'] = pts.snap$link
+    pts.n = nrow(pts)
+    
+    # append an ID to unscramble everything later
+    pts['group_catchments_id'] = 1:pts.n
+    
+    # merge suggested outlets that snap to same stream reach
+    pts.unique = unique(pts.snap$link)
+    idx.pts.merge = match(pts.unique, pts.snap$link)
+    idx.pts.unmerge = match(pts.snap$link, pts.unique)
+    pts.merged = pts[idx.pts.merge,]
+    pts.merged.n = nrow(pts.merged)
+    if(pts.n != pts.merged.n)
+    {
+      omit.n = pts.n - pts.merged.n
+      omit.msg = paste0(omit.n, ' (of ', pts.n, ')')
+      print(paste('> grouping', omit.msg, 'input points with non-unique channel mapping'))
+    }
+    
+    # find the associated subset of demnet for each `pts` point
+    print(paste('> computing upstream channel networks for', pts.merged.n, 'input points'))
+    demnet.list = my_upstream(pts.merged, demnet, quiet=TRUE)
+    
+    # copy the link numbers in same list structure
+    linklist = lapply(demnet.list, function(demnet.sub) demnet.sub$LINKNO)
+    
+  } else {
+    
+    # flag for initial call vs recursive calls
+    is.initial = FALSE
+    
+    # if `linklist` is supplied, it is assumed the points are already merged
+    pts.merged = pts
+    pts.merged.n = nrow(pts.merged)
+    
+  }
+  
+  # with only one input point, we simply collect all remaining channels into one catchment
+  if(pts.merged.n == 1)
+  {
+    # dissolve polygons for the channel network into boundary polygon, compute inlets/outlets
+    print(paste('> dissolving remaining polygons for final input point...'))
+    leaf.geometry = my_make_catchment(demnet, subb, linklist[[1]])
+    o.poly = leaf.geometry$poly
+    o.inlet = leaf.geometry$io
+    
+    # storage in lists to conform with more general case below
+    leaf.result = list(pts=pts.merged,
+                       linklist=linklist,
+                       poly=list(o.poly),
+                       io=list(o.inlet))
+    
+  } else {
+    
+    # inclusion matrix: point j is found upstream of (or at) point i iff element [i,j] is TRUE
+    incl.mat = sapply(linklist, function(linkno) pts.merged$demnet_link %in% linkno)
+    
+    # identify "leaves" of the tree, ie input points with no other (unprocessed) points upstream
+    pts.isleaf = colSums(incl.mat) == 1
+    leaves.n = sum(pts.isleaf)
+    pts.msg  = paste0('(', pts.merged.n - leaves.n, ' remain)')
+    print(paste('> dissolving catchments for', leaves.n, 'input points(s)', pts.msg))
+    
+    # build a demnet subset and catchment polygon for each leaf in a loop
+    pb = txtProgressBar(min=0, max=leaves.n, style=3)
+    o.poly = o.inlet = vector(mode='list', length=leaves.n)
+    for(idx.leaf in 1:leaves.n)
+    {
+      # find the index in `linklist` for this catchment, and the link numbers
+      idx.linklist = which(pts.isleaf)[idx.leaf]
+      leaf.linkno = linklist[[idx.linklist]]
+      
+      # dissolve polygons for the channel network into boundary polygon, compute inlets/outlets
+      leaf.geometry = my_make_catchment(demnet, subb, leaf.linkno)
+      o.poly[[idx.leaf]] = leaf.geometry$poly
+      o.inlet[[idx.leaf]] = leaf.geometry$io
+      
+      # trim stream networks of all channels whose catchments overlap with current leaf
+      idx.overlap = which(incl.mat[idx.linklist,])[which(incl.mat[idx.linklist,]) != idx.linklist]
+      for(idx.o in idx.overlap)
+      {
+        # remove segments of overlap from the rest of the channel network
+        idx.totrim = linklist[[idx.o]] %in% leaf.linkno
+        linklist[[idx.o]] = linklist[[idx.o]][!idx.totrim]
+      }
+      
+      # update progress bar
+      setTxtProgressBar(pb, idx.leaf)
+    }
+    close(pb)
+    
+    # store these finished catchments in a list
+    leaf.result = list(pts=pts.merged[pts.isleaf,],
+                       linklist=linklist[pts.isleaf],
+                       poly=o.poly,
+                       io=o.inlet)
+    
+    # process any remaining branches and append their output
+    if(sum(!pts.isleaf)>0)
+    {
+      # recursive call with inputs trimmed to remove current leaves
+      branch.result = my_group_catchments(pts.merged[!pts.isleaf,],
+                                          demnet, 
+                                          subb, 
+                                          linklist[!pts.isleaf])
+                                    
+      
+      # append result to list from earlier
+      leaf.result$pts = rbind(leaf.result$pts, branch.result$pts)
+      leaf.result$linklist = c(leaf.result$linklist, branch.result$linklist)
+      leaf.result$poly = c(leaf.result$poly, branch.result$poly)
+      leaf.result$io = c(leaf.result$io, branch.result$io)
+      
+    }
+  }
+  
+  # this part only happens at the very end (skipped in recursive calls) 
+  if(is.initial)
+  {
+    # determine order of `pts.merged` relative to `leaf.result$pts` 
+    id.new = leaf.result$pts$group_catchments_id
+    id.old = pts$group_catchments_id[idx.pts.merge]
+    
+    # rearrange `pts` entries (unmerged input) as list in same order as `leaf.result`
+    leaf.result$pts = lapply(id.new, function(id) pts[c(id.old==id)[idx.pts.unmerge],])
+    
+    # merge any catchments that are too small (with a neighbour)
+    if(!is.null(areamin))
+    {
+      # compute catchment areas and identify those below the threshold
+      areas = st_area(do.call(c, leaf.result$poly))
+      idx.toosmall = areas < units::set_units(areamin, km^2)
+      n.toosmall = sum(idx.toosmall)
+      
+      # skip if all the catchments are big enough
+      if(n.toosmall > 0)
+      {
+        merging.msg = paste0('with area < ', round(areamin, 2), 'km^2')
+        print(paste('> merging', n.toosmall, 'catchments', merging.msg))
+        n.todo = n.toosmall
+        pb = txtProgressBar(min=0, max=n.todo, style=3)
+        while(n.toosmall > 0)
+        {
+          # copy link number list and print progress message
+          linklist = leaf.result$linklist
+          setTxtProgressBar(pb, n.todo - n.toosmall)
+          
+          # grab first catchment from the too-small list
+          idx.pop = which(idx.toosmall)[1]
+          
+          # identify the catchment to merge with
+          io.pop = leaf.result$io[[idx.pop]]
+          if(!any(io.pop$inlet))
+          {
+            # no inlets case: find the downstream catchment via outlet
+            idx.outlet = which(!io.pop$inlet)
+            outlet.linkno = io.pop$olink1[idx.outlet]
+            idx.merge = which(sapply(linklist, function(link) any(outlet.linkno %in% link)))
+            
+          } else {
+            
+            # inlets case: find the upstream neighbour having smallest area
+            idx.inlet = which(io.pop$inlet)
+            inlet.linkno = c(io.pop$olink1[idx.inlet], io.pop$olink2[idx.inlet])
+            inlet.linkno = inlet.linkno[!is.na(inlet.linkno)]
+            idx.merge = which(sapply(linklist, function(link) any(inlet.linkno %in% link)))
+            idx.merge = idx.merge[which.min(areas[idx.merge])]
+
+          }
+          
+          # merge the input points, channel networks, recompute inlets/outlets/boundary
+          pts.out = do.call(rbind, leaf.result$pts[c(idx.pop, idx.merge)])
+          linklist.out = do.call(c, linklist[c(idx.pop, idx.merge)])
+          catchment.out = my_make_catchment(demnet, subb, linklist.out)
+          
+          # update results list with merged data 
+          leaf.result$pts[[idx.merge]] = pts.out
+          leaf.result$linklist[[idx.merge]] = linklist.out
+          leaf.result$poly[[idx.merge]] = catchment.out$poly
+          leaf.result$io[[idx.merge]] = catchment.out$io
+          
+          # delete the old catchment
+          leaf.result$pts = leaf.result$pts[-idx.pop]
+          leaf.result$linklist = leaf.result$linklist[-idx.pop]
+          leaf.result$poly = leaf.result$poly[-idx.pop]
+          leaf.result$io = leaf.result$io[-idx.pop]
+          
+          # update the areas vector, and todo counter
+          areas[idx.merge] = areas[idx.pop] + areas[idx.merge]
+          areas = areas[-idx.pop]
+          idx.toosmall = areas < units::set_units(areamin, km^2)
+          n.toosmall = sum(idx.toosmall)
+        }
+        close(pb)
+      }
+    }
+    
+    print(paste('> finished delineating', length(leaf.result$poly), 'catchments'))
+  }
+  
+  return(leaf.result)
+}
+
+
+
 
 # # print all available SWAT+ plant codes containing the following keywords
 # kw = 'forest|woodland|pine'
