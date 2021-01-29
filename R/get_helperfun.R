@@ -1938,6 +1938,7 @@ my_upstream = function(root, demnet, linkno=NULL, quiet=FALSE)
   #
   # `root`: sf or sfc POINT(s), the location on/near the channel network to start from 
   # `demnet`: sf object, the channel network shapefile produced by StreamNet in TauDEM
+  # `linkno`: (internal) integer, the link number to use in place of `root`
   # `quiet`: boolean, suppresses message about snap length if TRUE
   #
   # RETURN VALUE:
@@ -2014,8 +2015,110 @@ my_upstream = function(root, demnet, linkno=NULL, quiet=FALSE)
   
 }
 
-# given a (contiguous) subset of links in demnet, compute the catchment boundary and its in/outlets
-my_make_catchment = function(demnet, subb, linkno)
+# finds outlet location given link numbers on either side of a catchment boundary
+my_catchment_outlet = function(demnet, subb, linkno1, linkno2, snap=10)
+{
+  # ARGUMENTS:
+  #
+  # `demnet`: sf LINESTRING object, the channel network shapefile from TauDEM's StreamNet
+  # `subb`: sf MULTIPOLYGON object, subbasins shapefile with attribute 'DN' mapping to demnet$LINKNO
+  # `linkno1`: integer, mapping to one of two stream reaches in different catchments   
+  # `linkno2`: integer, mapping to the other reach 
+  # `snap`: positive numeric (in metres), the maximum snapping distance
+  #
+  # RETURN VALUE:
+  #
+  # sfc POINT, the outlet location along the catchment boundary
+  # 
+  # DETAILS:
+  #
+
+  # coerce to integer vector
+  linkno1 = as.integer(linkno1)
+  linkno2 = as.integer(linkno2)
+  
+  # note if this is an outlet, and relabel to ensure that linkno1 flows into linkno2
+  is.outlet = demnet$DSLINKNO[demnet$LINKNO == linkno1] == linkno2
+  if(!is.outlet)
+  {
+    linkno1_old = linkno1
+    linkno1 = linkno2
+    linkno2 = linkno1_old
+  }
+  
+  
+  # find the line segments associated with the two link numbers
+  link1 = st_geometry(demnet)[demnet$LINKNO == linkno1]
+  link2 = st_geometry(demnet)[demnet$LINKNO == linkno2]
+  
+  # build the relevant boundary segment
+  subb1 = st_make_valid(st_geometry(subb)[subb$DN == linkno1])
+  subb2 = st_make_valid(st_geometry(subb)[subb$DN == linkno2])
+  line.boundary = st_intersection(subb1, subb2)
+  
+  # intersect this boundary with the union of the two channel segments
+  channel = st_union(link1, link2)
+  pt.out = st_cast(st_intersection(channel, line.boundary), 'POINT')
+  
+  # assign units to snap distance
+  snap = units::set_units(snap, m)
+  
+  # if this fails to find an intersection, try snapping the channel to the boundary first
+  if(length(pt.out) == 0)
+  {
+    channel = st_snap(channel, line.boundary, tolerance=snap)
+    pt.out = st_cast(st_intersection(channel, line.boundary), 'POINT')
+    
+  }
+  
+  # look for issue of channel glancing off boundary before/after true crossing
+  if(length(pt.out) > 2)
+  {
+    # this will usually generate a pair of nearby points - compute interpoint distances
+    pt.dmat = st_distance(pt.out)
+    
+    # find all point pairs lying withing snap distance
+    idx.remove = rowSums(pt.dmat < snap) > 1
+    
+    # if all points fit this criterion, keep only the most isolated one
+    if(sum(idx.remove) == length(pt.out))
+    {
+      idx.remove[which.max(rowSums(pt.dmat))] = TRUE 
+    }
+    
+    # trim the output points list
+    pt.out = pt.out[!idx.remove]
+
+  }
+  
+  
+  # if we still have multiple matches, select the one nearest to where the two channels meet
+  if(length(pt.out) > 1)
+  {
+    # find the point at which both channels meet, and the nearest candidate outlet
+    pt.join = st_intersection(link1, link2, tolerance=snap)
+    idx.keep = which.min(st_distance(pt.out, pt.join))
+    
+    # trim the output points list
+    pt.out = pt.out[idx.keep]
+    
+  }
+
+  
+  # #
+  # plot(c(subb1, subb2))
+  # plot(line.boundary, lwd=2, add=TRUE)
+  # plot(channel, col='lightblue', add=TRUE)
+  # plot(link1, add=TRUE, col='blue')
+  # #
+
+  
+  return(pt.out)
+  
+}
+
+# given a subset of links in demnet, compute the catchment boundary and its in/outlets
+my_delineate_catchment = function(demnet, subb, linkno)
 {
   # ARGUMENTS:
   #
@@ -2063,10 +2166,20 @@ my_make_catchment = function(demnet, subb, linkno)
   out.ilink = dn.subb$LINKNO[match(out.olink, dn.subb$DSLINKNO)]
   outlet.n = length(out.ilink)
   
-  # compile outlets data into dataframe, apply intersection function along rows
-  inlet.b = rep(FALSE, outlet.n)
-  o.df = data.frame(inlet=inlet.b, ilink=out.ilink, olink1=out.olink, olink2=rep(NA, outlet.n))
-  o.sfc = apply(o.df, 1, function(x) st_intersection(st_union(demnet.sfc[dn.link %in% x[2:3]]),poly))
+  # skip when no outlets found
+  if(outlet.n > 0)
+  {
+    # compile outlets data into dataframe, apply intersection function along rows
+    inlet.b = rep(FALSE, outlet.n)
+    o.df = data.frame(inlet=inlet.b, ilink=out.ilink, olink1=out.olink, olink2=rep(NA, outlet.n))
+    # o.sfc = apply(o.df, 1, function(x) st_intersection(st_union(demnet.sfc[dn.link %in% x[2:3]]),poly))
+    o.sfc = apply(o.df, 1, function(x) my_catchment_outlet(demnet, subb, linkno1=x[2], linkno2=x[3]))
+    
+  } else {
+    
+    o.df = NULL
+    o.sfc = NULL
+  }
   
   # upstream channels are more complicated, since we can have (potentially) two outside links
   uslink1.unique = unique(dn.subb$USLINKNO1)
@@ -2090,14 +2203,23 @@ my_make_catchment = function(demnet, subb, linkno)
     olink.mat = t(sapply(olink.list, function(link) if(length(link)==2) {link} else {c(link, NA)}))
     olink.df = data.frame(olink1=olink.mat[,1], olink2=olink.mat[,2])
     
-  } else {
+    # compile inlets data into dataframe, apply intersection function along rows
+    i.df = cbind(data.frame(inlet=rep(TRUE, inlet.n), ilink=in.ilink.unique), olink.df)
+    i.sfc = apply(i.df, 1, function(x) my_catchment_outlet(demnet, subb, linkno1=x[2], linkno2=x[3]))
     
-    olink.df = NULL
+  } else {
+
+    i.df = NULL
+    i.sfc = NULL
   }
 
-  # compile inlets/outlets data into dataframe, apply intersection function along rows
-  i.df = cbind(data.frame(inlet=rep(TRUE, inlet.n), ilink=in.ilink.unique), olink.df)
-  i.sfc = apply(i.df, 1, function(x) st_intersection(st_union(demnet.sfc[dn.link %in% x[2:3]]), poly))
+  # plot(poly, col='red')
+  # plot(x )
+  # plot(i.sfc[[1]], add=TRUE)
+  # plot(o.sfc[[1]], add=TRUE)
+  # 
+  # x = st_intersection(st_geometry(subb[subb$DN %in% o.df[,2],]), st_geometry(subb[subb$DN %in% o.df[,3],]))
+  # 
   
   # merge inlets/outlets data with attributes (as sf), recast `poly`, and finish
   io.sf = st_sf(rbind(o.df, i.df), geometry=do.call(c, c(o.sfc, i.sfc)))
@@ -2105,8 +2227,149 @@ my_make_catchment = function(demnet, subb, linkno)
   
 }
 
+# merge catchments according to a minimum area rule, given the output of my_find_catchments
+my_merge_catchments = function(boundary, io, pts, demnet, subb, areamin=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `boundary`, sf MULTIPOLYONS object, the catchment boundaries (output of `my_find_catchments`)
+  # `io`, sf POINTS object, the inlets/outlets (")
+  # `pts`, sf POINTS object, the input to `my_find_catchments`
+  # `demnet`: sf LINESTRING, the channel network (with 'catchment_id') field
+  # `subb`: sf MULTIPOLYGON, subbasins shapefile with attribute 'DN' mapping to demnet$LINKNO
+  # `areamin`: numeric (in km^2), the minimum desired catchment size
+  #
+  # RETURN VALUE:
+  #
+  # A list containing the four catchment datasets (`boundary`, `io`, `pts`, `demnet`),
+  # appropriately modified so that any catchment with area less than `areamin` has been
+  # merged with one of its neighbours
+  # 
+  # DETAILS:
+  # 
+  # With default NULL `areamin` value, the function returns the four catchment datasets
+  # unchanged. Otherwise, it dissolves each of the too-small catchments with a neighbouring
+  # catchment, updating all attributes and lists appropriately. 
+  #
+  # The algorithm iterates over the too-small catchments according to these rules:
+  #
+  # 1. the smallest of the too-small catchments is selected first
+  # 1. upstream neighbours (if they exist) are preferred over the downstream one
+  # 2. If there is more than one upstream choice, the one having fewest inlets is preferred
+  # 3. In case of ties, the upstream neighbour with smallest area is selected 
+  #
+  # These rules are intended to both reduce variability in catchment area, and increase
+  # the proportion of catchments having no inlets. 
+  #
+  
+  # unpack link numbers from demnet
+  idvals = boundary$catchment_id
+  linklist = lapply(idvals, function(idval) demnet$LINKNO[demnet$catchment_id %in% idval])
+  
+  # halt if there are any NAs in this list, as that seems to crash R
+  if(anyNA(unlist(linklist)))
+  {
+    stop('something went wrong mapping link numbers to catchments - check `demnet$LINKNO`')
+  }
+  
+  # set up units for the threshold, and set default if necessary
+  areamin = units::set_units(ifelse(is.null(areamin), 0, areamin), km^2)
+  
+  # identify catchments below the area threshold
+  idx.toosmall = which(boundary$area < areamin)
+  n.toosmall = length(idx.toosmall)
+  
+  # skip if all the catchments are big enough
+  if(n.toosmall > 0)
+  {
+    # rearrange so that catchments with the fewest inlets get processed first
+    idx.toosmall = idx.toosmall[order(boundary$n_inlet[idx.toosmall])]
+    
+    # print a progress message and start iterating
+    merging.msg = paste0('with area < ', round(areamin, 2), 'km^2')
+    print(paste('> merging', n.toosmall, 'catchments', merging.msg))
+    pb = txtProgressBar(min=0, max=n.toosmall, style=3)
+    n.todo = n.toosmall
+    while(n.toosmall > 0)
+    {
+      # print progress message, grab data on first catchment from the too-small list
+      setTxtProgressBar(pb, n.todo - n.toosmall)
+      idx.pop = idx.toosmall[1]
+      id.pop = boundary$catchment_id[idx.pop]
+      io.pop = io[io$catchment_id==id.pop,]
+      
+      # identify a neighbouring catchment to merge with
+      if(!any(io.pop$inlet))
+      {
+        # no inlets case: find the downstream catchment via outlet
+        idx.outlet = which(!io.pop$inlet)
+        outlet.linkno = io.pop$olink1[idx.outlet]
+        idx.merge = which(sapply(linklist, function(link) any(outlet.linkno %in% link)))
+        id.merge = boundary$catchment_id[idx.merge]
+        
+      } else {
+        
+        # inlets case: find the upstream neighbour(s)
+        idx.inlet = which(io.pop$inlet)
+        inlet.linkno = c(io.pop$olink1[idx.inlet], io.pop$olink2[idx.inlet])
+        inlet.linkno = inlet.linkno[!is.na(inlet.linkno)]
+        id.upstream = io$catchment_id[io$ilink %in% inlet.linkno]
+        
+        # count the number of inlets on the upstream neighbour(s) 
+        n.up.inlet = boundary$n_inlet[boundary$catchment_id %in% id.upstream]
+        if(sum(n.up.inlet == min(n.up.inlet)) == 1)
+        {
+          # pick the neighbour with fewest inlets, when this choice is unique
+          id.merge = id.upstream[which.min(n.up.inlet)]
+          
+        } else {
+          
+          # pick the neighbour with fewest inlets AND smallest area
+          id.upstream = id.upstream[n.up.inlet == min(n.up.inlet)]
+          idx.upstream = which.min(boundary$area[boundary$catchment_id %in% id.upstream])
+          id.merge = id.upstream[idx.upstream]
+          
+        }
+        
+        # find index for this catchment id in `boundary`
+        idx.merge = which(boundary$catchment_id==id.merge)
+        
+      }
+      
+      # update input points and channel networks
+      pts$catchment_id[pts$catchment_id == id.pop] = id.merge
+      linklist[[idx.merge]] = do.call(c, linklist[c(idx.pop, idx.merge)])
+      demnet$catchment_id[demnet$catchment_id == id.pop] = id.merge
+      
+      # recompute catchment geometry, inlets/outlets
+      catchment.merge = my_delineate_catchment(demnet, subb, linklist[[idx.merge]])
+      catchment.merge$io$catchment_id = id.merge
+      io = rbind(io[!io$catchment_id %in% c(id.pop, id.merge), ], catchment.merge$io)
+      
+      # update boundary polygon and attributes for new merged catchment
+      boundary.merge.df = data.frame(catchment_id=id.merge)
+      boundary.merge.df$area = st_area(catchment.merge$poly)
+      boundary.merge.df$n_inlet = sum(catchment.merge$io$inlet)
+      boundary[idx.merge,] = st_sf(boundary.merge.df, geometry=catchment.merge$poly)
+      
+      # delete the old catchment from the channel network link list and boundaries
+      linklist = linklist[-idx.pop]
+      boundary = boundary[-idx.pop,]
+      
+      # update counter and to-do list
+      idx.toosmall = which(boundary$area < areamin)
+      idx.toosmall = idx.toosmall[order(boundary$n_inlet[idx.toosmall])]
+      n.toosmall = length(idx.toosmall)
+    }
+    setTxtProgressBar(pb, n.todo)
+    close(pb)
+  }
+  
+  return(list(boundary=boundary, io=io, pts=pts, demnet=demnet))
+}
+
 # delineate a set of mutually exclusive catchment polygons based on suggested outlet points
-my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
+my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
 {
   # ARGUMENTS:
   #
@@ -2114,28 +2377,35 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   # `demnet`: sf LINESTRING, the channel network shapefile from TauDEM's StreamNet
   # `subb`: sf MULTIPOLYGON, subbasins shapefile with attribute 'DN' mapping to demnet$LINKNO
   # `linklist`: (internal) list of integer vectors, subsets of `demnet$LINKNO` upstream of `pts`
-  # `areamin`: numeric (in km^2), the minimum desired catchment size
+  # `areamin`: (optional) numeric (in km^2), the minimum desired catchment size
   #
   # RETURN VALUE:
   #
-  # named list with entries 'pts', 'linklist', 'poly', 'io'; each is a list with one entry per
-  # catchment (eg. the nth catchment has associated data pts[[n]], linklist[[n]], poly[[n]], and
-  # io[[n]]). The entries of these lists are described below:
+  # For NULL `linklist` (default behaviour), returns a named list of four sf objects:
+  #
+  #   'boundary', MULTIPOLYGON with one row per catchment, and primary key `catchment_id`
+  #   'io', POINTS indicating the inlets and outlets of each catchment
+  #   'pts', POINTS, a copy of input `pts` object, plus fields `catchment_id` and `demnet_linkno`
+  #   'demnet', LINESTRING, a copy of input `pts` object, plus `catchment_id` field
+  # 
+  # non-NULL `linklist` is for recursive calls (internal use) - the function returns a named list
+  # with entries 'pts', 'linklist', 'poly', 'io'; each is a list with one entry per catchment (eg.
+  # the nth catchment has associated data pts[[n]], linklist[[n]], poly[[n]], and io[[n]]):
   #
   #   pts[[n]]: sf POINTS object, the subset of input points mapping to the catchment
   #   linklist[[n]]: integer vector, the upstream channel network as a subset of `demnet$LINKNO` 
   #   poly[[n]]: sfc MULTIPOLYGON, the catchment boundary
-  #   io[[n]]: sf POINTS object, the inlets and outlets to the catchment (see `my_make_catchment`)
+  #   io[[n]]: sf POINTS object, the inlets/outlets to the catchment (see `my_delineate_catchment`)
   # 
   # DETAILS:
   # 
   # This is an iterative algorithm for delineating catchments given a set of suggested outlet
-  # locations (in `pts`), and the output of TauDEM (where `subb` is the polygonized `w` raster).
+  # locations in `pts`, and the output of TauDEM (where `subb` is the polygonized `w` raster).
   # Input points may be gage locations, or any other point of interest in `demnet`. The output is
   # a partitioning of `demnet` into catchments (linked together by inlet/outlet points) that aims
-  # to place all of the suggested points in `pts` at the main outlet of a catchment.
+  # to place all suggested points at/near the main outlet of a catchment.
   #
-  # For each input point, the algorithm computes the full upstream channel network. From this set
+  # For each input point, the algorithm computes the full upstream channel network, from which
   # it identifies catchments that contain no other input points apart from their main outlets (ie
   # leaf nodes). These catchments are recorded, then their channel networks and outlet points are
   # clipped from `demnet` and `pts`. The algorithm then calls itself with the cropped channel
@@ -2143,36 +2413,30 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   # downstream location in `pts` has been assigned to a catchment.
   #
   # Note: `pts` locations are first snapped to the channel network, and are merged (ie treated as
-  # identical) whenever they snap to the same channel in `demnet`. 
-  #
-  # Any catchments smaller than `areamin` (if supplied) will be merged with a neighbour (where
-  # upstream neighbours are always preferred, and if more than one upstream neighbour exists, the
-  # one with smallest area is preferred). The output number of catchments may therefore by less
-  # than `pts`, and the exact number depends on both the spatial arrangement of `pts`, the area
-  # threshold (`areamin`), and the detail level in `demnet`.
-  #
+  # identical) whenever they snap to the same channel in `demnet`. `areamin` (if supplied) merges
+  # any catchments below the threshold size - see `my_merge_catchments` for details.
+  # 
 
   
   # this initial step is slow - skip it by supplying precomputed list in `linklist`
   if(is.null(linklist))
   {
     # flag for initial call vs recursive calls
-    is.initial = TRUE
+    is.final = TRUE
     
-    # snap all `pts` locations to stream reaches in demnet, add 'demnet_link' attribute
+    # snap all `pts` locations to stream reaches in demnet, add link number attribute
     pts.snap = my_demnet_snap(pts, demnet, quiet=TRUE)
-    pts['demnet_link'] = pts.snap$link
+    pts['demnet_linkno'] = pts.snap$link
     pts.n = nrow(pts)
     
-    # append an ID to unscramble everything later
-    pts['group_catchments_id'] = 1:pts.n
-    
-    # merge suggested outlets that snap to same stream reach
-    pts.unique = unique(pts.snap$link)
-    idx.pts.merge = match(pts.unique, pts.snap$link)
-    idx.pts.unmerge = match(pts.snap$link, pts.unique)
+    # merge any input points that snap to same stream reach
+    link.unique = unique(pts.snap$link)
+    idx.pts.merge = match(link.unique, pts.snap$link)
+    idx.pts.unmerge = match(pts.snap$link, link.unique)
     pts.merged = pts[idx.pts.merge,]
     pts.merged.n = nrow(pts.merged)
+    
+    # message if points are merged
     if(pts.n != pts.merged.n)
     {
       omit.n = pts.n - pts.merged.n
@@ -2180,9 +2444,15 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
       print(paste('> grouping', omit.msg, 'input points with non-unique channel mapping'))
     }
     
+    # temporary IDs to unscramble everything later
+    pts.merged$catchment_id = 1:pts.merged.n
+    pts$catchment_id = pts.merged$catchment_id[idx.pts.unmerge]
+
+    
     # find the associated subset of demnet for each `pts` point
     print(paste('> computing upstream channel networks for', pts.merged.n, 'input points'))
     demnet.list = my_upstream(pts.merged, demnet, quiet=TRUE)
+    
     
     # copy the link numbers in same list structure
     linklist = lapply(demnet.list, function(demnet.sub) demnet.sub$LINKNO)
@@ -2190,7 +2460,7 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   } else {
     
     # flag for initial call vs recursive calls
-    is.initial = FALSE
+    is.final = FALSE
     
     # if `linklist` is supplied, it is assumed the points are already merged
     pts.merged = pts
@@ -2202,11 +2472,12 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   if(pts.merged.n == 1)
   {
     # dissolve polygons for the channel network into boundary polygon, compute inlets/outlets
-    print(paste('> dissolving remaining polygons for final input point...'))
-    leaf.geometry = my_make_catchment(demnet, subb, linklist[[1]])
+    print(paste0('> dissolving final catchment'))
+    leaf.geometry = my_delineate_catchment(demnet, subb, linklist[[1]])
     o.poly = leaf.geometry$poly
     o.inlet = leaf.geometry$io
-    
+    o.inlet$catchment_id = pts.merged$catchment_id
+
     # storage in lists to conform with more general case below
     leaf.result = list(pts=pts.merged,
                        linklist=linklist,
@@ -2216,14 +2487,15 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   } else {
     
     # inclusion matrix: point j is found upstream of (or at) point i iff element [i,j] is TRUE
-    incl.mat = sapply(linklist, function(linkno) pts.merged$demnet_link %in% linkno)
+    incl.mat = sapply(linklist, function(linkno) pts.merged$demnet_linkno %in% linkno)
     
     # identify "leaves" of the tree, ie input points with no other (unprocessed) points upstream
     pts.isleaf = colSums(incl.mat) == 1
     leaves.n = sum(pts.isleaf)
-    pts.msg  = paste0('(', pts.merged.n - leaves.n, ' remain)')
+    pts.msg  = paste0('(', pts.merged.n - leaves.n, ' point(s) remain)')
     print(paste('> dissolving catchments for', leaves.n, 'input points(s)', pts.msg))
     
+
     # build a demnet subset and catchment polygon for each leaf in a loop
     pb = txtProgressBar(min=0, max=leaves.n, style=3)
     o.poly = o.inlet = vector(mode='list', length=leaves.n)
@@ -2231,24 +2503,26 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
     {
       # find the index in `linklist` for this catchment, and the link numbers
       idx.linklist = which(pts.isleaf)[idx.leaf]
-      leaf.linkno = linklist[[idx.linklist]]
+      linkno = linklist[[idx.linklist]]
       
       # dissolve polygons for the channel network into boundary polygon, compute inlets/outlets
-      leaf.geometry = my_make_catchment(demnet, subb, leaf.linkno)
+      leaf.geometry = my_delineate_catchment(demnet, subb, linkno)
       o.poly[[idx.leaf]] = leaf.geometry$poly
       o.inlet[[idx.leaf]] = leaf.geometry$io
+      o.inlet[[idx.leaf]]$catchment_id = pts.merged$catchment_id[idx.linklist]
       
       # trim stream networks of all channels whose catchments overlap with current leaf
       idx.overlap = which(incl.mat[idx.linklist,])[which(incl.mat[idx.linklist,]) != idx.linklist]
       for(idx.o in idx.overlap)
       {
         # remove segments of overlap from the rest of the channel network
-        idx.totrim = linklist[[idx.o]] %in% leaf.linkno
+        idx.totrim = linklist[[idx.o]] %in% linkno
         linklist[[idx.o]] = linklist[[idx.o]][!idx.totrim]
       }
       
       # update progress bar
       setTxtProgressBar(pb, idx.leaf)
+      
     }
     close(pb)
     
@@ -2262,10 +2536,11 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
     if(sum(!pts.isleaf)>0)
     {
       # recursive call with inputs trimmed to remove current leaves
-      branch.result = my_group_catchments(pts.merged[!pts.isleaf,],
-                                          demnet, 
-                                          subb, 
-                                          linklist[!pts.isleaf])
+      branch.result = my_find_catchments(pts.merged[!pts.isleaf,],
+                                         demnet,
+                                         subb,
+                                         areamin,
+                                         linklist[!pts.isleaf])
                                     
       
       # append result to list from earlier
@@ -2278,89 +2553,89 @@ my_group_catchments = function(pts, demnet, subb, linklist=NULL, areamin=NULL)
   }
   
   # this part only happens at the very end (skipped in recursive calls) 
-  if(is.initial)
+  if(is.final)
   {
     # determine order of `pts.merged` relative to `leaf.result$pts` 
-    id.new = leaf.result$pts$group_catchments_id
-    id.old = pts$group_catchments_id[idx.pts.merge]
+    id.new = leaf.result$pts$catchment_id
+    id.old = pts$catchment_id[idx.pts.merge]
     
-    # rearrange `pts` entries (unmerged input) as list in same order as `leaf.result`
-    leaf.result$pts = lapply(id.new, function(id) pts[c(id.old==id)[idx.pts.unmerge],])
+    # compile io, sort, count the number of inlets for each catchment 
+    io = do.call(rbind, leaf.result$io)
+    io = io[order(io$catchment_id),]
+    n.inlet = as.vector(by(io, io$catchment_id, function(x) sum(x$inlet)))
     
-    # merge any catchments that are too small (with a neighbour)
-    if(!is.null(areamin))
-    {
-      # compute catchment areas and identify those below the threshold
-      areas = st_area(do.call(c, leaf.result$poly))
-      idx.toosmall = areas < units::set_units(areamin, km^2)
-      n.toosmall = sum(idx.toosmall)
-      
-      # skip if all the catchments are big enough
-      if(n.toosmall > 0)
-      {
-        merging.msg = paste0('with area < ', round(areamin, 2), 'km^2')
-        print(paste('> merging', n.toosmall, 'catchments', merging.msg))
-        n.todo = n.toosmall
-        pb = txtProgressBar(min=0, max=n.todo, style=3)
-        while(n.toosmall > 0)
-        {
-          # copy link number list and print progress message
-          linklist = leaf.result$linklist
-          setTxtProgressBar(pb, n.todo - n.toosmall)
-          
-          # grab first catchment from the too-small list
-          idx.pop = which(idx.toosmall)[1]
-          
-          # identify the catchment to merge with
-          io.pop = leaf.result$io[[idx.pop]]
-          if(!any(io.pop$inlet))
-          {
-            # no inlets case: find the downstream catchment via outlet
-            idx.outlet = which(!io.pop$inlet)
-            outlet.linkno = io.pop$olink1[idx.outlet]
-            idx.merge = which(sapply(linklist, function(link) any(outlet.linkno %in% link)))
-            
-          } else {
-            
-            # inlets case: find the upstream neighbour having smallest area
-            idx.inlet = which(io.pop$inlet)
-            inlet.linkno = c(io.pop$olink1[idx.inlet], io.pop$olink2[idx.inlet])
-            inlet.linkno = inlet.linkno[!is.na(inlet.linkno)]
-            idx.merge = which(sapply(linklist, function(link) any(inlet.linkno %in% link)))
-            idx.merge = idx.merge[which.min(areas[idx.merge])]
+    # TODO: find the total number of upstream catchments
+    
+    # combine all polygons into an sfc object and compile attributes as data frame
+    boundary.geom = do.call(c, leaf.result$poly) 
+    boundary.df = data.frame(catchment_id = id.new,
+                             area = st_area(boundary.geom),
+                             n_inlet = n.inlet[match(id.new, unique(io$catchment_id))])
+    
+    # combine boundary polygons as sf object and reorder
+    boundary = st_sf(boundary.df, geometry=boundary.geom)
+    idx.boundary = order(boundary$catchment_id)
+    boundary = boundary[idx.boundary,]
+    n.catchment = nrow(boundary)
 
-          }
-          
-          # merge the input points, channel networks, recompute inlets/outlets/boundary
-          pts.out = do.call(rbind, leaf.result$pts[c(idx.pop, idx.merge)])
-          linklist.out = do.call(c, linklist[c(idx.pop, idx.merge)])
-          catchment.out = my_make_catchment(demnet, subb, linklist.out)
-          
-          # update results list with merged data 
-          leaf.result$pts[[idx.merge]] = pts.out
-          leaf.result$linklist[[idx.merge]] = linklist.out
-          leaf.result$poly[[idx.merge]] = catchment.out$poly
-          leaf.result$io[[idx.merge]] = catchment.out$io
-          
-          # delete the old catchment
-          leaf.result$pts = leaf.result$pts[-idx.pop]
-          leaf.result$linklist = leaf.result$linklist[-idx.pop]
-          leaf.result$poly = leaf.result$poly[-idx.pop]
-          leaf.result$io = leaf.result$io[-idx.pop]
-          
-          # update the areas vector, and todo counter
-          areas[idx.merge] = areas[idx.pop] + areas[idx.merge]
-          areas = areas[-idx.pop]
-          idx.toosmall = areas < units::set_units(areamin, km^2)
-          n.toosmall = sum(idx.toosmall)
-        }
-        close(pb)
+    
+    # copy link number list, reordering to match boundaries
+    linklist = leaf.result$linklist[idx.boundary]
+    
+    # append 'catchment_id' values to stream channels in demnet in a loop
+    demnet.n = nrow(demnet)
+    demnet = cbind(demnet, data.frame(catchment_id=rep(NA, demnet.n)))
+    for(idx.catchment in 1:n.catchment)
+    {
+      idx.demnet = demnet$LINKNO %in% linklist[[idx.catchment]]
+      demnet$catchment_id[idx.demnet] = boundary$catchment_id[idx.catchment]
+    }
+
+    # apply catchment area threshold (if provided) to these results 
+    merge.results = my_merge_catchments(boundary, io, pts, demnet, subb, areamin)
+    
+    # unpack the results of `my_merge_catchments`
+    boundary = merge.results$boundary
+    demnet = merge.results$demnet
+    io = merge.results$io
+    pts = merge.results$pts
+    n.catchment = nrow(boundary)
+    
+    # overwrite `catchment_id` with contiguous integers
+    id.old = unique(boundary$catchment_id)
+    boundary$catchment_id = match(boundary$catchment_id, id.old)
+    demnet$catchment_id = match(demnet$catchment_id, id.old)
+    io$catchment_id = match(io$catchment_id, id.old)
+    pts$catchment_id = match(pts$catchment_id, id.old)
+    
+    # For USGS style `pts`, attempt to build catchment names from 'station_nm' field
+    if(!(is.null(pts$station_nm)|is.null(pts$count_nu)))
+    {
+      # find the station name corresponding to the gage with the most records
+      idvals = pts$catchment_id
+      stn.names = as.vector(by(pts, idvals, function(x) x$station_nm[which.max(x$count_nu)]))
+      
+      # attempt to shorten these a bit
+      stn.names.short = gsub(' ', '_', gsub('yellowstone river', 'main', tolower(stn.names)))
+      stn.names.short = gsub('_ynp', '', stn.names.short)
+      stn.names.short = gsub('_mt', '', stn.names.short)
+      stn.names.short = gsub('ranger_station', 'stn', stn.names.short)
+      stn.names.short = gsub('creek', 'c', stn.names.short)
+      stn.names.short = gsub('cr', 'c', stn.names.short)
+      stn.names.short = gsub('near', 'nr', stn.names.short)
+      
+      # add to boundary sf only when this produces unique names
+      if(length(unique(stn.names.short)) == n.catchment)
+      {
+        boundary$catchment_name = stn.names.short
       }
     }
-    
-    print(paste('> finished delineating', length(leaf.result$poly), 'catchments'))
+
+    print(paste('> finished delineating', n.catchment, 'catchments'))
+    return(list(boundary=boundary, io=io, pts=pts, demnet=demnet))
   }
   
+  # if not final, return results for this branch
   return(leaf.result)
 }
 
