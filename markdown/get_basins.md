@@ -1,7 +1,7 @@
 get\_basins.R
 ================
 Dean Koch
-2020-11-30
+2021-02-02
 
 **Mitacs UYRW project**
 
@@ -25,6 +25,13 @@ UYRW upstream of [Carter’s Bridge,
 Montana](https://myfwp.mt.gov/fwpPub/landsMgmt/siteDetail.action?lmsId=39753508),
 transforming that data into a more convenient format, and producing some
 plots giving an overview of the watershed.
+
+``` r
+#
+# we may want to also fetch the current watershed boundary (HUC) map, either from: 
+# https://developers.google.com/earth-engine/datasets/catalog/USGS_WBD_2017_HUC10
+# or http://prd-tnm.s3-website-us-west-2.amazonaws.com/?prefix=StagedProducts/Hydrography/WBD/National/GDB/
+```
 
 ## libraries
 
@@ -64,6 +71,13 @@ library(nhdplusTools)
 library(smoothr)
 ```
 
+    ## 
+    ## Attaching package: 'smoothr'
+
+    ## The following object is masked from 'package:stats':
+    ## 
+    ##     smooth
+
 ## project data
 
 To keep the project data folder organized, the list `files.towrite` is
@@ -78,7 +92,7 @@ A helper function writes this file metadata information to a CSV file
 basins.meta = my_metadata('get_basins', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_basins_metadata.csv"
+    ## [1] "> writing metadata to: data/get_basins_metadata.csv"
 
 ``` r
 print(basins.meta[, c('file', 'type')])
@@ -185,6 +199,9 @@ computes the bounding box extent.
 ``` r
 if(any(!file.exists(here(basins.meta[c('boundary','crs'), 'file']))))
 {
+  # sf::st_read requires a layer name. List these names using `rgdal`
+  # rgdal:: ogrListLayers(here(basins.meta['nhd', 'file']))
+  
   # load the watershed catchments. There are several thousand
   uyrw.catchment = read_sf(here(basins.meta['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
@@ -236,7 +253,7 @@ if(any(!file.exists(here(basins.meta[c('boundary','crs'), 'file']))))
 
 Note that holes in this watershed boundary polygon can emerge, such as
 when the catchement boundaries don’t perfectly align - see this by
-plotting `st_union(uyrw.catchment)`. These are filled using the
+plotting `st_union(uyrw.catchment)`. They are filled using the
 *fill\_holes* function in the `smoothr`package.
 
 ## data prep

@@ -22,6 +22,10 @@
 #' This script uses it to assemble some basic info on the hydrology of the UYRW upstream of
 #' [Carter's Bridge, Montana](https://myfwp.mt.gov/fwpPub/landsMgmt/siteDetail.action?lmsId=39753508),
 #' transforming that data into a more convenient format, and producing some plots giving an overview of the watershed.
+#
+# we may want to also fetch the current watershed boundary (HUC) map, either from: 
+# https://developers.google.com/earth-engine/datasets/catalog/USGS_WBD_2017_HUC10
+# or http://prd-tnm.s3-website-us-west-2.amazonaws.com/?prefix=StagedProducts/Hydrography/WBD/National/GDB/
 
 #'
 #' ## libraries
@@ -215,6 +219,9 @@ if(!file.exists(here(basins.meta['nhd', 'file'])))
 #' 
 if(any(!file.exists(here(basins.meta[c('boundary','crs'), 'file']))))
 {
+  # sf::st_read requires a layer name. List these names using `rgdal`
+  # rgdal:: ogrListLayers(here(basins.meta['nhd', 'file']))
+  
   # load the watershed catchments. There are several thousand
   uyrw.catchment = read_sf(here(basins.meta['nhd', 'file']), 'CatchmentSP')
   print(nrow(uyrw.catchment))
@@ -263,16 +270,17 @@ if(any(!file.exists(here(basins.meta[c('boundary','crs'), 'file']))))
   uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 }
 
-#' Note that holes in this watershed boundary polygon can emerge, such as when the catchement boundaries don't perfectly align - see
-#' this by plotting `st_union(uyrw.catchment)`. These are filled using the *fill_holes* function in the `smoothr`package.
+#' Note that holes in this watershed boundary polygon can emerge, such as when the catchement
+#' boundaries don't perfectly align - see this by plotting `st_union(uyrw.catchment)`. They are
+#' filled using the *fill_holes* function in the `smoothr`package.
 
 
 #'
 #' ## data prep
 #' 
-#' With the watershed boundaries and projection so defined, we can now transform the rest of the data. Files fetched by `nhdplusTools`
-#' may include some invalid geometries (self-intersections) and features lying outside this watershed, so we clean up the sfc objects
-#' before continuing.
+#' With the watershed boundaries and projection so defined, we can now transform the rest of the data.
+#' Files fetched by `nhdplusTools` may include some invalid geometries (self-intersections) and features
+#' lying outside this watershed, so we clean up the sfc objects before continuing.
 if(any(!file.exists(here(basins.meta[c('catchment', 'waterbody', 'flowline', 'mainstem'), 'file']))))
 {
   # load and reproject all geometries to from latitude/longitude to UTM
@@ -304,7 +312,6 @@ if(any(!file.exists(here(basins.meta[c('catchment', 'waterbody', 'flowline', 'ma
   uyrw.mainstem = readRDS(here(basins.meta['mainstem', 'file']))
   
 }
-
 
 #' In a small pilot study leading up to this project, SWAT+ was fitted to the Mill Creek, MT watershed.
 #' Define this subset of the UYRW and save those geometries to disk:
