@@ -42,6 +42,9 @@ library(data.table)
 #' [`gdalUtilities`](https://cran.r-project.org/web/packages/gdalUtilities/index.html) GDAL wrapper
 library(gdalUtilities)
 
+#' [`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) web scraping
+library(rvest) 
+
 #'
 #' ## project data
 
@@ -454,6 +457,79 @@ my_daymet_reader = function(nc, perim, buff=0)
   return(list(tab=c(list(coords=coords.tab), climdata.list), spat=c(list(pts=pts.sf), rbrick.list)))
   
 }
+
+
+#' Data retrieval from NRCS National Water Climate Center
+my_nwcc_list = function(csvpath=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `path`: (optional) character, the full path to the file to write
+  #
+  # RETURN VALUE:
+  #
+  # data.frame with a row for each site
+  #
+  # DETAILS:
+  #
+  # Using `rvest`, downloads the full table of info on sites (including discontinued ones)
+  # for which the NWCC publishes records, and returns their metadata as data.frame(). If
+  # `csvpath` is supplied, this dataframe is written to disk as a CSV file
+  
+  # the URL to fetch from
+  base.url = 'https://wcc.sc.egov.usda.gov/nwcc/'
+  networks = c('scan', 'snow', 'sntl', 'sntlt', 'mprc', 'other')
+  
+  # build a query for each network
+  query.pt1 = 'yearcount?'
+  query.pt2 = paste0('network=', networks)
+  query.pt3 = '&counttype=listwithdiscontinued&state='
+  query.url = paste0(base.url, query.pt1, query.pt2, query.pt3)
+  query.n = length(query.url)
+  
+  # fetch the html using `rvest` in a loop, storing in list
+  data.list = setNames(vector(mode='list', length=query.n), networks) 
+  pb = txtProgressBar(max=query.n, style=3)
+  for(idx.net in 1:query.n)
+  {
+    # download the html
+    setTxtProgressBar(pb, idx.net)
+    data.html = read_html(query.url[idx.net])
+
+    # parse the table as dataframe and add to storage
+    data.df = data.html %>% html_nodes(xpath="//table[3]") %>% html_table() %>% '[['(1)
+    data.list[[idx.net]] = data.df
+    
+  }
+  close(pb) 
+  
+  # bind all the tables together
+  data.df = do.call(rbind, data.list)
+  data.n = nrow(data.df)
+  
+  # cleaning: parse `site_name` and `huc`, interpret empty strings and 'unknown' as NA
+  data.df = data.df %>% 
+    mutate(ts = gsub('\\(|\\)', '', ts)) %>%              
+    mutate(site_id = gsub('.+\\(|\\)', '', site_name)) %>%  
+    mutate(site_name = gsub('\\(.+', '', site_name)) %>%
+    mutate(huc_id = gsub('.+\\(|\\)', '', huc)) %>%
+    mutate(huc_name = gsub('\\(.+', '', huc)) %>%
+    mutate(huc_name = gsub('^[0-9]+', '', huc_name)) %>%
+    mutate(huc_name = gsub('^-', '', huc_name)) %>%
+    select(-huc) %>% 
+    na_if('') %>% 
+    na_if('unknown') %>%
+    na_if('unknown ')
+    
+  # write as CSV if requested
+  if(!is.null(path)) write.csv(data.df, path, row.names=FALSE)
+  
+  # finished
+  return(data.df)
+  
+}
+  
+  
 
 
 #' This is a kludge combining various `FedData` functions with some of my own code, in order to import STATSGO2 data and produce
@@ -2623,6 +2699,8 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
       stn.names.short = gsub('creek', 'c', stn.names.short)
       stn.names.short = gsub('cr', 'c', stn.names.short)
       stn.names.short = gsub('near', 'nr', stn.names.short)
+      stn.names.short = gsub(',', '', stn.names.short)
+      stn.names.short = gsub(',', '', stn.names.short)
       
       # add to boundary sf only when this produces unique names
       if(length(unique(stn.names.short)) == n.catchment)
@@ -2639,6 +2717,215 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
   return(leaf.result)
 }
 
+
+
+#' scan for a list of SWAT text input files and associated variable names 
+my_swat_scan = function(swatdir)
+{
+  # ARGUMENTS:
+  #
+  # `swatdir`, character string path to the text input file directory of a SWAT+ model
+  #
+  # RETURN VALUE:
+  #
+  # A list of all text input configuration files for the SWAT model (in `swatdir`) 
+  
+  # scan all existing files in the directory 
+  all.fn = list.files(swatdir)
+  
+    ## master watershed file ('file.cio')
+  
+  # read 'file.cio', copy comment line and pull file references as named list
+  cio.path = file.path(swatdir, 'file.cio')
+  cio.raw = readLines(cio.path, warn=FALSE)
+  cio.msg = cio.raw[[1]]
+  cio.fn.raw = lapply(cio.raw[2:length(cio.raw)], function(x) strsplit(x, '\\s+|null')[[1]])
+  cio.fn.grp = sapply(cio.fn.raw, function(x) x[1])
+  cio.fn = setNames(lapply(cio.fn.raw, function(x) x[-1][ nchar(x[-1]) > 0 ]), cio.fn.grp)
+  
+
+    ## simulation files ('print.prt', 'time.sim', 'object.cnt')
+  
+  # 'print.prt' has four parts, split at these magic line numbers
+  msg.ln = 1
+  bool.ln = 6
+  tstep.ln = 9
+  
+  # read the file and its comment
+  path = file.path(swatdir, 'print.prt')
+  rawtxt = readLines(path, n=tstep.ln)
+  msg = rawtxt[[msg.ln]]
+  
+  # after `tstep.ln` is a simple table of 'y'/'n' characters - store as boolean
+  tstep.table = read.table(path, header=TRUE, row.names=1, skip=tstep.ln) == 'y'
+  
+  # make indices for the rest, handle with `my_rw_nvtext`
+  int.idx = (1 + msg.ln):(bool.ln - 1)
+  bool.idx = bool.ln:(tstep.ln)
+  
+  
+  my_nvtext(rawtxt[-1])
+  # 
+}
+
+#' edit lines from SWAT text configuration files, or parse them into name-value pair form 
+my_nvtext = function(txt, replacement=NULL)
+{
+  # if `replacement` is NULL (default), returns the vector of name-value pairs
+  # otherwise, returns `txt` with entries of the named character vector `replacement` replacing
+  # the values in `txt` with matching names. All names must match with an entry of `txt`
+  # (ie any mismatch causes the function to halt without replacing anything)
+  
+  # The function assumes that name and value lines alternate in `txt`, with names coming first
+ # txt = rawtxt[bool.idx]
+  #txt = rawtxt[-1]
+
+  # make alternating indices - values are on even lines, names on odd lines 
+  is.val = !as.logical(1:length(txt) %% 2)
+  
+  # strip whitespace to compile all names and values
+  txt.unpacked = strsplit(txt, '\\s+')
+  txt.read = setNames(do.call(c, txt.unpacked[is.val]), do.call(c, txt.unpacked[!is.val]))
+  
+  # write mode
+  if(!is.null(replacement))
+  {
+    # halt if any variable names in `replacement` are missing from `txt`
+    varname = names(replacement)
+    idx.varname = match(varname, names(txt.read))
+    idx.notfound = is.na(idx.varname)
+    if(any(idx.notfound)) stop(paste('variable(s)', varname[idx.notfound], 'not found'))
+    
+    # make a regexp to pick out and measure the whitespace (escaping any periods)
+    txt.regexp = sapply(txt.unpacked, function(x) paste0('(', paste(x, collapse=')|('), ')'))
+    txt.regexp = gsub('\\.', '\\\\.', txt.regexp)
+    txt.spacing = lapply(strsplit(txt, txt.regexp), nchar)
+    txt.length = lapply(txt.unpacked, nchar)
+
+    # make a vector of character start positions for each string, and the max length
+    txt.start = mapply(function(x, y) 1 + cumsum(c(0, x)) + cumsum(y), txt.length, txt.spacing)
+    txt.max = lapply(txt.start, function(x) diff(x) - 1)
+    
+    # find the row (line) and column (entry) numbers for each parameter 
+    rn = sapply(varname, function(nm) which(sapply(txt.unpacked[!is.val], function(x) nm %in% x)))
+    cn = mapply(function(nm, n) which(nm == txt.unpacked[!is.val][[n]]), varname, rn)
+  
+    # find the character limits then format the replacements as character strings
+    nc = mapply(function(i, j) txt.max[is.val][[i]][j], rn, cn)
+    txt.replacement = my_typeco(txt.read[match(varname, names(txt.read))], replacement, nc)
+    
+    # loop to replace values in the raw text
+    for(idx.val in 1:length(replacement))
+    {
+      # find the character start/end positions
+      pos.start = txt.start[[ rn[idx.val] ]][ cn[idx.val] ]
+      pos.end = pos.start + nchar(replacement[idx.val]) - 1
+      
+      # make the substitution
+      substr(txt[is.val][rownum], pos.start, pos.end) <- txt.replacement[idx.val]
+      
+    }
+    
+    # finished write mode
+    return(txt)
+    
+  } else {
+    
+   # convert unpacked parameter values to data.frame and finish read mode
+   return(my_typeco(txt.read)) 
+    
+  }
+    
+}
+  
+# type detection/conversion for swapping between SWAT text and R representation of a parameter 
+my_typeco = function(txtvec, rval=NULL, nc=NULL)
+{
+  # ARGUMENTS:
+  #  
+  # `txtvec`: character vector or data.frame, the value(s) text from SWAT without whitespace
+  # `rval`: (optional) data.frame; the value(s) to write, as R object  
+  # `nc`: (optional) integer vector, the maximum string length(s) for truncation 
+  #
+  # RETURN VALUE:
+  #
+  # For NULL `rval`, a data frame of the SWAT parameter values in `txtvec` in the appropriate
+  # R type, either integer, numeric, logical, or character.
+  #
+  # For non-NULL `rval`, a character vector of the SWAT parameter values supplied in `rval`,
+  # truncated to the lengths in `nc` (if supplied), ready to be written to the SWAT text file.
+  #
+  # DETAILS:
+  #
+  # Character type is the default for anything not detected as integer, numeric, or logical.
+  # `nc` is ignored if `rval` not supplied, and truncation has no effect on booleans. 
+  # 
+  # 
+  
+  # txtvec = tstep.table
+  # txtvec = txt.read
+  # rval = NULL
+  # nc = NULL
+  #txtvec = txt.read[match(varname, names(txt.read))]
+  #rval = replacement
+  
+  # TODO: dataframes 
+  if(!is.vector(txtvec))
+  {
+    # grab a random sample of rows and test all of them?
+    # test just the first row?
+  }
+  
+  # type detection for 'y'/'n' booleans
+  is.bool = txtvec %in% 'y' | txtvec %in% 'n'
+  
+  # detect numeric and integer, the rest is treated as character
+  is.num = !is.na(suppressWarnings(as.numeric(txtvec))) & !is.bool
+  is.int = is.num & !grepl('.', txtvec, fixed=TRUE)
+  is.num = is.num & !is.int
+  is.char = !is.int & !is.num & !is.bool 
+
+  # read mode  
+  if(is.null(rval))
+  {
+    # coerce to appropriate type, then transpose into a data frame
+    df.char = as.data.frame( t(txtvec[is.char]) )
+    df.bool = as.data.frame( t(txtvec[is.bool] == 'y') )
+    df.num = setNames(as.data.frame( t(as.numeric(txtvec[is.num])) ), names(txtvec[is.num]))
+    df.int = setNames(as.data.frame( t(as.integer(txtvec[is.int])) ), names(txtvec[is.int]))
+
+    # bind the dataframes, return everything to original order and finish
+    idx.reorder = c(which(is.bool), which(is.char), which(is.num), which(is.int))
+    return(cbind(df.bool, df.char, df.num, df.int)[idx.reorder])
+
+  } else {
+    
+    # write mode: collect input types and expected types based on SWAT string 
+    rval.class = sapply(rval, class)
+    classnames = c('logical', 'character', 'numeric', 'integer')
+    rval.class.mat = sapply(classnames, function(x) rval.class == x)
+    swat.class.mat = cbind(is.bool, is.char, is.num, is.int)
+    
+    # warn of any mismatches (ignoring numeric vs integer mismatches)
+    mismatch.mat = ! swat.class.mat == rval.class.mat
+    mismatch.msg = paste(names(rval)[which(rowSums(mismatch.mat) > 0)], collapse=', ')
+    if(any(mismatch.mat)) warning(paste('type mismatch in variables:', mismatch.msg))
+    
+    # translate boolean to 'y'/'n' - numeric inputs x are interpreted as x==0
+    rval[is.bool] = as.logical(rval[is.bool])
+    idx.match = match(names(rval[is.bool]), names(txtvec[is.bool]))
+    txtvec[is.bool] = c('n', 'y')[ 1 + as.numeric(rval[is.bool][idx.match]) ]
+    
+    # translate the rest 
+    idx.match = match(names(rval[!is.bool]), names(txtvec[!is.bool]))
+    txtvec[!is.bool] = as.character(rval[!is.bool][idx.match])
+    
+    # truncate, if requested, then finish 
+    if(!is.null(nc)) txtvec = substr(txtvec, 1, nc) 
+    return(txtvec)
+  }
+  
+}
 
 
 
