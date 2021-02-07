@@ -1,7 +1,7 @@
 get\_helperfun.R
 ================
 Dean Koch
-2021-02-02
+2021-02-06
 
 **Mitacs UYRW project**
 
@@ -539,31 +539,46 @@ my_daymet_reader = function(nc, perim, buff=0)
 }
 ```
 
-Data retrieval from NRCS National Water Climate Center
+get a listing of stations with records available through NRCS National
+Water Climate Center
 
 ``` r
 my_nwcc_list = function(csvpath=NULL)
 {
   # ARGUMENTS:
   #
-  # `path`: (optional) character, the full path to the file to write
+  # `csvpath`: (optional) character, the full path to the metadata file to write
   #
   # RETURN VALUE:
   #
-  # data.frame with a row for each site
+  # dataframe with a row for each site
   #
   # DETAILS:
   #
-  # Using `rvest`, downloads the full table of info on sites (including discontinued ones)
-  # for which the NWCC publishes records, and returns their metadata as data.frame(). If
-  # `csvpath` is supplied, this dataframe is written to disk as a CSV file
+  # Using `rvest`, builds a table of info on sites (including discontinued ones)
+  # where records are available through NWCC, and returns their metadata as data.frame().
+  # If `csvpath` is supplied, the dataframe is written to disk as a CSV file.
+  #
+  # based on snotelr::snotel_info
   
-  # the URL to fetch from
-  base.url = 'https://wcc.sc.egov.usda.gov/nwcc/'
-  networks = c('scan', 'snow', 'sntl', 'sntlt', 'mprc', 'other')
+  # the URL to fetch from and a list of networks to query
+  base.url = 'https://wcc.sc.egov.usda.gov'
+  networks = c('scan',   # NRCS Soil Climate Analysis Network
+               'snow',   # NRCS Snow Course Sites
+               'coop',   # National Weather Service COOP stations
+               'bor',    # reservoir stations, including all from Bureau of Reclamation 
+               'sntl',   # NWCC SNOTEL and SCAN stations
+               'msnt',   # Manual SNOTEL non-telemetered, non-real-time sites
+               'usgs',   # streamflow stations, including all from USGS
+               'mprc',   # Manual precipitation sites
+               'sntlt',  # telemetered aerial markers with sensors (Snolite) 
+               'clmind', # climate indices, such as Southern Oscillation or Trans-Nino
+               'cscan',  # cooperative Soil Climate Analysis Network
+               'nrcsxp', # ??
+               'other')
   
   # build a query for each network
-  query.pt1 = 'yearcount?'
+  query.pt1 = '/nwcc/yearcount?'
   query.pt2 = paste0('network=', networks)
   query.pt3 = '&counttype=listwithdiscontinued&state='
   query.url = paste0(base.url, query.pt1, query.pt2, query.pt3)
@@ -575,8 +590,8 @@ my_nwcc_list = function(csvpath=NULL)
   for(idx.net in 1:query.n)
   {
     # download the html
-    setTxtProgressBar(pb, idx.net)
     data.html = read_html(query.url[idx.net])
+    setTxtProgressBar(pb, idx.net)
 
     # parse the table as dataframe and add to storage
     data.df = data.html %>% html_nodes(xpath="//table[3]") %>% html_table() %>% '[['(1)
@@ -589,25 +604,461 @@ my_nwcc_list = function(csvpath=NULL)
   data.df = do.call(rbind, data.list)
   data.n = nrow(data.df)
   
-  # cleaning: parse `site_name` and `huc`, interpret empty strings and 'unknown' as NA
+  # clean up 'ts', parse sites, hucs, dates, interpret length-0 and 'unknown' as NA 
   data.df = data.df %>% 
-    mutate(ts = gsub('\\(|\\)', '', ts)) %>%              
+    mutate(ts = gsub('\\(|\\)', '', ts)) %>%
     mutate(site_id = gsub('.+\\(|\\)', '', site_name)) %>%  
-    mutate(site_name = gsub('\\(.+', '', site_name)) %>%
+    mutate(site_nm = gsub('\\(.+', '', site_name)) %>%
     mutate(huc_id = gsub('.+\\(|\\)', '', huc)) %>%
-    mutate(huc_name = gsub('\\(.+', '', huc)) %>%
-    mutate(huc_name = gsub('^[0-9]+', '', huc_name)) %>%
-    mutate(huc_name = gsub('^-', '', huc_name)) %>%
-    select(-huc) %>% 
-    na_if('') %>% 
-    na_if('unknown') %>%
-    na_if('unknown ')
+    mutate(huc_nm = gsub('\\(.+', '', huc)) %>%
+    mutate(huc_nm = gsub('^[0-9]+', '', huc_nm)) %>%
+    mutate(huc_nm = gsub('^-', '', huc_nm)) %>%
+    mutate(start_mo = match(tolower(gsub('.+-', '', start)), tolower(month.name))) %>%
+    mutate(start_yr = as.integer(gsub('-.+', '', start))) %>%
+    mutate(end_mo = match(tolower(gsub('.+-', '', enddate)), tolower(month.name))) %>%
+    mutate(end_yr = as.integer(gsub('-.+', '', enddate))) %>%
+    mutate(dc = end_yr!=2100) %>%
+    mutate(end_yr = ifelse(end_yr==2100, format(Sys.Date(),'%Y'), end_yr)) %>%
+    na_if('') %>% na_if('unknown') %>% na_if('unknown ') %>%
+    select(-c(huc, start, enddate, wyear, site_name))
+
+  # ft -> m conversion
+  data.df$elev = units::set_units(units::set_units(data.df$elev, ft), m)
     
   # write as CSV if requested
-  if(!is.null(path)) write.csv(data.df, path, row.names=FALSE)
+  if(!is.null(csvpath)) write.csv(data.df, csvpath, row.names=FALSE)
   
   # finished
   return(data.df)
+  
+}
+```
+
+download datasets as CSV from the NRCS National Water Climate Center
+
+``` r
+my_nwcc_get = function(varname=NULL, sites=NULL, savedir=NULL, reuse=TRUE, retry=0)
+{
+  # ARGUMENTS:
+  #
+  # `varname`: character vector, the variable names to request from NWCC
+  # `sites`: data frame, containing columns `site_id`, `state`, `ntwk`, (see `my_nwcc_list`) 
+  # `savedir`: character vector, path to save downloaded CSV files
+  # `reuse`: boolean, indicating to skip downloading any files found in `savedir`
+  # `retry`: positive integer, indicating number of times to retry failed downloads 
+  #
+  # RETURN VALUE:
+  # 
+  # If `varname` is NULL, returns a named vector of descriptions of the variables that can
+  # be requested using the NWCC website. `sites` and `savedir` are ignored in this case
+  #
+  # If `varname` is supplied, downloads the data files and returns a dataframe containing
+  # their paths, source urls, and some metadata 
+  #
+  # DETAILS:
+  #
+  # Entries of `sites` are turned into data requests for NWCC (for all variable names in
+  # `varname`) and downloaded in a loop, with downloads (as CSV) going in the direcory
+  # `savedir`. `sites` should be a subset of rows from the dataframe returned by
+  # `my_nwcc_list`.
+  #
+  # Destination filepaths for the downloads have the form 'savedir/site_<x>_<y>', where <x>
+  # is the 'site_id' string for the site and <y> is one of 'daily', 'semimonthly', or
+  # `semimonthly`. When `reuse==TRUE`, these files (if they exist already) will be preserved,
+  # and the download skipped.
+  # 
+  # based on snotelr::snotel_download
+  #
+  
+  # define the base URL to fetch from, and a list of variables allowed in requests
+  base.url = 'https://wcc.sc.egov.usda.gov'
+  allvars = c(TMAX = 'air temperature maximum',
+              TMIN = 'air temperature minimum',
+              TOBS = 'air temperature observed',
+              PREC = 'precipitation accumulation',
+              PRCP = 'precipitation increment',
+              RESC = 'reservoir storage volume',
+              SNWD = 'snow depth',
+              WTEQ = 'snow water equivalent',
+              SRVO = 'stream volume, adjusted',
+              PRES = 'barometric pressure',
+              BATT = 'battery',
+              BATV = 'battery average',
+              BATX = 'battery maximum',
+              BATN = 'battery minimum',
+              ETIB = 'battery-eti precip guage',
+              COND = 'conductivity',
+              DPTP = 'dew point temperature',
+              DIAG = 'diagnostics',
+              SRDOX = 'discharge manual/external adjusted mean',
+              DISO = 'dissolved oxygen',
+              DISP = 'dissolved oxygen - percent saturation',
+              DIVD = 'diversion discharge observed mean',
+              DIV = 'diversion flow volume observed',
+              HFTV = 'energy gain or loss from ground',
+              EVAP = 'evaporation',
+              FUEL = 'fuel moisture',
+              FMTMP = 'fuel temperature internal',
+              VOLT = 'generic voltage',
+              TGSV = 'ground surface interface temperature average',
+              TGSX = 'ground surface interface temperature maximum',
+              TGSN = 'ground surface interface temperature minimum',
+              TGSI = 'ground surface interface temperature observed',
+              JDAY = 'julian date',
+              MXPN = 'maximum',
+              MNPN = 'minimum',
+              NTRDV = 'net solar radiation average',
+              NTRDX = 'net solar radiation maximum',
+              NTRDN = 'net solar radiation minimum',
+              NTRDC = 'net solar radiation observed',
+              H2OPH = 'ph',
+              PARV = 'photosynthetically active radiation (par) average',
+              PART = 'photosynthetically active radiation (par) total',
+              PRCPSA = 'precipitation increment - snow-adj',
+              ETIL = 'pulse line monitor-eti guage',
+              RDC = 'real dielectric constant',
+              RHUM = 'relative humidity',
+              RHUMV = 'relative humidity average',
+              RHENC = 'relative humidity enclosure',
+              RHUMX = 'relative humidity maximum',
+              RHUMN = 'relative humidity minimum',
+              REST = 'reservoir stage',
+              SRDOO = 'river discharge observed mean',
+              RVST = 'river stage level',
+              SAL = 'salinity',
+              SNWDV = 'snow depth average',
+              SNWDX = 'snow depth maximum',
+              SNWDN = 'snow depth minimum',
+              WTEQV = 'snow water equivalent average',
+              WTEQX = 'snow water equivalent maximum',
+              WTEQN = 'snow water equivalent minimum',
+              SMOV = 'soil moisture bars average',
+              SMOC = 'soil moisture bars current',
+              SMOX = 'soil moisture bars maximum',
+              SMON = 'soil moisture bars minimum',
+              SMS = 'soil moisture percent',
+              SMV = 'soil moisture percent average',
+              SMX = 'soil moisture percent maximum',
+              SMN = 'soil moisture percent minimum',
+              STV = 'soil temperature average',
+              STX = 'soil temperature maximum',
+              STN = 'soil temperature minimum',
+              STO = 'soil temperature observed',
+              SRAD = 'solar radiation',
+              SRADV = 'solar radiation average',
+              SRADX = 'solar radiation maximum',
+              SRADN = 'solar radiation minimum',
+              SRADT = 'solar radiation total',
+              LRAD = 'solar radiation/langley',
+              LRADX = 'solar radiation/langley maximum',
+              LRADT = 'solar radiation/langley total',
+              SRMV = 'stream stage (gauge height) average',
+              SRMX = 'stream stage (gauge height) maximum',
+              SRMN = 'stream stage (gauge height) minimum',
+              SRMO = 'stream stage (gauge height) observed',
+              SRVOX = 'stream volume, adjusted external',
+              SRVOO = 'stream volume, observed',
+              SNDN = 'snow density',
+              SNRR = 'snow rain ratio',
+              OI = 'teleconnection index',
+              CDD = 'temperature, degree days of cooling',
+              GDD = 'temperature, degree days of growing',
+              HDD = 'temperature, degree days of heating ',
+              TURB = 'turbidity',
+              RESA = 'usable lake storage volume',
+              PVPV = 'vapor pressure - partial',
+              SVPV = 'vapor pressure - saturated',
+              WLEVV = 'water level average',
+              WLEVX = 'water level maximum',
+              WLEVN = 'water level minimum',
+              WLEV = 'water level observed',
+              WTEMP = 'water temperature',
+              WTAVG = 'water temperature average',
+              WTMAX = 'water temperature maximum',
+              WTMIN = 'water temperature minimum',
+              WELL = 'well depth',
+              WDIRV = 'wind direction average',
+              WDIR = 'wind direction observed',
+              WDIRZ = 'wind direction standard deviation',
+              WDMVV = 'wind movement average',
+              WDMVX = 'wind movement maximum',
+              WDMVN = 'wind movement minimum',
+              WDMV = 'wind movement observed',
+              WDMVT = 'wind movement total',
+              WSPDV = 'wind speed average',
+              WSPDX = 'wind speed maximum',
+              WSPDN = 'wind speed minimum',
+              WSPD = 'wind speed observed',
+              AWDC = 'leaf wetness duration current')
+  
+  # return this giant list of variable names and descriptions if `varname` not supplied
+  if(is.null(varname)) return(allvars) 
+
+  # check for invalid names
+  idx.mismatch = ! varname %in% names(allvars)
+  if(any(idx.mismatch))
+  {
+    # print a warning and remove the offending entries from `varname`
+    names(allvars)[idx.mismatch]
+    varname = varname[!idx.mismatch]
+    warning(paste('variable name(s)', varname[idx.mismatch], 'not recognized'))
+    if(length(varname)==0) return()
+  }
+  
+  # check for missing `savedir`
+  if(is.null(savedir)) error('savedir not assigned')
+
+  # build a dataframe to hold URL and destination paths for the downloads
+  ns = nrow(sites)
+  period = c('daily', 'semimonthly', 'monthly')
+  idnm = c('site_id', 'state', 'ntwk')
+  destfile = cbind(sites[rep(1:ns, each=length(period)), idnm], data.frame(freq=rep(period, ns)))
+  
+  # build a query URL for each site and period combination
+  query.period = paste0(period, '/start_of_period/')
+  query.pt1 = paste0('/reportGenerator/view_csv/customSingleStationReport,metric/', query.period)
+  query.pt2 = apply(destfile[,idnm], 1, function(x) paste(x, collapse=':'))
+  query.pt3 = '|id=%22%22|name/POR_BEGIN,POR_END/'
+  query.pt4 = paste0(paste0(paste0(varname, '::value'), collapse=','), '?fitToScreen=false')
+  destfile$url = paste0(base.url, query.pt1, query.pt2, query.pt3, query.pt4)
+  
+  # build names and destination paths for the downloaded files
+  fname = paste0(paste('site', destfile$site_id, destfile$freq, sep='_'), '.csv')
+  destfile$path = file.path(savedir, fname)
+  
+  # identify files that exist already on disk and create a flag for download errors
+  idx.skip = rep(FALSE, length(period)*ns)
+  if(reuse) idx.skip = file.exists(destfile$path)
+  n.todl = sum(!idx.skip)
+  idx.problem = rep(FALSE, length(period)*ns)
+  
+  # skip if there are no files to download
+  if(n.todl > 1) 
+  {
+    # fetch the datasets by site and period using `rvest` in a loop
+    pb = txtProgressBar(max=n.todl, style=3)
+    print(paste('downloading', n.todl, 'files from NWCC'))
+    for(idx.dl in 1:n.todl)
+    {
+      # index in the destfile dataframe
+      idx.row = which(!idx.skip)[idx.dl]
+      url.row = destfile$url[idx.row]
+      path.row = destfile$path[idx.row]
+    
+      # attempt to download the csv file
+      dl = tryCatch(download.file(url.row, path.row, mode='wb', quiet=T),
+               error = function(cond) return(NA),
+               warning = function(cond) return(NA))
+      
+      # in case of warnings or errors, delete the downloaded file and set a flag
+      if(is.na(dl))
+      {
+        unlink(path.row)
+        idx.problem[idx.row] = TRUE
+      }
+
+      # pause for five seconds so we don't clobber the server
+      setTxtProgressBar(pb, idx.dl)
+      Sys.sleep(5)
+  
+    }
+    close(pb) 
+    
+  } else {
+    
+    print('all requested files exist in savedir. Set reuse=FALSE to overwrite')
+    
+  }
+  
+  if(any(idx.problem))
+  {
+    # print a message
+    problem.files = paste(basename(destfile$path[idx.problem]), collapse=', ')
+    print(paste('there was a problem downloading site(s):', problem.sites))
+               
+    # if allowed, attempt the downloads again via recursive call
+    if(retry > 0)
+    {
+      print('retrying...')
+      my_nwcc_get(varname, sites[idx.problem,], savedir, reuse, retry-1)
+      
+    } else {
+      
+      # print a warning and add a flag to the output dataset
+      warning(paste('failed to download', length(problem.files), 'files'))
+      destfile$error = idx.problem
+      
+    }
+  }
+  
+  return(destfile)
+  
+}
+```
+
+open a CSV file from the NRCS National Water Climate Center
+
+``` r
+my_nwcc_open = function(path, varname=NULL, period=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `path`: character, the full path to the CSV file downloaded with `my_nwcc_get`
+  # `varname`: (optional) character vector, variable names for the columns
+  # `period`: (optional) character vector, indicating time series type ('daily' or 'semimonthly')
+  #
+  # RETURN VALUE:
+  # 
+  # A dataframe containing the parsed NWCC records, with empty columns omitted 
+  #
+  # DETAILS:
+  #
+  # If `period` is not supplied, the function attempts to detect it from the filename
+  # (by grepping for the strings 'daily' or 'semimonthly' in the basename). These are the only
+  # two types supported at the moment. Dates are set in semimonthly records to the start of the
+  # period, and the field `period` is appended to tables of either type. 
+  #
+  # based on snotelr::snotel_download
+  #
+
+  # detect period if not supplied
+  if(is.null(period))
+  {
+    is.daily = grepl('daily', basename(path))
+    is.semi = grepl('semimonthly', basename(path))
+    is.monthly = grepl('monthly', basename(path)) & !is.semi
+    period = c('daily', 'semimonthly', 'monthly')[as.numeric(is.semi)+2*as.numeric(is.monthly)+1]
+  }
+
+  # open the file as text
+  rawtxt = readLines(path)
+  rawtxt.iscomment = which(grepl('^#', rawtxt))
+  rawtxt.header = rawtxt[rawtxt.iscomment[length(rawtxt.iscomment)] + 1]
+  
+  # parse units into a form R understands
+  rawtxt.header.matches = gregexpr('(?<=\\().*?(?=\\))', rawtxt.header, perl=T)
+  varname.units = regmatches(rawtxt.header, rawtxt.header.matches)[[1]]
+  varname.units = c('unitless', varname.units[! varname.units %in% c('gauge Height', 'par') ])
+  varname.units[varname.units == 'pct'] = '%'
+  varname.units[varname.units == 'unitless'] = NA
+  
+  # open again as table and format field names to match input
+  site.df = read.csv(path, comment.char='#')
+  if(is.null(varname)) varname = colnames(site.df)[-1]
+  colnames(site.df) = c('date', varname)
+      
+  # drop empty columns and assign units 
+  idx.drop = apply(site.df, 2, function(x) all(is.na(x)))
+  site.df = site.df[, !idx.drop]
+  varname.units = varname.units[!idx.drop]
+  varname.hasunits = !is.na(varname.units)
+  if(any(varname.hasunits))
+  {
+    # replace columns with unit-assigned versions in a loop 
+    for(idx.unit in 1:sum(varname.hasunits))
+    {
+      unit.symbol = varname.units[varname.hasunits][idx.unit]
+      cn = which(varname.hasunits)[idx.unit]
+      site.df[,cn] = units::set_units(site.df[,cn], unit.symbol, mode='standard')
+    }
+  }
+  
+  # indicate period as a new field
+  site.df$period = rep(period, nrow(site.df))
+  
+  # dates are easy to parse in daily files
+  if(period=='daily')
+  {
+    site.df$date = as.Date(site.df$date)
+    
+  }
+  
+  # dates in semimonthly files get days set to 1 and 15 in each month
+  if(period=='semimonthly')
+  {
+    site.df$date = gsub('1st Half', '1', site.df$date)
+    site.df$date = gsub('2nd Half', '15', site.df$date)
+    site.df$date = as.Date(site.df$date, '%b %d %Y')
+
+  }
+  
+  # dates in monthly files get days set to 1
+  if(period=='monthly')
+  {
+    site.df$date = as.Date(sapply(site.df$date, function(x) paste('1 ', x)), '%d %b %Y')
+    
+  }
+  
+  # finished
+  return(site.df)
+  
+}
+```
+
+open a batch of CSV files from the NRCS National Water Climate Center
+
+``` r
+my_nwcc_import = function(files, varname=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `files`: dataframe with character fields `path`, `period`, ``
+  # `varname`: (optional) character vector, variable names for the columns
+  # `trimresult`: (optional) boolean, indicating whether to omit suspected duplicates 
+  #
+  # RETURN VALUE:
+  # 
+  # A list of dataframes, in same length/order as the site listed in `files`. These contain
+  # the raw data, with appropriately assigned units and dates. When a site request returns
+  # no data (one or two 0-row CSV files), the list entry is a 
+  #
+  # DETAILS:
+  #
+  # Daily and semimonthly data are joined into a single dataframe for each site by 
+  # assigning the 1st and 15th of the month as placeholder dates for any semimonthly 
+  # records (field `period` identifies these records). Empty columns are then omitted from
+  # output. `varname` optionally supplies column names as a vector the same length/order
+  # as headers in the input CSV tables (not the output dataframes).
+  #
+  
+  # define output storage
+  site.id = unique(files$site_id)
+  sites.n = length(site.id)
+  sites.out = setNames(vector(mode='list', length=sites.n), paste0('site_', site.id))
+
+  # check for missing files
+  idx.missing = !file.exists(files$path)
+  msg.missing = paste(basename(files$path[idx.missing]), collapse=', ')
+  if(any(idx.missing)) warning(paste('file(s)', msg.missing, 'not found'))
+  if(all(idx.missing)) stop('0 files loaded')
+  files = files[!idx.missing,]
+  
+  # read the files in a loop
+  pb = txtProgressBar(max=sites.n+1, style=3)
+  print(paste('importing', nrow(files), 'NWCC data tables'))
+  for(idx.site in 1:sites.n)
+  {
+    # each site is imported as a list of dataframes (one per file)
+    idx.files = files$site_id == site.id[idx.site]
+    in.path = files$path[idx.files]
+    sites.out[[idx.site]] = lapply(in.path, function(path) my_nwcc_open(path, varname=varname))
+    setTxtProgressBar(pb, idx.site)
+    
+  }
+  
+  # join into single dataframe at each site, dropping any empty ones
+  joined.out = lapply(sites.out, function(x) merge(x[[1]], x[[2]], all=TRUE))
+  setTxtProgressBar(pb, idx.site + 1)
+  close(pb)
+  
+  # replace 0-row dataframes with NULL
+  joined.n = sapply(joined.out, nrow)
+  idx.empty = joined.n == 0
+  joined.out[idx.empty] = rep(list(NULL), sum(idx.empty))
+  if(any(idx.empty)) print(paste(sum(idx.empty), 'sites had no data'))
+
+  # finished
+  return(joined.out)
   
 }
 ```
@@ -2842,6 +3293,485 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
 }
 ```
 
+read config data from “print.prt”, and similar SWAT+ text files
+
+``` r
+my_swat_prt = function(txtpath)
+{
+  # ARGUMENTS:
+  #
+  # `path`: path to the SWAT+ output config file ('print.prt')
+  #
+  # RETURN VALUE:
+  #
+  # named list with entries:
+  #
+  #   'comment', character string (the first line)
+  #   'items`, data.frame of itemized name-value pairs
+  #   `table`, data.frame, the table of output flags
+  
+  # read in file, copy comment, and split the rest at magic line numbers
+  raw.txt = readLines(txtpath)
+  msg = raw.txt[[1]]
+  table.ln = 9
+  idx.items = 2:table.ln
+  idx.table = (table.ln + 1):length(raw.txt)
+  
+  # read the itemized parameters as a data.frame
+  raw.txt.items = raw.txt[idx.items]
+  out.items = my_swat_rwvalue(raw.txt.items)
+  
+  # read the table as a data.frame
+  raw.txt.table = raw.txt[idx.table]
+  out.table = my_swat_rwtable(raw.txt.table)
+  
+  # adjust line numbers to match `txt`
+  out.items$lines$line = out.items$lines$line + min(idx.items) - 1
+  out.table$lines$line = out.table$lines$line + min(idx.table) - 1
+  
+  # merge the results, adding field to indicate table
+  out.items$lines = out.items$lines %>% mutate(tabular=FALSE)
+  out.table$lines = out.table$lines %>% mutate(tabular=TRUE)
+  out.lines = list(lines = rbind(out.items$lines, out.table$lines))
+  out.values = list(comment=msg, items=out.items$values, table=out.table$values)
+  
+  # finish
+  return(c(out.values, out.lines))
+  
+}
+```
+
+read config data from “object.cnt”, and similar SWAT+ text files
+
+``` r
+my_swat_cnt = function(txtpath)
+{
+  # ARGUMENTS:
+  #
+  # `path`: path to the SWAT+ output config file ('object.cnt')
+  #
+  # RETURN VALUE:
+  #
+  # named list with entries:
+  #
+  #   'comment', character string (the first line)
+  #   'item`, data.frame of itemized name-value pairs
+  
+  # read in file, copy comment
+  raw.txt = readLines(txtpath)
+  msg = raw.txt[[1]]
+  
+  # pull out the name-value lines
+  idx.items = 2:length(raw.txt)
+  raw.txt.items = raw.txt[idx.items]
+  
+  # read the itemized parameters as a data.frame
+  out.items = my_swat_rwvalue(raw.txt.items)
+  
+  # adjust line numbers to match `txt`
+  out.items$lines$line = out.items$lines$line + min(idx.items) - 1
+  
+  return(list(comment=msg, items=out.items$values, lines=out.items$lines))
+  
+}
+```
+
+generic line reader for SWAT+ text files
+
+``` r
+my_swat_readline = function(txt, skip=0)
+{
+  # ARGUMENTS:
+  #
+  # `txt`: character vector, one or more contiguous lines from a SWAT+ config file
+  # `skip`: integer, adjustment added to all line numbers
+  # 
+  # RETURN:
+  #
+  # A dataframe with a row for each field entry found in `txt`, and columns:
+  # 
+  #   'string': character, the field stripped of whitespace
+  #   'line': integer, the line number of the field
+  #   'field_num' integer, the ordering of fields on a line
+  #   'start_pos', integer, character position where field begins 
+  #   'max_len', integer, the maximum string length for this field (based on whitespace)
+  # 
+  # DETAILS:
+  #
+  # Parses a subset of whitespace-delimited lines to determine how its fields are
+  # spaced out, returning a table of line numbers and field positions within `txt`. 
+  #
+  # Argument `skip` increments all line numbers by a fixed integer, for use with
+  # subsets of a file (eg. skip=1 when `txt` has comment line omitted).
+  #
+  
+  # measure and strip any leading whitespace
+  txt.n = length(txt)
+  txt.trim = trimws(txt, 'l')
+  txt.wslead = nchar(txt) - nchar(txt.trim)
+  
+  # split fields at remaining whitespace and count characters in each field
+  txt.wsr = strsplit(txt.trim, '\\s+')
+  txt.flen = lapply(txt.wsr, nchar)
+  
+  # enumerate the fields (columns) on each line, make matching list of row (line) numbers
+  txt.cn = lapply(txt.wsr, seq_along)
+  txt.rn = lapply(1:txt.n, function(ln) rep(ln, length(txt.wsr[[ln]])))
+  
+  # make a regexp to split at fields (escaping any periods)
+  txt.regexp = sapply(txt.wsr, function(x) paste0('(', paste(x, collapse=')|('), ')'))
+  txt.regexp = gsub('\\.', '\\\\.', txt.regexp)
+  
+  # count the whitespace trailing each field
+  txt.wstrail = lapply(strsplit(txt.trim, txt.regexp), function(x) nchar(x)[-1])
+  
+  # make a vector of character start positions for each string
+  txt.start = mapply(function(x, y, z) 1 + x + c(0, cumsum(y) + cumsum(z)), 
+                     txt.wslead,
+                     txt.flen,
+                     txt.wstrail,
+                     SIMPLIFY=FALSE)
+  
+  # find max string length for each field (leaving 1 space as delimiter)
+  txt.max = lapply(txt.start, function(x) diff(x) - 1)
+  
+  # trim the redundant start position at end of each line
+  txt.start = lapply(txt.start, function(x) x[-length(x)])
+  
+  # compile everything into a dataframe, adjust line numbers, and finish
+  return(data.frame(string = unlist(txt.wsr),
+                    line_num = unlist(txt.rn) + skip, 
+                    field_num = unlist(txt.cn),
+                    start_pos = unlist(txt.start),
+                    max_len = unlist(txt.max)))
+  
+}
+```
+
+type detection for converting SWAT text to R representation of a
+parameter
+
+``` r
+my_swat_parse = function(txtdf)
+{
+  # ARGUMENTS:
+  #  
+  # `txtdf`: data.frame, (subset of) the output of `my_swat_readline`
+  #
+  # RETURN VALUE:
+  #
+  # A dataframe of the SWAT strings in `txtdf` converted to the appropriate R type (either
+  # integer, numeric, logical, or character), in wide form - each row of `txtdf` becomes a
+  # column of the output dataframe.
+  #
+  # DETAILS:
+  #
+  # Character type is the default for anything not detected as integer, numeric, or logical.
+  # 
+  
+  # copy the literal strings to translate
+  txt = txtdf$'string' 
+  txt.n = length(txt)
+  
+  # type detection for 'y'/'n' booleans
+  is.bool = txt %in% c('n', 'y')
+  
+  # detect numeric and integer, the rest is treated as character
+  is.num = !is.na(suppressWarnings(as.numeric(txt))) & !is.bool
+  is.int = is.num & !grepl('.', txt, fixed=TRUE)
+  is.num = is.num & !is.int
+  is.char = !is.int & !is.num & !is.bool 
+  
+  # coerce to appropriate type, then transpose into a data frame
+  df.char = as.data.frame( t(txt[is.char]) )
+  df.bool = as.data.frame( t(txt[is.bool] == 'y') )
+  df.num = as.data.frame( t(as.numeric(txt[is.num])) )
+  df.int = as.data.frame( t(as.integer(txt[is.int])) )
+  
+  # bind the dataframes, return to original order, create short names for columns
+  idx.reorder = c(which(is.bool), which(is.char), which(is.num), which(is.int))
+  out.df = cbind(df.bool, df.char, df.num, df.int)[match(1:txt.n, idx.reorder)]
+  colnames(out.df) = paste0('v', 1:txt.n) 
+  return(out.df)
+
+}
+```
+
+import a SWAT+ table, given the outputs of `my_swat_readline` and
+`my_swat_parse`
+
+``` r
+my_swat_tparse = function(txtdf, pardf, skip=0, recursive=FALSE)
+{
+  # ARGUMENTS:
+  #
+  # `txtdf`: dataframe, (contiguous subset of) the output of `my_swat_readline`
+  # `pardf`: dataframe, (contiugous subset of) the output of `my_swat_parse`
+  # `skip`: integer, the number of lines to skip when looking for table headers
+  # `recursive`: boolean, to scan for multiple tables
+  # 
+  # RETURN:
+  #
+  # dataframe, the table in `txtdf` starting at headers line `min(txtdf$line_num) + skip`,
+  # or if `recursive==TRUE`, a list of of such tables (each separated by n=`skip` lines),
+  # possibly with different headers.
+  #
+  # DETAILS:
+  #
+  # `pardf` should have the correctly-classed string values of `txtdf` in matching order,
+  # and `txtdf` must contain the line number `min(txtdf$line_num) + skip`. This headers line
+  # determines the number of columns in the table. If it contains any non-character fields
+  # (a likely indexing error situation) the functions prints a warning and returns NA.
+  #
+  # The number of rows is determined by finding the longest table having consistent row
+  # structure (same number of columns, matching classes). 
+  #
+  # If the length of the first row after the headers line doesn't match the headers length
+  # (or doesn't exist), the function returns a 0-row dataframe with character class columns.
+  # 
+  
+  # append class field to `textdf` based on `pardf`
+  txtdf$class = sapply(pardf, class)
+  
+  # define headers line number and maximum number of rows for output 
+  head.ln = min(txtdf$line_num) + skip
+  row.n = max(txtdf$line_num) - head.ln
+  
+  # negative `row.n` indicates we skipped too far
+  if(row.n < 0)
+  {
+    stop(paste('invalid `skip`. Data has only', row.n + skip + 1, 'lines!'))
+  }
+  
+  # count fields on headers line and check for non-character values
+  head.n = sum(txtdf$line_num == head.ln)
+  head.ischar = txtdf$class[txtdf$line_num == head.ln] == 'character'
+  if(any(!head.ischar))
+  {
+    stop('non-character field detected in headers line. Is `skip` set correctly?') 
+  }
+  
+  # split text by line (omit headers) and check for matching row lengths 
+  txtdf.split = txtdf %>% filter(line_num > head.ln) %>% group_split(line_num)
+  len.ismatch = sapply(txtdf.split, nrow) == head.n
+  
+  # handle empty files and other edge cases where we return a 0-row dataframe
+  if(row.n == 0) len.ismatch = FALSE
+  if(!len.ismatch[1])
+  {
+    # first row either doesn't exist or doesn't match headers length
+    out.df = data.frame(setNames(rep(list(character(0)), length(pardf)), pardf))
+    return(out.df)
+    
+  } else {
+    
+    # find the last line number in the longest block of contiguous matches
+    tail.idx = ifelse(all(len.ismatch), length(len.ismatch), which(!len.ismatch)[1] - 1)
+    tail.ln = txtdf.split[[ tail.idx ]]$line_num[1]
+    
+    # check for consistency in row classes (skip for 1-row tables)
+    if(row.n == 1)
+    {
+      class.ismatch = TRUE
+      
+    } else {
+      
+      # check for consistency in row classes
+      rowclass = txtdf.split[[1]]$class
+      class.ismatch = sapply(txtdf.split[1:tail.idx], function(x) all(x$class == rowclass))
+      
+      # revise tail number for class consistency
+      tail.idx = ifelse(all(class.ismatch), length(class.ismatch), which(!class.ismatch)[1] - 1)
+      tail.ln = txtdf.split[[ tail.idx ]]$line_num[1]
+
+    }
+  }
+  
+  # extract column names then crop `txtdf` to line numbers of interest, adding `name`
+  out.ln = (head.ln + 1):tail.ln
+  out.idx = txtdf$line_num %in% out.ln
+  tab.nm = setNames(nm = txtdf$string[ txtdf$line_num == head.ln ])
+  out.txtdf = txtdf[out.idx,] %>%  mutate(name=tab.nm[field_num])
+  
+  # reshape `pardf` into a table at the line numbers of interest, adding `line_num` attribute
+  out.df = data.frame(lapply(tab.nm, function(nm) t(pardf[, out.idx][out.txtdf$name==nm])))
+  rownames(out.df) = 1:nrow(out.df)
+  out.df = cbind(out.df, data.frame(line_num=out.ln))
+  
+  # recursive calls, if requested
+  if(recursive)
+  {
+    # terminal case
+    if(tail.ln == max(txtdf$line_num))
+    {
+      return(list(out.df))
+      
+    } else {
+      
+      # trim input datasets to remove what was just processed
+      ln.totrim = (head.ln - skip):tail.ln
+      idx.totrim = txtdf$line_num %in% ln.totrim
+      txtdf.trim = txtdf[!idx.totrim,]
+      pardf.trim = pardf[,!idx.totrim]
+      
+      # call the function again with trimmed arguments
+      out.recursive = my_swat_tparse(txtdf.trim, pardf.trim, skip, recursive) 
+      
+      # bundle into list and finish
+      return(c(list(out.df), out.recursive))
+
+    }
+  }
+  
+  # finish
+  return(out.df)
+  
+}
+```
+
+read config data from “file.cio”, and similar SWAT+ text files
+
+``` r
+my_swat_cio = function(txtpath)
+{
+  # ARGUMENTS:
+  #
+  # `txtpath`: path to the text file (probably the SWAT+ master watershed 'file.cio')
+  #
+  # RETURN VALUE:
+  #
+  # list with entries:
+  #
+  #   'comment': (character) text of the first line of the file
+  #   'values': (dataframe) non-category field values grouped by category
+  #   'txtdf': (dataframe) whitespace delimited data from the file in a table with metadata
+  #
+  # DETAILS:
+  #
+  # 'file.cio' is a whitespace-delimited table of unnamed strings, where the first
+  # field on each line gives the category for the entries in the other fields on that
+  # line. This function parses the file, returning the (non-null) entries in the 'values'
+  # dataframe, with columns 'group', 'entry' and 'path' (where 'path' is constructed from the
+  # parsed filenames and the parent directory of the `txtpath` argument)
+  
+  # read in text, copy comment
+  txt = readLines(txtpath)
+  txt.n = length(txt)
+  msg = txt[[1]]
+  
+  # parse all lines (except initial comment) into a dataframe
+  txtdf = my_swat_readline(txt[-1], skip=1)
+  
+  # read in group names from first column and append to the metadata
+  out.nm = txtdf %>% group_by(line_num) %>% filter(field_num==1) %>% pull(string)
+  out.txtdf = txtdf %>% group_by(line_num) %>% mutate(group=out.nm[line_num-1])
+  
+  # construct output table, filtering nulls
+  tabdf = out.txtdf %>% filter(field_num > 1, string != 'null') %>% 
+    mutate(path = file.path(dirname(txtpath), string)) %>% 
+    mutate(entry = string) %>% 
+    select(group, entry, line_num, field_num, path)
+  
+  # return everything in a list
+  return(list(comment=msg, values=tabdf, txtdf=txtdf))
+  
+}
+```
+
+open a SWAT+ configuration file
+
+``` r
+my_swat_openfile = function(txtpath)
+{
+  # ARGUMENTS:
+  #
+  # `txtpath`: path to the SWAT+ config file
+  #
+  # RETURN VALUE:
+  #
+  # list with entries:
+  #
+  #   'comment': (character) the first line of text is always some metadata about the file
+  #   'values': (list of dataframes) the parameter values, appropriately classed and named
+  #   'txtdf': (dataframe) whitespace delimited data from the file in a table with metadata
+  # 
+  # txtpath = prt.path
+  # txtpath = cnt.path
+  # txtpath = sta.path
+  # txtpath
+  
+  # 'file.cio' is handled by another function
+  if(basename(txtpath)=='file.cio') return(my_swat_cio(txtpath))
+
+  # read in text, copy comment
+  txt = readLines(txtpath)
+  txt.n = length(txt)
+  msg = txt[[1]]
+  
+  # parse all lines (except initial comment) into dataframes and do class detection
+  txtdf = my_swat_readline(txt[-1], skip=1)
+  pardf = my_swat_parse(txtdf)
+  txtdf$class = sapply(pardf, class)
+  
+  # identify the first line having all character type to guess header location
+  txtdf.class = split(txtdf$class, txtdf$line_num)
+  skip = which(sapply(txtdf.class, function(x) all(x=='character')))[1] - 1
+
+  # convert everything to list of tabular data
+  tabdf = my_swat_tparse(txtdf, pardf, skip=skip, recursive=TRUE)
+  txtdf.class = split(txtdf$class, txtdf$line_num)
+  
+  # TODO: handle skip>0 cases
+  
+  # # trim non-value lines from txtdf output
+  # out.lines = unlist(lapply(tabdf, function(x) x$line_num))
+  # out.txtdf = txtdf %>% filter(line_num %in% out.lines)
+  # 
+  # 
+  # tab.n = sapply(tabdf, nrow)
+  # # cbind any 1-row tables (name-value sets) together and copy their text metadata
+  # tab.n = sapply(tabdf, nrow)
+  # if(any(tab.n==1))
+  # {
+  #   for(idx in which(tab.n==1))
+  #   {
+  #     txtdf %>% filter(line_num == tabdf[[idx]]$line_num)
+  #     
+  #     
+  #   }
+  #   
+  #   tabdf.nv = 
+  #   tabdf.nv
+  #   
+  # }
+  # txtdf.nv = 
+  # 
+  # 
+  # do.call(cbind, tabdf[tab.n == 1]) %>% select(-line_num)
+  
+  
+  
+  
+  # # handle special cases where `my_swat_tparse` returns 0-row dataframe
+  # if(is.data.frame(tabdf))
+  # {
+  #   # handle empty files
+  #   print('not yet implemented!')
+  # }
+  
+  # TODO: join some of the list elements for name-value output
+  # TODO: add names fields to txtdf and trim unecessary rows
+  
+   
+  
+  
+  # return everything in a list
+  return(list(comment=msg, values=tabdf, txtdf=txtdf))
+
+
+}
+```
+
 scan for a list of SWAT text input files and associated variable names
 
 ``` r
@@ -2857,204 +3787,256 @@ my_swat_scan = function(swatdir)
   
   # scan all existing files in the directory 
   all.fn = list.files(swatdir)
-  
-    ## master watershed file ('file.cio')
-  
-  # read 'file.cio', copy comment line and pull file references as named list
   cio.path = file.path(swatdir, 'file.cio')
-  cio.raw = readLines(cio.path, warn=FALSE)
-  cio.msg = cio.raw[[1]]
-  cio.fn.raw = lapply(cio.raw[2:length(cio.raw)], function(x) strsplit(x, '\\s+|null')[[1]])
-  cio.fn.grp = sapply(cio.fn.raw, function(x) x[1])
-  cio.fn = setNames(lapply(cio.fn.raw, function(x) x[-1][ nchar(x[-1]) > 0 ]), cio.fn.grp)
   
+  # parse the master watershed file 
+  cio = my_swat_openfile(cio.path)
+  
+  # determine simulation control config file paths
+  time.path = cio$values %>% filter(group=='simulation') %>% filter(field_num==2) %>% pull(path)
+  prt.path = cio$values %>% filter(group=='simulation') %>% filter(field_num==3) %>% pull(path)
+  cnt.path = cio$values %>% filter(group=='simulation') %>% filter(field_num==5) %>% pull(path)
+  
+  # parse these files
+  print.prt = my_swat_openfile(prt.path) # TODO
+  time.sim = my_swat_openfile(time.path)
+  object.cnt = my_swat_openfile(cnt.path)
+  
+  # open the basins files
+  codes.path = cio$values %>% filter(group=='basin') %>% filter(field_num==2) %>% pull(path)
+  parms.path = cio$values %>% filter(group=='basin') %>% filter(field_num==3) %>% pull(path)
+  codes.bsn = my_swat_openfile(codes.path)
+  parms.bsn = my_swat_openfile(parms.path)
+  
+  # open the weather files
+  sta.path = cio$values %>% filter(group=='climate') %>% filter(field_num==2) %>% pull(path)
+  wgn.path = cio$values %>% filter(group=='climate') %>% filter(field_num==3) %>% pull(path)
+  sta.cli = my_swat_openfile(sta.path)
+  wgn.cli = my_swat_openfile(wgn.path)
+  
+  s# # open the connect files
+  hru.path = cio$values %>% filter(group=='connect') %>% filter(field_num==2) %>% pull(path)
+  hru.con = my_swat_openfile(hru.path)
 
-    ## simulation files ('print.prt', 'time.sim', 'object.cnt')
   
-  # 'print.prt' has four parts, split at these magic line numbers
-  msg.ln = 1
-  bool.ln = 6
-  tstep.ln = 9
-  
-  # read the file and its comment
-  path = file.path(swatdir, 'print.prt')
-  rawtxt = readLines(path, n=tstep.ln)
-  msg = rawtxt[[msg.ln]]
-  
-  # after `tstep.ln` is a simple table of 'y'/'n' characters - store as boolean
-  tstep.table = read.table(path, header=TRUE, row.names=1, skip=tstep.ln) == 'y'
-  
-  # make indices for the rest, handle with `my_rw_nvtext`
-  int.idx = (1 + msg.ln):(bool.ln - 1)
-  bool.idx = bool.ln:(tstep.ln)
-  
-  
-  my_nvtext(rawtxt[-1])
-  # 
 }
 ```
 
-edit lines from SWAT text configuration files, or parse them into
-name-value pair form
+read and write name-value lines from SWAT text configuration files
 
 ``` r
-my_nvtext = function(txt, replacement=NULL)
+my_swat_rwvalue = function(txt, replacement=NULL)
 {
-  # if `replacement` is NULL (default), returns the vector of name-value pairs
-  # otherwise, returns `txt` with entries of the named character vector `replacement` replacing
-  # the values in `txt` with matching names. All names must match with an entry of `txt`
-  # (ie any mismatch causes the function to halt without replacing anything)
+  # ARGUMENTS:
+  #
+  # `txt`: character vector, containing name-value lines from a SWAT+ config file
+  # `replacement`: ...
+  # 
+  # RETURN:
+  #
+  # A list with entries:
+  #
+  #   'values': dataframe, the named and correctly-typed parameter values in `txt`
+  #   'lines': dataframe, string location information from `my_swat_readline` 
+  # 
+  # DETAILS:
+  #
+  # 
   
   # The function assumes that name and value lines alternate in `txt`, with names coming first
- # txt = rawtxt[bool.idx]
-  #txt = rawtxt[-1]
-
-  # make alternating indices - values are on even lines, names on odd lines 
-  is.val = !as.logical(1:length(txt) %% 2)
+  isname = as.logical(1:length(txt) %% 2)
+  idx.isname = which(isname)
   
-  # strip whitespace to compile all names and values
-  txt.unpacked = strsplit(txt, '\\s+')
-  txt.read = setNames(do.call(c, txt.unpacked[is.val]), do.call(c, txt.unpacked[!is.val]))
+  # treat each of these name-value line pairs as a table, handling with `my_swat_rwtable`
+  txt.list = lapply(idx.isname, function(x) my_swat_rwtable(txt[c(x, x+1)]))
+  txt.lenout = sapply(txt.list, function(x) nrow(x$lines))
+  
+  # merge the results
+  out.values = do.call(cbind, lapply(txt.list, function(x) x$values))
+  out.lines = do.call(rbind, lapply(txt.list, function(x) x$lines))
+  
+  # adjust the line numbers to match `txt` (instead of the subsets passed to `my_swat_rwtable`)
+  lines.inc = mapply(function(x,y) rep(x, each=y), idx.isname-1, txt.lenout)
+  out.lines$line = out.lines$line + unlist(lines.inc)
+  
+  # finished read mode
+  if(is.null(replacement))
+  {
+    return(list(values=out.values, lines=out.lines)) 
+    
+  } else {
+    
+    # # halt if any variable names in `replacement` are missing from `txt`
+    # varname = names(replacement)
+    # idx.varname = match(varname, names(txt.read))
+    # idx.notfound = is.na(idx.varname)
+    # if(any(idx.notfound)) stop(paste('variable(s)', varname[idx.notfound], 'not found'))
+    # 
+    # # find the row (line) and column (entry) numbers for each parameter 
+    # rn = sapply(varname, function(nm) which(sapply(txt.names, function(x) nm %in% x)))
+    # cn = mapply(function(nm, n) which(txt.names[[n]]==nm), varname, rn)
+    # 
+    # # find the character limits then format the replacements as character strings
+    # nc = mapply(function(i, j) txt.max[[i]][j], rn, cn)
+    # txt.replacement = my_swat_parse(txt.read[match(varname, names(txt.read))], replacement, nc)
+    # 
+    # # loop to replace values in the raw text
+    # for(idx.val in 1:length(replacement))
+    # {
+    #   # find the character start/end positions
+    #   pos.start = txt.start[[ rn[idx.val] ]][ cn[idx.val] ]
+    #   pos.end = pos.start + nchar(replacement[idx.val]) - 1
+    #   
+    #   # make the substitution
+    #   substr(txt[is.val][rn[idx.val]], pos.start, pos.end) <- txt.replacement[idx.val]
+    #   
+    # }
+  }
+    
+}
+```
+
+read and write tables from SWAT text configuration files
+
+``` r
+my_swat_rwtable = function(txt, replacement=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `txt`: character vector, lines from a SWAT+ config file comprising a table 
+  # `replacement`: ...
+  # 
+  # RETURN:
+  #
+  # A list with entries:
+  #
+  #   'values': dataframe, the named and correctly-typed parameter values in `txt`
+  #   'lines': dataframe, the output of `my_swat_readline` 
+  # 
+  # DETAILS:
+  #
+  
+  # parse the text as dataframe, use headers to append a 'name' field
+  txt.df = my_swat_readline(txt)
+  txt.nm = txt.df %>% filter(line == 1) %>% pull(string)
+  txt.df = txt.df %>% filter(line > 1) %>% mutate(name=txt.nm[field_num])
+
   
   # write mode
   if(!is.null(replacement))
   {
-    # halt if any variable names in `replacement` are missing from `txt`
-    varname = names(replacement)
-    idx.varname = match(varname, names(txt.read))
-    idx.notfound = is.na(idx.varname)
-    if(any(idx.notfound)) stop(paste('variable(s)', varname[idx.notfound], 'not found'))
-    
-    # make a regexp to pick out and measure the whitespace (escaping any periods)
-    txt.regexp = sapply(txt.unpacked, function(x) paste0('(', paste(x, collapse=')|('), ')'))
-    txt.regexp = gsub('\\.', '\\\\.', txt.regexp)
-    txt.spacing = lapply(strsplit(txt, txt.regexp), nchar)
-    txt.length = lapply(txt.unpacked, nchar)
-
-    # make a vector of character start positions for each string, and the max length
-    txt.start = mapply(function(x, y) 1 + cumsum(c(0, x)) + cumsum(y), txt.length, txt.spacing)
-    txt.max = lapply(txt.start, function(x) diff(x) - 1)
-    
-    # find the row (line) and column (entry) numbers for each parameter 
-    rn = sapply(varname, function(nm) which(sapply(txt.unpacked[!is.val], function(x) nm %in% x)))
-    cn = mapply(function(nm, n) which(nm == txt.unpacked[!is.val][[n]]), varname, rn)
-  
-    # find the character limits then format the replacements as character strings
-    nc = mapply(function(i, j) txt.max[is.val][[i]][j], rn, cn)
-    txt.replacement = my_typeco(txt.read[match(varname, names(txt.read))], replacement, nc)
-    
-    # loop to replace values in the raw text
-    for(idx.val in 1:length(replacement))
-    {
-      # find the character start/end positions
-      pos.start = txt.start[[ rn[idx.val] ]][ cn[idx.val] ]
-      pos.end = pos.start + nchar(replacement[idx.val]) - 1
-      
-      # make the substitution
-      substr(txt[is.val][rownum], pos.start, pos.end) <- txt.replacement[idx.val]
-      
-    }
+    print('unfinished!')
     
     # finished write mode
     return(txt)
     
   } else {
     
-   # convert unpacked parameter values to data.frame and finish read mode
-   return(my_typeco(txt.read)) 
+    # convert text vector to correctly-typed data.frame, and return from read mode
+    values.df = my_swat_parse(txt.df, tabular=TRUE)
+    return(list(values=values.df, lines=txt.df)) 
     
-  }
-    
-}
-  
-# type detection/conversion for swapping between SWAT text and R representation of a parameter 
-my_typeco = function(txtvec, rval=NULL, nc=NULL)
-{
-  # ARGUMENTS:
-  #  
-  # `txtvec`: character vector or data.frame, the value(s) text from SWAT without whitespace
-  # `rval`: (optional) data.frame; the value(s) to write, as R object  
-  # `nc`: (optional) integer vector, the maximum string length(s) for truncation 
-  #
-  # RETURN VALUE:
-  #
-  # For NULL `rval`, a data frame of the SWAT parameter values in `txtvec` in the appropriate
-  # R type, either integer, numeric, logical, or character.
-  #
-  # For non-NULL `rval`, a character vector of the SWAT parameter values supplied in `rval`,
-  # truncated to the lengths in `nc` (if supplied), ready to be written to the SWAT text file.
-  #
-  # DETAILS:
-  #
-  # Character type is the default for anything not detected as integer, numeric, or logical.
-  # `nc` is ignored if `rval` not supplied, and truncation has no effect on booleans. 
-  # 
-  # 
-  
-  # txtvec = tstep.table
-  # txtvec = txt.read
-  # rval = NULL
-  # nc = NULL
-  #txtvec = txt.read[match(varname, names(txt.read))]
-  #rval = replacement
-  
-  # TODO: dataframes 
-  if(!is.vector(txtvec))
-  {
-    # grab a random sample of rows and test all of them?
-    # test just the first row?
-  }
-  
-  # type detection for 'y'/'n' booleans
-  is.bool = txtvec %in% 'y' | txtvec %in% 'n'
-  
-  # detect numeric and integer, the rest is treated as character
-  is.num = !is.na(suppressWarnings(as.numeric(txtvec))) & !is.bool
-  is.int = is.num & !grepl('.', txtvec, fixed=TRUE)
-  is.num = is.num & !is.int
-  is.char = !is.int & !is.num & !is.bool 
-
-  # read mode  
-  if(is.null(rval))
-  {
-    # coerce to appropriate type, then transpose into a data frame
-    df.char = as.data.frame( t(txtvec[is.char]) )
-    df.bool = as.data.frame( t(txtvec[is.bool] == 'y') )
-    df.num = setNames(as.data.frame( t(as.numeric(txtvec[is.num])) ), names(txtvec[is.num]))
-    df.int = setNames(as.data.frame( t(as.integer(txtvec[is.int])) ), names(txtvec[is.int]))
-
-    # bind the dataframes, return everything to original order and finish
-    idx.reorder = c(which(is.bool), which(is.char), which(is.num), which(is.int))
-    return(cbind(df.bool, df.char, df.num, df.int)[idx.reorder])
-
-  } else {
-    
-    # write mode: collect input types and expected types based on SWAT string 
-    rval.class = sapply(rval, class)
-    classnames = c('logical', 'character', 'numeric', 'integer')
-    rval.class.mat = sapply(classnames, function(x) rval.class == x)
-    swat.class.mat = cbind(is.bool, is.char, is.num, is.int)
-    
-    # warn of any mismatches (ignoring numeric vs integer mismatches)
-    mismatch.mat = ! swat.class.mat == rval.class.mat
-    mismatch.msg = paste(names(rval)[which(rowSums(mismatch.mat) > 0)], collapse=', ')
-    if(any(mismatch.mat)) warning(paste('type mismatch in variables:', mismatch.msg))
-    
-    # translate boolean to 'y'/'n' - numeric inputs x are interpreted as x==0
-    rval[is.bool] = as.logical(rval[is.bool])
-    idx.match = match(names(rval[is.bool]), names(txtvec[is.bool]))
-    txtvec[is.bool] = c('n', 'y')[ 1 + as.numeric(rval[is.bool][idx.match]) ]
-    
-    # translate the rest 
-    idx.match = match(names(rval[!is.bool]), names(txtvec[!is.bool]))
-    txtvec[!is.bool] = as.character(rval[!is.bool][idx.match])
-    
-    # truncate, if requested, then finish 
-    if(!is.null(nc)) txtvec = substr(txtvec, 1, nc) 
-    return(txtvec)
   }
   
 }
+  
+
+
+
+
+# # type detection/conversion for swapping between SWAT text and R representation of a parameter 
+# my_swat_typeco = function(txtdf, rval=NULL, nc=NULL)
+# {
+#   # ARGUMENTS:
+#   #  
+#   # `txt`: character vector or data.frame, the value(s) text from SWAT without whitespace
+#   # `rval`: (optional) data.frame; the value(s) to write, as R object  
+#   # `nc`: (optional) integer vector, the maximum string length(s) for truncation 
+#   #
+#   # RETURN VALUE:
+#   #
+#   # For NULL `rval`, a data frame of the SWAT parameter values in `txt` in the appropriate
+#   # R type, either integer, numeric, logical, or character.
+#   #
+#   # For non-NULL `rval`, a character vector of the SWAT parameter values supplied in `rval`,
+#   # truncated to the lengths in `nc` (if supplied), ready to be written to the SWAT text file.
+#   #
+#   # DETAILS:
+#   #
+#   # Character type is the default for anything not detected as integer, numeric, or logical.
+#   # `nc` is ignored if `rval` not supplied, and truncation has no effect on booleans. 
+#   # 
+#   # 
+#   
+#   # txt = tstep.table
+#   # txt = txt.read
+#   # rval = NULL
+#   # nc = NULL
+#   #txt = txt.read[match(varname, names(txt.read))]
+#   #rval = replacement
+#   
+#   # TODO: dataframes 
+#   if(!is.vector(txt))
+#   {
+#     # grab a random sample of rows and test all of them?
+#     # test just the first row?
+#   }
+#   
+#   if(is.list(txt))
+#   {
+#     return(lapply(txt, function(x) my_swat_typeco(x, rval, nc)))
+#   }
+#   
+#   # type detection for 'y'/'n' booleans
+#   is.bool = txt %in% 'y' | txt %in% 'n'
+#   
+#   # detect numeric and integer, the rest is treated as character
+#   is.num = !is.na(suppressWarnings(as.numeric(txt))) & !is.bool
+#   is.int = is.num & !grepl('.', txt, fixed=TRUE)
+#   is.num = is.num & !is.int
+#   is.char = !is.int & !is.num & !is.bool 
+# 
+#   # read mode  
+#   if(is.null(rval))
+#   {
+#     # coerce to appropriate type, then transpose into a data frame
+#     df.char = as.data.frame( t(txt[is.char]) )
+#     df.bool = as.data.frame( t(txt[is.bool] == 'y') )
+#     df.num = setNames(as.data.frame( t(as.numeric(txt[is.num])) ), names(txt[is.num]))
+#     df.int = setNames(as.data.frame( t(as.integer(txt[is.int])) ), names(txt[is.int]))
+# 
+#     # bind the dataframes, return everything to original order and finish
+#     idx.reorder = c(which(is.bool), which(is.char), which(is.num), which(is.int))
+#     return(cbind(df.bool, df.char, df.num, df.int)[match(1:length(txt), idx.reorder)])
+# 
+#   } else {
+#     
+#     # write mode: collect input types and expected types based on SWAT string 
+#     rval.class = sapply(rval, class)
+#     classnames = c('logical', 'character', 'numeric', 'integer')
+#     rval.class.mat = sapply(classnames, function(x) rval.class == x)
+#     swat.class.mat = cbind(is.bool, is.char, is.num, is.int)
+#     
+#     # warn of any mismatches (ignoring numeric vs integer mismatches)
+#     mismatch.mat = ! swat.class.mat == rval.class.mat
+#     mismatch.msg = paste(names(rval)[which(rowSums(mismatch.mat) > 0)], collapse=', ')
+#     if(any(mismatch.mat)) warning(paste('type mismatch in variables:', mismatch.msg))
+#     
+#     # translate boolean to 'y'/'n' - numeric inputs x are interpreted as x==0
+#     rval[is.bool] = as.logical(rval[is.bool])
+#     idx.match = match(names(rval[is.bool]), names(txt[is.bool]))
+#     txt[is.bool] = c('n', 'y')[ 1 + as.numeric(rval[is.bool][idx.match]) ]
+#     
+#     # translate the rest 
+#     idx.match = match(names(rval[!is.bool]), names(txt[!is.bool]))
+#     txt[!is.bool] = as.character(rval[!is.bool][idx.match])
+#     
+#     # truncate, if requested, then finish 
+#     if(!is.null(nc)) txt = substr(txt, 1, nc) 
+#     return(txt)
+#   }
+#   
+# }
 
 
 
