@@ -1,0 +1,6 @@
+"","file","type","description"
+"nwcc_src","data/source/nwcc","directory","directory for storage of NWCC source files (CSV) from NOAA"
+"nwcc_sites","data/source/nwcc/nwcc_sites.csv","CSV","metadata list for site records from NWCC and partner networks"
+"nwcc_sf","data/prepared/nwcc_sites.rds","R sf object","sf object containing `nwcc_sites` data frame and point geometries for UYRW area"
+"nwcc_data","data/prepared/nwcc_data.rds","R list object","list of data frames containing all available NWCC data at the sites in `nwcc_sf`"
+"metadata","data/get_snow_metadata.csv","CSV","list files of files written by get_snow.R"
