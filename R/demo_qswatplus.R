@@ -90,11 +90,18 @@ plot(st_geometry(uyrw.waterbody), col='lightblue', add=TRUE)
 plot(st_geometry(usgs.catchments$pts), pch=16, col='red', add=TRUE)
 plot(st_geometry(usgs.catchments$pts), col='orange', add=TRUE)
 
-# pick one (id #11) near Corwin Springs with a nice long record, extract its data
-id.eg = 11
-pts.eg = usgs.catchments$pts[usgs.catchments$pts$catchment_id==id,]
-boundary.eg = usgs.catchments$boundary[usgs.catchments$boundary$catchment_id==id,]
-demnet.eg = usgs.catchments$demnet[usgs.catchments$demnet$catchment_id==id,]
+# pick one near Corwin Springs with a recent record
+id.eg = usgs.catchments$pts %>% 
+  filter(catchment_id %in% id.leaf) %>%
+  filter(end_date > as.Date('1950-01-01')) %>%
+  filter(!grepl('Yellowstone Lk', station_nm)) %>%
+  filter(count_nu == max(count_nu)) %>%
+  pull(catchment_id)
+
+# extract its data
+pts.eg = usgs.catchments$pts[usgs.catchments$pts$catchment_id==id.eg,]
+boundary.eg = usgs.catchments$boundary[usgs.catchments$boundary$catchment_id==id.eg,]
+demnet.eg = usgs.catchments$demnet[usgs.catchments$demnet$catchment_id==id.eg,]
 usgs.eg = usgs$dat[[pts.eg$site_no]]
 
 # highlight it on the plot
@@ -110,47 +117,101 @@ plot(st_geometry(pts.eg), col='red', add=TRUE)
 qswat_meta = my_setup_qswatplus(id.eg, usgs.catchments)
 my_run_qswatplus(qswat_meta)
 
+
+#' ## load the SWAT+ watershed geometry files
+#' 
+
+# define the SWAT+ shapefiles directory then load the reaches and subbasins files
+shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
+riv = read_sf(file.path(shpdir, 'rivs1.shp'))
+subb = read_sf(file.path(shpdir, 'subs1.shp'))
+
+# snap gage record site to stream reaches
+idx.riv = which.min(st_distance(usgs.eg$sf[1,], riv))
+id.riv = riv$Channel[which.min(riv.dist)]
+id.subb = riv$Subbasin[which.min(riv.dist)]
+
+# plot the result
+plot(st_geometry(subb), col='blue', border='white', lwd=2)
+plot(st_geometry(riv), col='black', add=TRUE)
+plot(st_geometry(subb)[subb$Subbasin==1], border='red', add=TRUE)
+plot(st_geometry(riv)[riv$Channel==1], col='red', lwd=2,  add=TRUE)
+plot(st_geometry(usgs.eg$sf)[3], col='orange', pch=16, cex=2, add=TRUE)
+
+
+#' ## run a simulation
+
 # for now we use the PNWNAmet analysis for weather - load this dataset
 meteo.eg = readRDS(here(meteo.meta[qswat_meta$file[qswat_meta$name=='wname'], 'file']))
 
-# open the project files with rswat
+# open the project files with `rswat`
 textio = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Scenarios/Default/TxtInOut')
 ciopath = file.path(textio, 'file.cio')
 cio = rswat_cio(ciopath, ignore='decision_table', reload=TRUE)
 
 # change the simulation time to match overlap of weather and gage time series
 usgs.test = usgs$dat[[which.max(usgs$sf$count_nu)]]
-range(usgs.test$date)
-range(meteo$dates)
-date.start = as.Date('1980-01-01')
-date.end = as.Date('1990-01-01')
+range(usgs.eg$dat[[1]]$date)
+plot(flow~date, data=usgs.eg$dat[[1]])
+range(meteo.eg$dates)
+date.start = as.Date('1985-01-01')
+date.end = as.Date('1995-01-01')
 
-# write the changes to disk
-time.sim = rswat_open('time.sim')
-time.sim$day_start = as.integer(format(date.start, '%d'))
-time.sim$yrc_start = as.integer(format(date.start, '%Y'))
-time.sim$day_end = as.integer(format(date.end, '%d'))
-time.sim$yrc_end = as.integer(format(date.end, '%Y'))
-rswat_write(time.sim, preview=F)
+# my_function()
+# TODO: put this into its own function 
+{
+  # write the changes to disk
+  time.sim = rswat_open('time.sim')
+  time.sim$day_start = as.integer(format(date.start, '%d'))
+  time.sim$yrc_start = as.integer(format(date.start, '%Y'))
+  time.sim$day_end = as.integer(format(date.end, '%d'))
+  time.sim$yrc_end = as.integer(format(date.end, '%Y'))
+  rswat_write(time.sim, preview=F)
+  
+  # define the outputs to write (ie print) in the text files
+  print.prt = rswat_open('print.prt')[[1]]
+  print.prt$day_start = as.integer(format(date.start, '%d'))
+  print.prt$yrc_start = as.integer(format(date.start, '%Y'))
+  print.prt$day_end = as.integer(format(date.end, '%d'))
+  print.prt$yrc_end = as.integer(format(date.end, '%Y'))
+  rswat_write(print.prt, preview=F)
 
-# define the outputs to write (ie print) in the text files
-print.prt = rswat_open('print.prt')[[1]]
-print.prt$day_start = as.integer(format(date.start, '%d'))
-print.prt$yrc_start = as.integer(format(date.start, '%Y'))
-print.prt$day_end = as.integer(format(date.end, '%d'))
-print.prt$yrc_end = as.integer(format(date.end, '%Y'))
-rswat_write(print.prt, preview=F)
 
-# define the files to write
-ofiles = c('basin_cha', 'basin_sd_cha', 'channel', 'channel_sd')
-print.prt = rswat_open('print.prt')[[5]]
-print.prt$yearly = 'n'
-print.prt$daily[print.prt$objects %in% ofiles] = 'y'
-rswat_write(print.prt, preview=F)
+  # TODO: put this into its own function
+  # define the files to write
+  ofiles = c('channel_sd')
+  print.prt = rswat_open('print.prt')[[5]]
+  print.prt$yearly = 'n'
+  print.prt$daily = 'n'
+  print.prt$monthly = 'n'
+  print.prt$daily[print.prt$objects %in% ofiles] = 'y'
+  rswat_write(print.prt, preview=F)
+  
+  # run a simulation
+  my_run_simulation(textio)
+  
+  #rswat_open('')
+  
+}
 
-# run a simulation
-my_run_simulation(textio)
-#rswat_open('')
+
+# TODO: make this a function, along with NSE etc
+# have a look at the output flow and compare with observed
+y = rswat_output('channel_sd_day', 'flo_out') %>% filter(gis_id==id.riv)
+plot(flo_out~date, data=y, pch='')
+lines(flo_out~date, data=y)
+lines(flow~date, data=usgs.eg$dat[[1]], col='blue')
+
+# TODO: make a function that defines (returns) an objective function, say `o_fn()`
+# inputs would be model parameter values
+# output would be NSE (etc), where the above two functions are called in sequence
+# `o_fn` could then be passed to one of many optimizers in R
+#
+
+
+
+
+
 
 
 #+ eval=FALSE
