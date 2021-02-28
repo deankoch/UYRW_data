@@ -28,7 +28,7 @@
 #' [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
 #' [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
 #' [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
-#' 
+#' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
 
 #'
 #' ## libraries
@@ -159,6 +159,12 @@ uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
 
 # load USGS stream gage station points and time series
 usgs.dat = readRDS(here(streamgages.meta['USGS_data', 'file']))
+
+
+
+
+
+
 
 #'
 #' ## define a subbasin of the UYRW to set up
@@ -448,6 +454,52 @@ if(0)
   lines(yy$date, yy$flo_out)
 }
 #
+
+
+######
+###
+## DEVELOP
+
+
+# try opening the files myself
+library(here)
+source(here('R/get_helperfun.R'))
+swatdir ='H:/UYRW_data/data/prepared/qswatplus/swat_millcreek_test/Scenarios/Default/TxtInOut'
+replacement = data.frame(mgtout=T, fdcout=T, interval=30124148113523572, csvout=0.01, dbout=FALSE, aa_int_cnt=10)
+
+
+
+# ### 
+# # testing swatplusr
+# library(SWATplusR)
+# # 
+# # check out these functions
+# #
+# # 
+# # 
+# # run_swatplus
+# # 
+# # check_output ?? not in namespace of SWATPlusR CRAN release
+# # 
+# # model_setup
+# # 
+# # translate_outfile_names ?? not in namespace of SWATPlusR CRAN release
+# # 
+# # read_swatplus_output
+# #
+# #
+# 
+# thread_path = 'H:/UYRW_data/data/prepared/qswatplus/millcreek/Scenarios/Default/TxtInOut'
+# 
+# #SWATplusR::read_swatplus_output(define_output('rch', 'flo_in', 1), thread_path)
+# 
+
+
+
+
+
+
+
 
 # # load the usersoil table
 # usersoil.path = here(out.subdir, 'usersoil.csv')
