@@ -1,7 +1,7 @@
 get\_soils.R
 ================
 Dean Koch
-2021-01-19
+2021-02-27
 
 **Mitacs UYRW project**
 
@@ -39,11 +39,9 @@ ongoing.
 is used to fetch the [NRCS
 SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 soils data,
-[`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is
-used to parse the NRCS website for links to STATSGO2 data archives, and
 [‘RSQLite’](https://cran.r-project.org/web/packages/RSQLite/index.html)
 is used to open the soil parameters database (usersoil) that ships with
-SWAT+. [‘RODBC’](https://db.rstudio.com/odbc/) connects to MS Access
+SWAT+, and [‘RODBC’](https://db.rstudio.com/odbc/) connects to MS Access
 databases using ODBC drivers. See the [get\_helperfun.R
 script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
 for other required libraries
@@ -53,11 +51,6 @@ library(here)
 source(here('R/get_helperfun.R'))
 library(FedData)
 library(rvest)
-```
-
-    ## Loading required package: xml2
-
-``` r
 library(RSQLite)
 library(RODBC)
 ```
@@ -73,7 +66,7 @@ this information to disk:
 soils.meta = my_metadata('get_soils', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_soils_metadata.csv"
+    ## [1] "> writing metadata to: data/get_soils_metadata.csv"
 
 ``` r
 print(soils.meta[, c('file', 'type')])

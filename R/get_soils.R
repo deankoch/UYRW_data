@@ -34,10 +34,8 @@
 #' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the
 #' [NRCS SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 #' soils data,
-#' [`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) is used to parse the NRCS website for
-#' links to STATSGO2 data archives, and
 #' ['RSQLite'](https://cran.r-project.org/web/packages/RSQLite/index.html) is used to open the soil parameters
-#' database (usersoil) that ships with SWAT+.
+#' database (usersoil) that ships with SWAT+, and
 #' ['RODBC'](https://db.rstudio.com/odbc/) connects to MS Access databases using ODBC drivers. See the
 #' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
 #' for other required libraries
