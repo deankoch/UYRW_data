@@ -20,11 +20,11 @@
 #' 
 #' In the no-inlet cases, SWAT+ models can be fitted independently using the gage data at the outlet.
 #' To fit the other cases, we will provide either simulation output from upstream models, or the observed flow
-#' data from the gage that lies on the connecting channel. This divide-and-conquer approach is aimed to:
+#' data from the gage that lies on the connecting channel. This divide-and-conquer approach should allow us to:
 #' 
 #' 1) increase the model complexity (number of subbasins) on well-instrumented catchments, and vice versa
-#' 2) allow us to take a more targeted approach to parameter-fitting, and fit models more efficiently
-#' 3) allow us to fit SWAT+ to a large watershed sequentially, in more managable stages
+#' 2) take a more targeted approach to parameter-fitting, requiring fewer simulations
+#' 3) fit SWAT+ to a large watershed sequentially, in managable stages
 #'   
 
 #'
@@ -94,6 +94,7 @@ uyrw.outlet = st_transform(uyrw.outlet.geo, crs=crs.list$epsg)
 #' Start by running TauDEM on the full DEM, with only one outlet point (on main stem). This
 #' will delineate the watershed upstream of that outlet, automatically identifying the lowest
 #' (ie most detailed) feasible channel delineation threshold by drop analysis. 
+#+ eval=FALSE
 
 # run TauDEM on full watershed at max detail, or load files if this is already done
 taudem.odir = subwatersheds.meta['taudem', 'file']
@@ -109,6 +110,9 @@ if(file.exists(taudem.odir))
   
 }
 
+#'
+#+ echo=FALSE
+taudem_uyrw = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
 
 #' load some of the output
 w = raster(here(taudem_uyrw['w', 'file']))
