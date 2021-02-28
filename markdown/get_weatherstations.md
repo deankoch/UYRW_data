@@ -1,7 +1,7 @@
 get\_weatherstations.R
 ================
 Dean Koch
-2020-12-14
+2021-02-27
 
 **Mitacs UYRW project**
 
@@ -38,6 +38,10 @@ library(snotelr)
 library(rnoaa)
 ```
 
+    ## Registered S3 method overwritten by 'hoardr':
+    ##   method           from
+    ##   print.cache_info httr
+
 ## project data
 
 A list object definition here (`files.towrite`) has been hidden from the
@@ -49,7 +53,7 @@ this information to disk:
 weatherstations.meta = my_metadata('get_weatherstations', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_weatherstations_metadata.csv"
+    ## [1] "> writing metadata to: data/get_weatherstations_metadata.csv"
 
 ``` r
 print(weatherstations.meta[, c('file', 'type')])
@@ -96,10 +100,9 @@ if(!file.exists(here(weatherstations.meta['snotel_sites', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
   snotel_info(path=here(src.subdir))
-  
+
   # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
   file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(weatherstations.meta['snotel_sites', 'file']))
-  
 }
 ```
 

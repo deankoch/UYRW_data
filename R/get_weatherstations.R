@@ -138,10 +138,9 @@ if(!file.exists(here(weatherstations.meta['snotel_sites', 'file'])))
 {
   # download the metadata csv to the folder specified in `path`. This writes the file "snotel_metadata.csv"
   snotel_info(path=here(src.subdir))
-  
+
   # rename the csv to avoid confusion with identically-named file in the parent folder (my list of project files)
   file.rename(from=here(src.subdir, 'snotel_metadata.csv'), to=here(weatherstations.meta['snotel_sites', 'file']))
-  
 }
 
 #' Load this CSV, omit stations not in UYRW, and convert it to a `sf` object, then save to disk
