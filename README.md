@@ -27,23 +27,21 @@ fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.scie
 fetches three different gridded meteorological reconstructions of Northwestern North America
 * [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
 fetches snow data from SNOTEL and partner networks
+
+Given the DEM and the USGS gage data, we delineate regions within the UYRW that can be separately fitted
+with a SWAT+: 
+
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
-partitions the UYRW area into subwatersheds based on USGS gage locations
+partitions the UYRW area into subwatersheds with USGS gages at their outlets
 
-This script does some intermediate steps required to successfully load the data into QSWAT+3 and build a watershed
-model:
-
-* [make_qswatplus](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_qswatplus.md) prepares QSWAT+3 inputs
-
-After running the above, the user can load the prepared raster and geometry data files into QSWAT+
-(a plugin for QGIS), and construct a SWAT+ model from there. Alternatively, SWAT+ model construction
-can be done automatically (and much more quickly) via PyQGIS scripts, such as those provided in the
-[SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html) by Celray
-James. An example that is customized for the UYRW_data project is linked below:
-
-* [run_qswatplus](https://github.com/deankoch/UYRW_data/tree/master/python) (standalone) PyQGIS script for creating a SWAT+ model
-
-We may open a new repository for this kind of python code, including parameter calibration scripts androutines for splitting large watersheds into smaller ones that can be calibrated sequentially. Check back for more scripts and figures as we add to this list in the coming weeks.
+In a [separate repository](https://gitlab.com/rob-yerc/swat), we are developing a python module that will
+take the output of `make_subwatersheds.R` (and some configuration parameters) and run the QSWAT+ workflow
+(in PyQGIS) automatically, similar to Celray James'
+[SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html), but customized
+to our use case. An R package for interpreting and writing SWAT+ I/O files is also in development, and this
+will include an R wrapper for calls to the python script, allowing users to build SWAT+ models automatically
+from scratch, and then review/edit/calibrate them, all without leaving the R environment. A link to these tools
+should appear soon on this page.
 
 Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's
 [Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
