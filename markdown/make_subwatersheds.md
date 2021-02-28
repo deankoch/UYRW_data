@@ -25,14 +25,13 @@ In the no-inlet cases, SWAT+ models can be fitted independently using
 the gage data at the outlet. To fit the other cases, we will provide
 either simulation output from upstream models, or the observed flow data
 from the gage that lies on the connecting channel. This
-divide-and-conquer approach is aimed to:
+divide-and-conquer approach should allow us to:
 
 1)  increase the model complexity (number of subbasins) on
     well-instrumented catchments, and vice versa
-2)  allow us to take a more targeted approach to parameter-fitting, and
-    fit models more efficiently
-3)  allow us to fit SWAT+ to a large watershed sequentially, in more
-    managable stages
+2)  take a more targeted approach to parameter-fitting, requiring fewer
+    simulations
+3)  fit SWAT+ to a large watershed sequentially, in managable stages
 
 ## libraries
 
@@ -107,12 +106,10 @@ if(file.exists(taudem.odir))
 } else {
   
   # run the TauDEM workflow (~10 mins)
-  #taudem_uyrw = my_taudem(uyrw.dem, taudem.odir, outlet.sf=uyrw.outlet, bsf=uyrw.flowline)
+  taudem_uyrw = my_taudem(uyrw.dem, taudem.odir, outlet.sf=uyrw.outlet, bsf=uyrw.flowline)
   
 }
 ```
-
-    ## NULL
 
 load some of the output
 
