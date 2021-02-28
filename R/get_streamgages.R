@@ -200,6 +200,37 @@ if(!file.exists(here(streamgages.meta['USGS_data', 'file'])))
   # determine which parameter codes correspond to streamflow:
   discharge.df = paramcodes.df %>% filter(group=='Physical', grepl('[Dd]ischarge', parm_nm))
   
+  # TODO: find temperature measurements 
+  # temperature.df = paramcodes.df %>% filter(group=='Physical', grepl('[Tt]emperature, water', parm_nm))
+  # usgs.temperature.sf = usgs.sf %>% filter(parm_cd %in% temperature.df$parameter_cd)
+  # print(unique(usgs.temperature.sf$data_type_cd))
+  # site.codes = unique(usgs.temperature.sf$site_no)
+  # n.sites = length(site.codes)
+  # n.obs = usgs.temperature.sf %>% 
+  #   group_by(site_no) %>% 
+  #   summarize(n=sum(as.integer(count_nu))) 
+  # plot(uyrw.poly, main= 'USGS water temperature gages with > 1000 days in record')
+  # plot(st_geometry(uyrw.flowline), add=TRUE, col='grey90')
+  # plot(st_geometry(n.obs[n.obs$n < 1001,'n']), add=TRUE)
+  # plot(n.obs[n.obs$n > 1000,'n'] %>% arrange(n), pch=16, cex=2, add=TRUE)
+  # plot(st_geometry(n.obs[n.obs$n > 1000,'n']), cex=2, add=TRUE)
+  
+  # TODO: find conductivity measurements 
+  # conductance.df = paramcodes.df %>% filter(group=='Physical', grepl('[Cc]onduct|[Cc]olor', parm_nm))
+  # usgs.conductance.sf = usgs.sf %>% filter(parm_cd %in% conductance.df$parameter_cd)
+  # print(unique(usgs.conductance.sf$data_type_cd))
+  # site.codes = unique(usgs.conductance.sf$site_no)
+  # n.sites = length(site.codes)
+  # n.obs = usgs.conductance.sf %>% 
+  #   group_by(site_no) %>% 
+  #   summarize(n=sum(as.integer(count_nu))) 
+  # plot(uyrw.poly, main= 'USGS water conductance gages with > 1000 days in record')
+  # plot(st_geometry(uyrw.flowline), add=TRUE, col='grey90')
+  # plot(st_geometry(n.obs[n.obs$n < 1001,'n']), add=TRUE)
+  # plot(n.obs[n.obs$n > 1000,'n'] %>% arrange(n), pch=16, cex=2, add=TRUE)
+  # plot(st_geometry(n.obs[n.obs$n > 1000,'n']), cex=2, add=TRUE)
+
+  
   # note that '30208', '30209' appear to duplicate the times/dates in '00060', '00061', yet they
   # consistently underestimate the flow. This might be a unit conversion problem? 
   # Keep only the former:
