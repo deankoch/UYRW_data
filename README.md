@@ -11,7 +11,6 @@ defines the study area and loads some hydrology info using
 [`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/)
 * [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
 finds climatic sensor station data using
-[`snotelr`](https://github.com/bluegreen-labs/snotelr) and
 [`rnoaa`](https://github.com/ropensci/rnoaa)
 * [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
 fetches the National Elevation Dataset from USGS using
@@ -26,6 +25,10 @@ fetches SSURGO/STATSGO2 data from the Soil Data Mart using
 fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
 * [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
 fetches three different gridded meteorological reconstructions of Northwestern North America
+* [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
+fetches snow data from SNOTEL and partner networks
+* [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
+partitions the UYRW area into subwatersheds based on USGS gage locations
 
 This script does some intermediate steps required to successfully load the data into QSWAT+3 and build a watershed
 model:
