@@ -6,7 +6,9 @@ Dean Koch
 **Mitacs UYRW project**
 
 **helper\_analysis**: general helper functions for scripts in
-/R/analysis compute Nash–Sutcliffe model efficiency coefficient (NSE)
+/R/analysis
+
+compute Nash–Sutcliffe model efficiency coefficient (NSE)
 
 ``` r
 my_nse = function(qobs, qsim, L=2, normalized=FALSE)

@@ -8,10 +8,12 @@
 #' **Mitacs UYRW project** 
 #' 
 #' **helper_analysis**: general helper functions for scripts in /R/analysis
+#' 
 
 
 
-#' compute Nash–Sutcliffe model efficiency coefficient (NSE) 
+#'
+#'  compute Nash–Sutcliffe model efficiency coefficient (NSE) 
 my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 {
   # compute the standard NSE coefficient
