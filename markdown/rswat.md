@@ -1,51 +1,57 @@
-#' ---
-#' title: "rswat"
-#' author: "Dean Koch"
-#' date: "`r format(Sys.Date())`"
-#' output: github_document
-#' ---
-#'
-#' **Mitacs UYRW project** 
-#' 
-#' **rswat**: R functions for building, reading, and editing SWAT+ configuration files
-#' 
-#' This is an all-in-one set of tools for running scripted R workflows on a SWAT+ project:
-#' A PyQGIS script wrapper (similar to SWAT+ AW) builds the model in QSWAT+; and helper functions
-#' (rswat_*) handle the reading and writing of TxtInOut files and execution of simulations (similar
-#' to SWATPlusR), along many other miscellaneous tasks, like loading and merging model geometry data. 
-#' 
-#' I may turn some of this into a package eventually, especially the file I/O interface, which took
-#' some work but has proven very useful.
-#' 
+rswat
+================
+Dean Koch
+2021-03-05
 
-#' ## dependencies
+**Mitacs UYRW project**
 
+**rswat**: R functions for building, reading, and editing SWAT+
+configuration files
+
+This is an all-in-one set of tools for running scripted R workflows on a
+SWAT+ project: A PyQGIS script wrapper (similar to SWAT+ AW) builds the
+model in QSWAT+; and helper functions (rswat\_\*) handle the reading and
+writing of TxtInOut files and execution of simulations (similar to
+SWATPlusR), along many other miscellaneous tasks, like loading and
+merging model geometry data.
+
+I may turn some of this into a package eventually, especially the file
+I/O interface, which took some work but has proven very useful.
+
+## dependencies
+
+``` r
 # `dplyr` syntax simplification for complex table operations 
 library(dplyr)
 
 # `data.table` faster table loading
 library(data.table)
+```
 
-#' ## initialization:
-#' We may later add a start-up script to scan for likely paths to the SWAT+ executable,
-#' as well as the OSGEO4W root which is needed when setting up the PyQGIS environment
-#' in a call to the QSWAT+ workflow wrapper (this requires installation of QGIS-LTR,
-#' and the path will be platform dependent!)
-#' 
+## initialization:
 
-#' config file I/O interface
-#' 
-#' NOTE: an environment `.rswat` is initialized here (overwriting anything with that
-#' name). It stores file data and lookup tables, and only the functions in this chunk
-#' should be touching it. Eventually I will make this a package so it's properly hidden
-#'
-#' The I/O interface functions work by scanning the files listed in 'file.cio', tabulating
-#' their white-space delineated fields, then merging the results into tables wherever
-#' there is a consistent pattern of row-length and class (as detected by R's built-in
-#' `is.numeric` and some sensible rules for snapping and spacing. This will hopefully make
-#' it robust version-specific differences in SWAT+ parameter names and file structures (and
-#' future changes). 
+We may later add a start-up script to scan for likely paths to the SWAT+
+executable, as well as the OSGEO4W root which is needed when setting up
+the PyQGIS environment in a call to the QSWAT+ workflow wrapper (this
+requires installation of QGIS-LTR, and the path will be platform
+dependent\!)
 
+config file I/O interface
+
+NOTE: an environment `.rswat` is initialized here (overwriting anything
+with that name). It stores file data and lookup tables, and only the
+functions in this chunk should be touching it. Eventually I will make
+this a package so it’s properly hidden
+
+The I/O interface functions work by scanning the files listed in
+‘file.cio’, tabulating their white-space delineated fields, then
+merging the results into tables wherever there is a consistent pattern
+of row-length and class (as detected by R’s built-in `is.numeric` and
+some sensible rules for snapping and spacing. This will hopefully make
+it robust version-specific differences in SWAT+ parameter names and file
+structures (and future changes).
+
+``` r
 # TODO: make this a package
 
 # (internal) environment to store the SWAT+ project file data
@@ -1805,7 +1811,4 @@ rswat_2char = function(value, linedf, quiet=FALSE)
   return(list(string=vstr, string_padded=vstr.pad))
   
 }
-
-
-#+ include=FALSE
-#my_markdown('rswat')
+```
