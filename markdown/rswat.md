@@ -45,7 +45,7 @@ the PyQGIS environment in a call to the QSWAT+ workflow wrapper (this
 requires installation of QGIS-LTR, and the path will be platform
 dependent\!)
 
-config file I/O interface
+## config file I/O interface
 
 NOTE: an environment `.rswat` is initialized here (overwriting anything
 with that name). It stores file data and lookup tables, and only the
