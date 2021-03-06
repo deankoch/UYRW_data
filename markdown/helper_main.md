@@ -87,6 +87,13 @@ JSON I/O
 library(jsonlite)
 ```
 
+[`units`](https://cran.r-project.org/web/packages/units/index.html)
+handle units
+
+``` r
+library(units)
+```
+
 ## project data
 
 To avoid downloading things over and over again, we’ll use a permanent

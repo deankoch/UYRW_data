@@ -47,6 +47,10 @@ library(snotelr)
 library(rnoaa)
 ```
 
+    ## Registered S3 method overwritten by 'hoardr':
+    ##   method           from
+    ##   print.cache_info httr
+
 ## project data
 
 A list object definition here (`files.towrite`) has been hidden from the
@@ -209,12 +213,12 @@ if(!file.exists(snotel.path))
     
     # make the unit/type changes
     snotel.df$date = as.Date(snotel.df$date)
-    snotel.df$snow_water_equivalent = units::set_units(snotel.df$snow_water_equivalent, 'mm')
-    snotel.df$precipitation_cumulative = units::set_units(snotel.df$precipitation_cumulative, 'mm')
-    snotel.df$temperature_max = units::set_units(snotel.df$temperature_max, '°C')
-    snotel.df$temperature_min = units::set_units(snotel.df$temperature_min, '°C')
-    snotel.df$temperature_mean = units::set_units(snotel.df$temperature_mean, '°C')
-    snotel.df$precipitation = units::set_units(snotel.df$precipitation, 'mm')
+    snotel.df$snow_water_equivalent = set_units(snotel.df$snow_water_equivalent, 'mm')
+    snotel.df$precipitation_cumulative = set_units(snotel.df$precipitation_cumulative, 'mm')
+    snotel.df$temperature_max = set_units(snotel.df$temperature_max, '°C')
+    snotel.df$temperature_min = set_units(snotel.df$temperature_min, '°C')
+    snotel.df$temperature_mean = set_units(snotel.df$temperature_mean, '°C')
+    snotel.df$precipitation = set_units(snotel.df$precipitation, 'mm')
     
     # overwrite the list entry with updated values
     snotel.list[[idx.df]] = snotel.df
@@ -393,7 +397,7 @@ if(!file.exists(ghcnd.out.path))
     
     # add units for volume measurements (most are integer, in units of 10ths of a mm)
     idx.mm = setNames(colnames(ghcnd.df) %in% ghcnd.units.mm, colnames(ghcnd.df))
-    for(idx.vn in which(idx.mm)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], 'mm')/10 }
+    for(idx.vn in which(idx.mm)) { ghcnd.df[,idx.vn] = set_units(ghcnd.df[,idx.vn], 'mm')/10 }
     
     # change back the two variables not given in 10ths
     idx.whole = setNames(colnames(ghcnd.df) %in% c('snow', 'snwd'), colnames(ghcnd.df))
@@ -401,11 +405,11 @@ if(!file.exists(ghcnd.out.path))
     
     # add units for temperatures (supplied as integer, in units of 10ths of a degree)
     idx.degC = setNames(colnames(ghcnd.df) %in% ghcnd.units.degC, colnames(ghcnd.df))
-    for(idx.vn in which(idx.degC)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], '°C')/10 }
+    for(idx.vn in which(idx.degC)) { ghcnd.df[,idx.vn] = set_units(ghcnd.df[,idx.vn], '°C')/10 }
     
     # add units for day counts
     idx.days = setNames(colnames(ghcnd.df) %in% ghcnd.units.days, colnames(ghcnd.df))
-    for(idx.vn in which(idx.days)) { ghcnd.df[,idx.vn] = units::set_units(ghcnd.df[,idx.vn], 'days') }
+    for(idx.vn in which(idx.days)) { ghcnd.df[,idx.vn] = set_units(ghcnd.df[,idx.vn], 'days') }
     
     # overwrite the list entry with updated values
     ghcnd.list[[idx.df]] = ghcnd.df

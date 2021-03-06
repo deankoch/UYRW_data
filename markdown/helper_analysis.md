@@ -14,7 +14,7 @@ compute Nash–Sutcliffe model efficiency coefficient (NSE)
 my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 {
   # compute the standard NSE coefficient
-  nse = 1 - units::drop_units( sum( abs(qsim - qobs)^L ) / sum( abs(qobs - mean(qobs))^L ) )
+  nse = 1 - drop_units( sum( abs(qsim - qobs)^L ) / sum( abs(qobs - mean(qobs))^L ) )
   
   # normalize, if requested
   if(normalized)
@@ -507,7 +507,7 @@ my_taudem = function(dem, odir, nstream=0, nproc=8, outlet.sf=NULL, bsf=NULL, bd
     taudem.meta = my_metadata('taudem', list(bsf.entry), overwrite=TRUE, data.dir=odir, v=F)
     
     # assign units to burn-in depth
-    bdepth = units::set_units(bdepth, m)
+    bdepth = set_units(bdepth, m)
     
     # make sure the streams network contains only LINESTRING geometries, drop any attributes
     bsf = st_geometry(bsf[st_is(bsf, 'LINESTRING'),])
@@ -521,7 +521,7 @@ my_taudem = function(dem, odir, nstream=0, nproc=8, outlet.sf=NULL, bsf=NULL, bd
     bsf.idx = Which(!is.na(raster(here(taudem.meta['bsf', 'file']))), cells=TRUE) 
     
     # extract elevations at all cells intersecting with a stream
-    bsf.elev = units::set_units(extract(dem, bsf.idx), m)
+    bsf.elev = set_units(extract(dem, bsf.idx), m)
     
     # decrement these elevations before writing DEM file as uncompressed GeoTIFF
     print('  > writing DEM...')
@@ -538,7 +538,7 @@ my_taudem = function(dem, odir, nstream=0, nproc=8, outlet.sf=NULL, bsf=NULL, bd
   ncell = length(dem) 
   
   # compute area in km^2 of single grid cell (assumes projection units of 'm')
-  cell.area = units::set_units(prod(res(dem))/1e6, km^2)
+  cell.area = set_units(prod(res(dem))/1e6, km^2)
   dem.area = ncell*cell.area
   
   # drop analysis is skipped when `nstream` threshold argument is provided
@@ -551,15 +551,15 @@ my_taudem = function(dem, odir, nstream=0, nproc=8, outlet.sf=NULL, bsf=NULL, bd
     do.dropanalysis = TRUE
     
     # set a range of thresholds to test by drop analysis
-    nstream.min = max(units::set_units(0.1, km^2), 2*cell.area)
-    nstream.max = min(units::set_units(100, km^2), dem.area/10)
+    nstream.min = max(set_units(0.1, km^2), 2*cell.area)
+    nstream.max = min(set_units(100, km^2), dem.area/10)
     
     # corresponding number of cells
     nstream.min = as.integer(nstream.min/cell.area) + 1
     nstream.max = as.integer(nstream.max/cell.area) + 1
     
     # set default initial threshold (if `nstream` provided, set to 10X that)
-    astream = units::set_units(1, km^2)
+    astream = set_units(1, km^2)
     
     # corresponding number of cells
     nstream = as.integer(astream/cell.area) + 1
@@ -992,7 +992,7 @@ my_catchment_outlet = function(demnet, subb, linkno1, linkno2, snap=10)
   pt.out = st_cast(st_intersection(channel, line.boundary), 'POINT')
   
   # assign units to snap distance
-  snap = units::set_units(snap, m)
+  snap = set_units(snap, m)
   
   # if this fails to find an intersection, try snapping the channel to the boundary first
   if(length(pt.out) == 0)
@@ -1212,7 +1212,7 @@ my_merge_catchments = function(boundary, io, pts, demnet, subb, areamin=NULL)
   }
   
   # set up units for the threshold, and set default if necessary
-  areamin = units::set_units(ifelse(is.null(areamin), 0, areamin), km^2)
+  areamin = set_units(ifelse(is.null(areamin), 0, areamin), km^2)
   
   # identify catchments below the area threshold
   idx.toosmall = which(boundary$area < areamin)
@@ -1771,7 +1771,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
   wdat$tables$hmd[] = NA
   
   # add 5km buffer for grabbing weather grid points
-  boundary.buff = st_buffer(boundary, dist=units::set_units(5, km))
+  boundary.buff = st_buffer(boundary, dist=set_units(5, km))
   include = as.vector(st_intersects(wdat$coords_sf, boundary.buff, sparse=FALSE))
   
   # load DEM and call the weather station data export function
@@ -1870,7 +1870,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
 run the QSWAT+ workflow for a project created by `my_prepare_qswatplus`
 
 ``` r
-my_run_qswatplus = function(jsonpath, quiet=FALSE)
+qswat_run = function(jsonpath, quiet=FALSE)
 {
   # `quiet`: logical, suppresses console messages
   # 'jsonpath': character, the path to the JSON config file created by `my_prepare_qswatplus`
@@ -1881,7 +1881,7 @@ my_run_qswatplus = function(jsonpath, quiet=FALSE)
   if(is.data.frame(jsonpath)) jsonpath = qswat_meta$file[qswat_meta$name=='config']
   
   # path to the python launcher
-  exepath = 'H:/YERC/swat/run_qswatplus.cmd'
+  exepath = 'H:/UYRW_data/python/run_qswatplus.cmd'
   
   # call the launcher with this JSON file (runs a python script)
   system2(exepath, normalizePath(jsonpath), stdout=ifelse(quiet, FALSE, ''))
@@ -1889,9 +1889,10 @@ my_run_qswatplus = function(jsonpath, quiet=FALSE)
 }
 ```
 
-functions for working with SWAT+ simulations NOTE: some of these require
-that `rswat.R` be sourced run the SWAT+ executable (NOTE: requires
-`rswat` helper function)
+read the map of HRUs and LSUs, binding with data from TxtInOut functions
+for working with SWAT+ simulations NOTE: some of these require that
+`rswat.R` be sourced run the SWAT+ executable (NOTE: requires `rswat`
+helper function)
 
 ``` r
 my_run_simulation = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)

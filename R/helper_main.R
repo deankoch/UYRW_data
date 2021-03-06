@@ -48,6 +48,10 @@ library(rvest)
 #' [`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle JSON I/O
 library(jsonlite)
 
+#' [`units`](https://cran.r-project.org/web/packages/units/index.html) handle units
+library(units)
+
+
 #'
 #' ## project data
 

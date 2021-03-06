@@ -171,7 +171,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       mutate(file = string) %>%
       mutate(path = file.path(dirname(ciopath), file)) %>%
       mutate(exists = file.exists(path)) %>%
-      mutate(size = units::set_units(file.info(path)$size, bytes)) %>%
+      mutate(size = set_units(file.info(path)$size, bytes)) %>%
       mutate(ignored = FALSE )  %>%
       mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>% 
       as.data.frame() 
@@ -777,7 +777,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
       cn.unit = which( !is.na( head.unit[idx.head] ) )
       if(length(cn.unit) > 0)
       {
-        dat.out[cn.unit] = mapply(function(x, y) units::set_units(x, y, mode='standard'), 
+        dat.out[cn.unit] = mapply(function(x, y) set_units(x, y, mode='standard'), 
                                   x = as.list(dat.out)[cn.unit], 
                                   y = head.unit[idx.head][cn.unit], 
                                   SIMPLIFY=FALSE)

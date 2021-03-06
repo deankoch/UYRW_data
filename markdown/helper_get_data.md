@@ -325,7 +325,7 @@ my_nwcc_list = function(csvpath=NULL)
     select(-c(huc, start, enddate, wyear, site_name))
   
   # ft -> m conversion
-  data.df$elev = units::set_units(units::set_units(data.df$elev, ft), m)
+  data.df$elev = set_units(set_units(data.df$elev, ft), m)
   
   # write as CSV if requested
   if(!is.null(csvpath)) write.csv(data.df, csvpath, row.names=FALSE)
@@ -662,7 +662,7 @@ my_nwcc_open = function(path, varname=NULL, period=NULL)
     {
       unit.symbol = varname.units[varname.hasunits][idx.unit]
       cn = which(varname.hasunits)[idx.unit]
-      site.df[,cn] = units::set_units(site.df[,cn], unit.symbol, mode='standard')
+      site.df[,cn] = set_units(site.df[,cn], unit.symbol, mode='standard')
     }
   }
   

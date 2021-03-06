@@ -292,7 +292,7 @@ if(any(!file.exists(c(pcic.out.path, pcic.out.rasters))))
 
   # extract elevations at gridpoints, set their units and names 
   elevation.vals = extract(dem.tif, pcic.list$coords_sf)
-  elevation.vals = units::set_units(setNames(elevation.vals, rownames(pcic.list$coords)), 'm')
+  elevation.vals = set_units(setNames(elevation.vals, rownames(pcic.list$coords)), 'm')
   
   # assemble everything into a list
   pcic.list = list(dates=pcic.dates,
@@ -478,7 +478,7 @@ if(any(!file.exists(c(livneh.out.path, livneh.out.rasters))))
   
   # extract elevations at gridpoints, set their units and names 
   elevation.vals = extract(dem.tif, livneh.list$coords_sf)
-  elevation.vals = units::set_units(setNames(elevation.vals, rownames(livneh.list$coords)), 'm')
+  elevation.vals = set_units(setNames(elevation.vals, rownames(livneh.list$coords)), 'm')
   
   # assemble everything into a list
   livneh.list = list(dates=livneh.dates,
@@ -687,7 +687,7 @@ if(any(!file.exists(daymet.out.path, daymet.out.raster.dir)))
   
   # extract elevations at gridpoints, set their units and names 
   elevation.vals = extract(dem.tif, daymet.list$coords_sf)
-  elevation.vals = units::set_units(setNames(elevation.vals, rownames(daymet.list$coords)), 'm')
+  elevation.vals = set_units(setNames(elevation.vals, rownames(daymet.list$coords)), 'm')
   
   # assemble everything into a list
   daymet.list = list(dates=daymet.dates,

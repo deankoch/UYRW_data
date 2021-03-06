@@ -336,8 +336,8 @@ if(!file.exists(here(streamgages.meta['USGS_data', 'file'])))
       
       # convert units to standard metric (if necessary)
       units.src = attr(nwis.raw, 'variableInfo')[['unit']]
-      nwis.tidier$flow = units::set_units(nwis.tidier$flow, units.src, mode='standard') %>%
-        units::set_units(unit.discharge, mode='standard')
+      nwis.tidier$flow = set_units(nwis.tidier$flow, units.src, mode='standard') %>%
+        set_units(unit.discharge, mode='standard')
 
       # copy to list 
       discharge.dat.entry[[idx.entry]] = nwis.tidier
