@@ -12,26 +12,26 @@ our research.
 /R/get_data contains R scripts to fetch public datasets on the hydrology of UYR:
 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
-defines the study area and loads some hydrology info using
-[`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/)
+defines the study area and loads some hydrology info from
+[NHDPlus](https://www.usgs.gov/core-science-systems/ngp/national-hydrography/access-national-hydrography-products)
 * [get_weatherstations](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_weatherstations.md)
-finds climatic sensor station data using
-[`rnoaa`](https://github.com/ropensci/rnoaa)
+finds climatic sensor station data at the
+[GHCN](https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ncdc:C00861/html)
 * [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md)
-fetches the National Elevation Dataset from USGS using
-[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+fetches the [USGS National Elevation Dataset](https://catalog.data.gov/dataset/national-elevation-dataset-ned-1-arc-second-downloadable-data-collection-national-geospatial-d)
 * [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md)
-fetches sensor data from the USGS NWIS using
-[`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
+finds historical daily values from [USGS Water Services](https://waterservices.usgs.gov/rest/Site-Service.html#outputDataTypeCd)
 * [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
-fetches SSURGO/STATSGO2 data from the Soil Data Mart using
-[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+fetches SSURGO/STATSGO2 maps from the [National Cooperative Soil Survey](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 * [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
-fetches GAP/LANDFIRE data from the [USGS ScienceBase catalogue](https://www.sciencebase.gov/catalog/)
+fetches data from [GAP/LANDFIRE](https://www.usgs.gov/core-science-systems/science-analytics-and-synthesis/gap/science/land-cover-data-overview)
 * [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
-fetches three different gridded meteorological reconstructions of Northwestern North America
+fetches
+[three](https://daymet.ornl.gov/)
+[different](https://www.pacificclimate.org/data/daily-gridded-meteorological-datasets)
+[gridded](https://ciresgroups.colorado.edu/livneh/data) meteorological reconstructions
 * [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
-fetches snow data from SNOTEL and partner networks
+finds snow data at [SNOTEL and partner networks](https://wcc.sc.egov.usda.gov)
 
 
 ### rswat

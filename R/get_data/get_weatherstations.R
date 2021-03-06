@@ -10,7 +10,8 @@
 #' **get_weatherstations**: finds climatic sensor stations located in the UYRW and downloads their time series
 #' 
 #' The weather variables available through GHCN vary by station and time period. This script downloads everything,
-#' however for the SWAT model we will mostly be interested in the variables 'tmin', 'tmax', 'prcp', 'snow', 'awnd'   
+#' however for the SWAT model we will mostly be interested in the variables 'tmin', 'tmax', 'prcp', 'snow', 'awnd'.
+#' TODO: remove the SNOTEL sections as we fetch that data in a different script now.   
 #' 
 
 #' 

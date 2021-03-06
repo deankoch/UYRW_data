@@ -1,7 +1,7 @@
 get\_weatherstations.R
 ================
 Dean Koch
-2021-03-05
+2021-03-06
 
 **Mitacs UYRW project**
 
@@ -11,7 +11,8 @@ UYRW and downloads their time series
 The weather variables available through GHCN vary by station and time
 period. This script downloads everything, however for the SWAT model we
 will mostly be interested in the variables ‘tmin’, ‘tmax’, ‘prcp’,
-‘snow’, ‘awnd’
+‘snow’, ‘awnd’. TODO: remove the SNOTEL sections as we fetch that
+data in a different script now.
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 which creates some required directories and project config files, should
@@ -46,10 +47,6 @@ model training.
 library(snotelr)
 library(rnoaa)
 ```
-
-    ## Registered S3 method overwritten by 'hoardr':
-    ##   method           from
-    ##   print.cache_info httr
 
 ## project data
 

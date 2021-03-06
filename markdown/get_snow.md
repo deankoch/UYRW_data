@@ -1,7 +1,7 @@
 get\_snow.R
 ================
 Dean Koch
-2021-03-05
+2021-03-06
 
 **Mitacs UYRW project**
 
@@ -32,13 +32,9 @@ source(here('R/helper_main.R'))
 source(here('R/get_data/helper_get_data.R'))
 ```
 
-The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package
-fetches [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from
-the USDA.
-
-``` r
-library(snotelr)
-```
+Based on the [`snotelr`](https://github.com/bluegreen-labs/snotelr)
+package, which fetches [SNOTEL network
+data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA.
 
 ## project data
 

@@ -27,9 +27,9 @@ library(here)
 source(here('R/helper_main.R'))
 source(here('R/get_data/helper_get_data.R'))
 
-#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
+#' Based on the [`snotelr`](https://github.com/bluegreen-labs/snotelr) package, which fetches
 #' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA.
-library(snotelr)
+
 
 #'
 #' ## project data
