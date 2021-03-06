@@ -282,7 +282,7 @@ if(!file.exists(here(streamgages.meta['USGS_data', 'file'])))
       # water quality
       if(site.dtype == 'qw')
       {
-        # download the raw data from water quality service (specifying UTM time zone)
+        # download the raw data from water quality service (specifying MDT time zone)
         nwis.raw = renameNWISColumns(readNWISqw(siteNumbers=site.no, 
                                                 parameterCd=site.pcode,
                                                 expanded=FALSE,
