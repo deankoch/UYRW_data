@@ -9,7 +9,7 @@
 #' 
 #' **rswat**: R functions for building, reading, and editing SWAT+ configuration files
 #' 
-#' I may turn some of this into a package eventually, especially the file I/O interface, which took
+#' I may turn all of this into a package eventually, especially the file I/O interface, which took
 #' some work but has proven very useful.
 #' 
 #' see also: [SWAT+](https://swat.tamu.edu/software/plus/), 
@@ -48,10 +48,10 @@ library(data.table)
 
 # TODO: make this a package
 
-# (internal) environment to store the SWAT+ project file data
+#' (internal) environment to store the SWAT+ project file data
 .rswat = new.env(parent=emptyenv())
 
-# open 'file.cio' and list its contents
+#' open 'file.cio' and list its contents
 rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=NULL)
 {
   # ARGUMENTS:
@@ -234,7 +234,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
 
 }
 
-# wrapper for various methods to load SWAT+ files
+#' wrapper for various methods to load SWAT+ files
 rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FALSE)
 {
   # ARGUMENTS:
@@ -346,7 +346,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   }
 }
 
-# search tool for SWAT+ parameter text, names, and filenames
+#' search tool for SWAT+ parameter text, names, and filenames
 rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=NULL, ignore=NULL)
 {
   # ARGUMENTS:
@@ -468,7 +468,7 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   }
 }
 
-# write a parameter value to its file
+#' write a parameter value to its file
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
   # 
@@ -608,7 +608,7 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   }
 }
 
-# load SWAT+ output files as dataframe
+#' load SWAT+ output files as dataframe
 rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
 {
   # add .txt extension (if it has none)
@@ -827,9 +827,11 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   return(dat.out)
 }
 
-## internal functions for file I/O interface
+#' ## internal functions for file I/O interface
+#' 
 
-# line reader for SWAT+ text files
+
+#' line reader for SWAT+ text files
 rswat_rlines = function(txtpath, omit=1, nmax=-1L)
 {
   # ARGUMENTS:
@@ -929,7 +931,7 @@ rswat_rlines = function(txtpath, omit=1, nmax=-1L)
                                                      end_pos = unlist(txt.end)))
 }
 
-# class detection to interpret SWAT text as R objects 
+#' class detection to interpret SWAT text as R objects 
 rswat_rtext = function(fname, yn=FALSE)
 {
   # ARGUMENTS:
@@ -1000,7 +1002,7 @@ rswat_rtext = function(fname, yn=FALSE)
   
 }
 
-# read and interpret a SWAT+ configuration file
+#' read and interpret a SWAT+ configuration file
 rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
 {
   # ARGUMENTS:
@@ -1154,7 +1156,7 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
   return(invisible())
 }
 
-# make a table from a parsed SWAT+ file text 
+#' make a table from a parsed SWAT+ file text 
 rswat_tmake = function(fname, idx=NULL)
 {
   # ARGUMENTS:
@@ -1218,7 +1220,7 @@ rswat_tmake = function(fname, idx=NULL)
   return(outlist)
 }
 
-# identify the first table with column names in a block of SWAT+ config text
+#' identify the first table with column names in a block of SWAT+ config text
 rswat_tfind = function(fname, idx=NULL)
 {
   # ARGUMENTS:
@@ -1347,7 +1349,7 @@ rswat_tfind = function(fname, idx=NULL)
 
 }
 
-# generate missing rows in linedf for incomplete lines in a SWAT+ table
+#' generate missing rows in linedf for incomplete lines in a SWAT+ table
 rswat_tfix = function(fname, ln=integer(0), ref=integer(0), yn=FALSE)
 {
   # ARGUMENTS:
@@ -1506,7 +1508,7 @@ rswat_tfix = function(fname, ln=integer(0), ref=integer(0), yn=FALSE)
 
 }
 
-# clean up positional data for a table in `linedf`
+#' clean up positional data for a table in `linedf`
 rswat_align = function(linedf)
 {
   # ARGUMENTS:
@@ -1646,7 +1648,7 @@ rswat_align = function(linedf)
   
 }
 
-# identify the filename and table number associated with a dataframe
+#' identify the filename and table number associated with a dataframe
 rswat_index = function(value, fname=NULL, tablenum=NULL)
 {
   # ARGUMENTS:
@@ -1746,7 +1748,7 @@ rswat_index = function(value, fname=NULL, tablenum=NULL)
   
 }
 
-# convert a dataframe of SWAT+ parameters to their character representation
+#' convert a dataframe of SWAT+ parameters to their character representation
 rswat_2char = function(value, linedf, quiet=FALSE)
 {
 

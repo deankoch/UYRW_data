@@ -128,98 +128,13 @@ qswat_run(qswat.meta)
 #' 
 #+ eval=FALSE
 
-# load the project DEM
-dem = raster(qswat_meta$file[qswat_meta$name=='dem'])
-
 # open the project text files with `rswat`
 textio = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Scenarios/Default/TxtInOut')
-ciopath = file.path(textio, 'file.cio')
-cio = rswat_cio(ciopath, ignore='decision_table', reload=TRUE)
+cio = rswat_cio(file.path(textio, 'file.cio'), ignore='decision_table', reload=TRUE)
 
-# identify the shapefiles directory 
-shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
-
-# open HRUs geometries ('hrus1.shp' is an earlier iteration before merging by dominant HRU)
-hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
-
-# open HRUs geometries ('lsu1.shp' appears to be the same as 'lsus2.shp', but with fewer attributes)
-lsu2 = read_sf(file.path(shpdir, 'lsus2.shp'))
-
-# merge LSU polygons with HRU data (they match because we picked "Dominant HRU" method)
-hru.df = inner_join(as.data.frame(st_drop_geometry(lsu2)), as.data.frame(st_drop_geometry(hru2)))
-hru = st_sf(hru.df, geometry=lsu2$geometry)
-
-# replace the subbasin-level lat/long values with HRU centroids
-hru.centroids = st_centroid(st_geometry(hru))
-hru[, c('lon', 'lat')] = st_coordinates(st_transform(hru.centroids, crs=4326))
-
-# replace subbasin-level elevations with DEM values at HRU centroids
-hru[, 'elev'] = extract(dem, st_sf(hru.centroids))
-# TODO: option to take a random sample of points from each HRU to get elevation medians
-# st_sample(st_geometry(hru), rep(10, nrow(hru)))
-
-library(units)
-st_area(st_geometry(hru)) - set_units(hru$Area, km^2)
-
-
-# remove some detritus
-hru %>% select(-c(, , , , , , , ,))
-
-
-match(as.integer(hru.dom$HRUS), hru.map)
-
-hru
-plot(lsu['Elev'], nbreaks=100)
-plot(lsu['Elev'], nbreaks=100)
-
-
-
-dem = raster(qswat_meta$file[qswat_meta$name=='dem'])
-plot(dem)
-
-
-
-
-hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
-
-
-
-hru1$HRUS = as.integer(hru1$HRUS)
-
-
-hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
-lsu1 = read_sf(file.path(shpdir, 'lsus1.shp'))
-lsu2 = read_sf(file.path(shpdir, 'lsus2.shp'))
-
-# import the HRUs spatial connectivity table as sf
-cio %>% filter(group=='regions')
-
-rswat_find('band', intext=TRUE)
-
-# aquifer
-aqu.con = rswat_open('aquifer.con')
-
-# HRUs
-hru.con = rswat_open('hru.con')
-hru.dat = rswat_open('hru-data.hru')
-hru.hyd = rswat_open('hydrology.hyd')
-
-# channels
-cha.con = rswat_open('chandeg.con')
-
-
-rswat_find('', intext=T)
-
-cio
-rswat_open('')
-rswat_open('')
-rswat_open('')
-
-hru = read_sf(file.path(shpdir, 'dem_inwshed.shp'))
-plot(hru['PolygonId'])
-
-
-
+# open the watershed shapefiles
+wsh = qswat_read(qswat.meta)
+plot(wsh['elev'], nbreaks=100)
 
 # define the SWAT+ shapefiles directory then load the reaches and subbasins files
 shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
