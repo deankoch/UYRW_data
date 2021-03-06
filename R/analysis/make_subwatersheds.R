@@ -25,16 +25,20 @@
 #' 1) increase the model complexity (number of subbasins) on well-instrumented catchments, and vice versa
 #' 2) take a more targeted approach to parameter-fitting, requiring fewer simulations
 #' 3) fit SWAT+ to a large watershed sequentially, in managable stages
-#'   
+#' 
+  
 #'
 #' ## libraries
-#' Start by sourcing two helper scripts (
-#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
-#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' Start by sourcing two helper scripts
+#' ([helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_analysis.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md))
 #' which set up required libraries and directories and define some utility functions.
 library(here)
 source(here('R/helper_main.R'))
-source(here('R/get_data/helper_get_data.R'))
+source(here('R/analysis/helper_analysis.R'))
+
+#' load the rswat
+source(here('R/rswat.R'))
 
 # set the minimum number of daily gage records for each subwatershed outlet
 obsmin = 3*365
@@ -161,4 +165,4 @@ if(!file.exists(usgs.catchments.path))
 
 
 #+ eval=FALSE
-#my_markdown('make_subwatersheds')
+#my_markdown('make_subwatersheds', 'R/analysis')
