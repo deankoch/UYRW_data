@@ -21,8 +21,10 @@
 #' [SWAT+](https://swat.tamu.edu/software/plus/)
 #' [SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
 #' [SWATplusR](https://github.com/chrisschuerz/SWATplusR)
+#' 
 
 #' ## dependencies
+#' 
 
 # `dplyr` syntax simplification for complex table operations 
 library(dplyr)
