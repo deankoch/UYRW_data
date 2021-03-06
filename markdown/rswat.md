@@ -1,30 +1,19 @@
 rswat
 ================
 Dean Koch
-2021-03-05
+2021-03-06
 
 **Mitacs UYRW project**
 
 **rswat**: R functions for building, reading, and editing SWAT+
 configuration files
 
-This is an all-in-one set of tools for running scripted R workflows on a
-SWAT+ project: A PyQGIS script wrapper (similar to SWAT+ AW) builds the
-model in QSWAT+; and helper functions (rswat\_\*) handle the reading and
-writing of TxtInOut files and execution of simulations (similar to
-SWATPlusR), along many other miscellaneous tasks, like loading and
-merging model geometry data.
-
 I may turn some of this into a package eventually, especially the file
 I/O interface, which took some work but has proven very useful.
 
-references:
-
-[SWAT+](https://swat.tamu.edu/software/plus/)
-
-[SWAT+ Automatic Workflow
-(AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
-
+see also: [SWAT+](https://swat.tamu.edu/software/plus/), [SWAT+
+Automatic Workflow
+(AW)](https://celray.github.io/docs/swatplus_aw/introduction.html),
 [SWATplusR](https://github.com/chrisschuerz/SWATplusR)
 
 ## dependencies

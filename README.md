@@ -1,10 +1,15 @@
-## about us
 
-We are a team of mathematicians, statisticians, and ecologists, conducting a multi-year research project to develop an operational forecasting system for streamflow and water quality on the [Upper Yellowstone River](http://fwp.mt.gov/mtoutdoors/images/Storyimages/2017/UpperYellowstoneMap.jpg) (UYR) and its tributaries. Our system will be based on [SWAT+/gflow](https://www.mdpi.com/2306-5338/7/4/75), a hybrid of the [SWAT+](https://swat.tamu.edu/software/plus/) (Soil-Water-Assessment Tool) model for surface water dynamics, and gflow, physically-based groundwater flow module developed by Ryan Bailey to replace the current SWAT+ aquifer module. 
+## r code
 
-## R code
+This repository hosts the R codebase for our data analysis and modelling workflows. Most of our scripts (\*.R)
+include some [roxygen2-style commenting](https://rmarkdown.rstudio.com/articles_report_from_r_script.html) for
+generating markdown report files (\*.knit.md), shared here
+[to better document and organize](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928)
+our research.
 
-The UYRW_data repository is a staging area for R code that can be used to fetch data on the hydrology of UYR. This repository will be active during the early stages of our project (August-November 2020), as we assemble datasets and build documentation for the model. The following scripts in /R/get_data download the data:
+### data
+
+/R/get_data contains R scripts to fetch public datasets on the hydrology of UYR:
 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info using
@@ -28,26 +33,33 @@ fetches three different gridded meteorological reconstructions of Northwestern N
 * [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
 fetches snow data from SNOTEL and partner networks
 
-Using this data, we delineate regions within the UYRW that can each be separately fitted with a SWAT+ model: 
+
+### rswat
+
+[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) provides an easy-to-use R
+interface to the configuration files in a SWAT+ project directory, helping to manage the large number
+of parameters in this model. We may polish this code and release it as an R package at some point.
+
+
+### analysis
+
+The R/analysis directory (in development) is for building, fitting and analysing SWAT+ models in R.
+This includes R wrappers for running the QSWAT+ workflow [in PyQGIS](https://gitlab.com/rob-yerc/swat)
+and executing simulations, as well as helper functions for visualizing and analyzing the results. Using the
+output from /R/get_data, we plan to fit SWAT+ models sequentially on small catchments in the UYRW. Check
+back in the coming weeks as we add to this section to demonstrate the model building code:
 
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
 
-Once the SWAT+ model files have been created, we import and edit them using the helper functions in
-[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md). We may eventually release
-this code as an R package. The R/analysis directory (in development) contains scripts related to building,
-fitting, and calibrating. SWAT+ models. This includes a wrapper for a python module that runs the QSWAT+ workflow automatically (in PyQGIS) to create SWAT+ model files for the catchments in our area of interest
-(python code [available here](https://gitlab.com/rob-yerc/swat)). Check back in the coming weeks as
-we add to this section to demonstrate the model building code:
-
 * [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md)
 utilities for creating and calibrating SWAT+ models in R
 
+## about us
 
-Our R data analysis workflow is structured around git and markdown. Our scripts (\*.R) are documented as dynamic reports -- markdown files of the form \*.knit.md. These document our code and methods in human-readable detail, with console output and figures incorporated automatically using [`rmarkdown` using roxygen2](https://rmarkdown.rstudio.com/articles_report_from_r_script.html). See Jennifer Bryan's
-[Am Stat article](https://amstat.tandfonline.com/doi/abs/10.1080/00031305.2017.1399928) and [instructional pages](https://happygitwithr.com/) for more on this.
+We are a team of mathematicians, statisticians, and ecologists, conducting a multi-year research project to develop an operational forecasting system for streamflow and water quality on the [Upper Yellowstone River](http://fwp.mt.gov/mtoutdoors/images/Storyimages/2017/UpperYellowstoneMap.jpg) (UYR) and its tributaries. Our system will be based on [SWAT+/gflow](https://www.mdpi.com/2306-5338/7/4/75), a hybrid of the [SWAT+](https://swat.tamu.edu/software/plus/) (Soil-Water-Assessment Tool) model for surface water dynamics, and gflow, physically-based groundwater flow module developed by Ryan Bailey to replace the current SWAT+ aquifer module. 
 
-## funding
+### funding
 
 Our work is funded through a [MITACS](https://www.mitacs.ca/en/about) [Accelerate International](https://www.mitacs.ca/en/programs/accelerate/mitacs-accelerate-international) grant to Dean Koch, partnering the University of Alberta with R2CS LLC in Montana, and the [Yellowstone Ecological Research Center](https://www.yellowstoneresearch.org/yerc-lab). The project began on August 3, 2020.
 
