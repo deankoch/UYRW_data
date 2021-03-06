@@ -63,13 +63,16 @@
 #' 
 #'
 #' ## libraries
-#' [`daymetr`] automates the retrieval of Daymet rasters and [`RColorBrewer`](https://colorbrewer2.org/)
-#' loads some nice colour palettes See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' for other required libraries
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
 library(here)
-source(here('R/get_helperfun.R'))
-#library(R.utils)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
+#' [`daymetr`] automates the retrieval of Daymet rasters and [`RColorBrewer`](https://colorbrewer2.org/)
+#' loads some nice colour palettes
 library(daymetr)
 library(stringr)
 library(RColorBrewer)
@@ -805,4 +808,4 @@ if(!file.exists(here(meteo.meta['img_meteo', 'file'])))
 
 #+ include=FALSE
 # Development code
-#my_markdown('get_meteo')
+#my_markdown('get_meteo', 'R/get_data')

@@ -1,12 +1,12 @@
 get\_streamgages.R
 ================
 Dean Koch
-2021-02-27
+2021-03-05
 
 **Mitacs UYRW project**
 
-**get\_streamgages**: finds USGS stream sensor stations located in the
-UYRW
+**get\_streamgages**: finds and retrieves data from USGS stream sensor
+stations located in the UYRW
 
 [get\_basins.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 which creates some required directories and project config files, should
@@ -14,19 +14,26 @@ be run before this script.
 
 ## libraries
 
-[`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
-is used to fetch the USGS data and
-[`RColorBrewer`](https://colorbrewer2.org/) for colour palettes. See the
-[get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-for other required libraries
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
 
 ``` r
 library(here)
-source(here('R/get_helperfun.R'))
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+```
+
+[`dataRetrieval`](https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html)
+is used to fetch the USGS data and
+[`RColorBrewer`](https://colorbrewer2.org/) for colour palettes.
+
+``` r
 library(dataRetrieval)
 library(RColorBrewer)
-#?library(waterData)
 ```
 
 ## project data
@@ -300,7 +307,7 @@ if(!file.exists(here(streamgages.meta['USGS_data', 'file'])))
       # water quality
       if(site.dtype == 'qw')
       {
-        # download the raw data from water quality service (specifying UTM time zone)
+        # download the raw data from water quality service (specifying MDT time zone)
         nwis.raw = renameNWISColumns(readNWISqw(siteNumbers=site.no, 
                                                 parameterCd=site.pcode,
                                                 expanded=FALSE,
@@ -443,5 +450,5 @@ if(!file.exists(here(streamgages.meta['img_streamgage', 'file'])))
 }
 
 
-#my_markdown('get_streamgages')
+#my_markdown('get_streamgages', 'R/get_data')
 ```

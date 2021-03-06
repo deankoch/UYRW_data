@@ -33,9 +33,12 @@
 #' The `here` package defines working directories in a way that makes R code portable
 library(here)
 
-#' Start by sourcing the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' which sets up required libraries, directories, and defines some utility functions
-source(here('R/get_helperfun.R'))
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
 
 #' Some additional packages are needed in this script:
 #' [`nhdplusTools`](https://usgs-r.github.io/nhdplusTools/) fetches data from the USGS, 
@@ -54,7 +57,7 @@ library(smoothr)
 #' ## project data
 #' To keep the project data folder organized, the list `files.towrite` is defined at the beginning of each
 #' script describing all of the files created by that script. This list definition is hidden from the markdown
-#' output for brevity (see "get_helperfun.R" source file for details).
+#' output for brevity (see "helper_main.R" source file for details).
 #+ echo=FALSE
 
 # descriptions of all files created by this script:
@@ -444,34 +447,5 @@ if(!file.exists(here(basins.meta['img_basins', 'file'])))
             pointsize=tmap.pars$png['pt'])
 }
 
-
 #+ include=FALSE
-# Development code
-
-# there is another layer here called NHDArea
-#st_layers(here(basins.meta['nhd', 'file']))
-
-
-#+ include=FALSE
-####
-# testing to make sure we get the same number of catchments if we download everything in pieces (to avoid warning):
-# uyrw.flowlines = navigate_nldi(list(featureSource='comid', featureID=poi.list$comid$bigtimber), mode='upstreamTributaries', data_source = '')
-# testfiles = sapply(1:10, function(x) here(paste0('data/source/nhd_test', x, '.gpkg')))
-# idx.storage = rep(1:10, each=length(uyrw.flowlines$nhdplus_comid)/10)
-# for(idx in 1:10)
-# {
-#   testcomids = uyrw.flowlines$nhdplus_comid[idx.storage==idx]
-#   subset_nhdplus(comids=testcomids, output_file=testfiles[idx], nhdplus_data='download')
-# }
-# testcatch = vector(mode='list', length=10)
-# for(idx in 1:10)
-# {
-#   testcatch[[idx]] = read_sf(testfiles[idx], 'CatchmentSP')
-# }
-# xx = do.call(rbind, testcatch)
-# nrow(xx)
-# 4162, same as before. A plot of the flowlines also matches with earlier. I think we are good.
-####
-
-#+ include=FALSE
-#my_markdown('get_basins')
+#my_markdown('get_basins', 'R/get_data')

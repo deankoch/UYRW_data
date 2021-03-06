@@ -1,7 +1,7 @@
 get\_dem.R
 ================
 Dean Koch
-2021-01-19
+2021-03-05
 
 **Mitacs UYRW project**
 
@@ -13,36 +13,28 @@ should be run before this script.
 
 ## libraries
 
-[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
-is used to fetch the USGS data and
-[`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
-provides a palette for the terrain map. See the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-for other required libraries
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
 
 ``` r
 library(here)
-source(here('R/get_helperfun.R'))
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
 ```
 
-    ## 
-    ## Attaching package: 'gdalUtilities'
-
-    ## The following object is masked from 'package:sf':
-    ## 
-    ##     gdal_rasterize
+[`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
+is used to fetch the USGS data and
+[`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
+provides a palette for the terrain map.
 
 ``` r
 library(FedData)
 library(colorspace)
 ```
-
-    ## 
-    ## Attaching package: 'colorspace'
-
-    ## The following object is masked from 'package:raster':
-    ## 
-    ##     RGB
 
 ## project data
 
@@ -55,7 +47,7 @@ this information to disk:
 dem.meta = my_metadata('get_dem', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_dem_metadata.csv"
+    ## [1] "> writing metadata to: data/get_dem_metadata.csv"
 
 ``` r
 print(dem.meta[, c('file', 'type')])

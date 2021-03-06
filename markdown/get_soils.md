@@ -1,7 +1,7 @@
 get\_soils.R
 ================
 Dean Koch
-2021-02-27
+2021-03-05
 
 **Mitacs UYRW project**
 
@@ -35,6 +35,19 @@ ongoing.
 
 ## libraries
 
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
+
+``` r
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+```
+
 [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html)
 is used to fetch the [NRCS
 SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
@@ -42,13 +55,9 @@ soils data,
 [‘RSQLite’](https://cran.r-project.org/web/packages/RSQLite/index.html)
 is used to open the soil parameters database (usersoil) that ships with
 SWAT+, and [‘RODBC’](https://db.rstudio.com/odbc/) connects to MS Access
-databases using ODBC drivers. See the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
-for other required libraries
+databases using ODBC drivers.
 
 ``` r
-library(here)
-source(here('R/get_helperfun.R'))
 library(FedData)
 library(rvest)
 library(RSQLite)

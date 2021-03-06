@@ -19,12 +19,16 @@
 
 #'
 #' ## libraries
-#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
-#' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' for other required libraries
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
 library(here)
-source(here('R/get_helperfun.R'))
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
+#' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
+#' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA.
 library(snotelr)
 
 #'
@@ -172,103 +176,5 @@ uyrw.varnames = unique(unlist(sapply(uyrw.data, function(x) names(x))))
 print(nwcc.descriptions[names(nwcc.descriptions) %in% uyrw.varnames])
 
 
-
-#' ## SNODAS
-#' 
-#' Based on code from (see 'snodas.R', at https://github.com/NCAR/rwrfhydro/)
-#' 
-#' 
-
-
-
-
-#' 
-#' my_nwcc_get()[names(my_nwcc_get())=='SNDN']
-#' idx=39
-#' names(uyrw.data[[idx]] %>% filter(period=='semimonthly'))
-#' 
-#' ggplot(uyrw.data[[idx]] %>% filter(period=='semimonthly') %>% filter(complete.cases(.)), aes(x=date), na.rm=TRUE) +
-#'   #geom_line(aes(y=as.vector(TMIN)), col='green') +
-#'   #geom_line(aes(y=as.vector(TMAX)), col='red') +
-#'   #geom_line(aes(y=as.vector(PREC)), col='blue') +
-#'   geom_line(aes(y=as.vector(SNDN)), col='violet') +
-#'   geom_line(aes(y=as.vector(SNWD)), col='darkblue') +
-#'   geom_line(aes(y=as.vector(WTEQ)), col='orange') +
-#'   #geom_line(aes(y=as.vector(PRCP)), col='purple') +
-#'   #geom_line(aes(y=as.vector(PRCPSA)), col='turquoise') +
-#'   #scale_x_date(limits = as.Date(c('1943-1-1', '1946-1-1'))) +
-#'   ggtitle(uyrw.sf$site_nm[idx])
-#' 
-#' range(uyrw.data[[78]]$date)
-#' 
-#' #' Some of these time series appear to be cross-listed on GHCND, but in many cases we have quite
-#' #' different measurements despite matching locations and timestamps (perhaps due to different instruments,
-#' #' or different data-cleaning methodologies)
-#' 
-#' # TODO: demo this 
-
-# # find index of observations lying within elk count units
-# elk.sf = st_transform(st_union(st_read('H:/elk/geometry/count_units.shp')), crs=crs.list$epsg)
-# elk.idx = st_intersects(st_geometry(uyrw.sf), elk.sf, sparse=F)
-# 
-# 
-# 
-# st_write(uyrw.poly, 'UYRW_boundary.shp')
-# st_read()
-
-
-#' # plot of relative locations
-#' plot(uyrw.poly.padded, col='grey90', main='SNOTEL time series sites')
-#' plot(uyrw.poly, add=TRUE, col='grey50')
-#' plot(elk.sf, add=TRUE, col='grey30')
-#' plot(st_geometry(uyrw.sf), add=TRUE, pch=16, cex=0.5, col='blue')
-#' 
-#' # outer join to concatenate everything into single massive dataframe
-#' xx = mapply(function(x, y) cbind(x, data.frame(site_id=y)), uyrw.data, uyrw.sf$site_id)
-#' yy = Reduce(function(...) merge(..., all=T), xx)
-#' 
-#' # find the number of stations reporting snow density or depth in the UYRW area
-#' zz = yy %>% 
-#'   filter(period=='semimonthly') %>%
-#'   filter(!is.na(SNDN) | !is.na(SNWD)) %>%
-#'   select(date, site_id, SNDN, SNWD) %>% 
-#'   mutate(month = format(date, "%m"), year = format(date, "%Y")) %>%
-#'   group_by(year, month) %>% 
-#'   summarise(n_stations = length(unique(site_id)), date)
-#' 
-#' ggplot(zz, aes(x=date, y=n_stations)) + 
-#'   geom_point(cex=0.5) + 
-#'   ggtitle('number of stations reporting snow depth or density in URYW area (semimonthly)')
-#' 
-#' zz = yy %>% 
-#'   filter(period=='daily') %>%
-#'   filter(!is.na(SNDN) | !is.na(SNWD)) %>%
-#'   select(date, site_id, SNDN, SNWD) %>% 
-#'   mutate(month = format(date, "%m"), year = format(date, "%Y")) %>%
-#'   group_by(year, month) %>% 
-#'   summarise(n_stations = length(unique(site_id)), date)
-#' 
-#' ggplot(zz, aes(x=date, y=n_stations)) + 
-#'   geom_point(cex=0.5) + 
-#'   ggtitle('number of stations reporting snow depth or density in URYW area (daily)')
-#' 
-#' uyrw.sf[elk.idx,]
-#' 
-#' # repeat for within elk range (neither is daily)
-#' zz = yy[yy$site_id %in% uyrw.sf$site_id[elk.idx],] %>% 
-#'   filter(period=='semimonthly') %>%
-#'   filter(!is.na(SNDN) | !is.na(SNWD)) %>%
-#'   select(date, site_id, SNDN, SNWD) %>% 
-#'   mutate(month = format(date, "%m"), year = format(date, "%Y")) %>%
-#'   group_by(year, month) %>% 
-#'   summarise(n_stations = length(unique(site_id)), date)
-#' 
-#' ggplot(zz, aes(x=date, y=n_stations)) + 
-#'   geom_point(cex=0.5) + 
-#'   ggtitle('number of stations reporting snow depth or density in elk survey area (semimonthly)')
-#' 
-#' 
-#' 
-#' 
-#' 
-#' #my_markdown('get_snow')
+#+ include=FALSE
+#my_markdown('get_snow', 'R/get_data')

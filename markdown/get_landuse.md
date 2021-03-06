@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2021-01-19
+2021-03-05
 
 **Mitacs UYRW project**
 
@@ -22,18 +22,26 @@ should be run before this script.
 
 ## libraries
 
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
+
+``` r
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+```
+
 The base package
 [`grid`](https://stat.ethz.ch/R-manual/R-devel/library/grid/html/grid-package.html)
 allows more control over plot layouts, and
 [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
-provides some predefined color palettes for plotting. See the
-[get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-for other required libraries
+provides some predefined color palettes for plotting.
 
 ``` r
-library(here)
-source(here('R/get_helperfun.R'))
 library(raster)
 library(grid)
 library(colorspace)
@@ -50,7 +58,7 @@ this information to disk:
 landuse.meta = my_metadata('get_landuse', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_landuse_metadata.csv"
+    ## [1] "> writing metadata to: data/get_landuse_metadata.csv"
 
 ``` r
 print(landuse.meta[, c('file', 'type')])

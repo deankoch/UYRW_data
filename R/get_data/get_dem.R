@@ -14,13 +14,18 @@
 
 #'
 #' ## libraries
+
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
 #' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the USGS data
 #' and [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html) provides
 #' a palette for the terrain map.
-#' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' for other required libraries
-library(here)
-source(here('R/get_helperfun.R'))
 library(FedData)
 library(colorspace)
 
@@ -209,4 +214,4 @@ if(!file.exists(here(dem.meta['img_dem', 'file'])))
 
 #+ include=FALSE
 # Development code
-#my_markdown('get_dem')
+#my_markdown('get_dem', 'R/get_data')

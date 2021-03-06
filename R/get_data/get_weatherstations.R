@@ -19,6 +19,14 @@
 
 #'
 #' ## libraries
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
 #' The [`snotelr`](https://github.com/bluegreen-labs/snotelr) package fetches
 #' [SNOTEL network data](https://www.wcc.nrcs.usda.gov/snow/) from the USDA; and the
 #' [`rnoaa`](https://github.com/ropensci/rnoaa) package fetches
@@ -26,11 +34,7 @@
 #' [here](https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/readme.txt) and 
 #' [here](https://docs.ropensci.org/rnoaa/)).
 #' We use them to build a map of climatic sensor stations in the UYRW, and to query historical data
-#' for model training. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' for other required libraries
-library(here)
-source(here('R/get_helperfun.R'))
+#' for model training.
 library(snotelr)
 library(rnoaa)
 
@@ -534,4 +538,4 @@ if(!file.exists(here(weatherstations.meta['img_weatherstation', 'file'])))
 }
 
 
-#my_markdown('get_weatherstations')
+#my_markdown('get_weatherstations', 'R/get_data')

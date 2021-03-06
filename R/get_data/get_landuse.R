@@ -22,15 +22,19 @@
 
 #'
 #' ## libraries
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
 #' The base package
 #' [`grid`](https://stat.ethz.ch/R-manual/R-devel/library/grid/html/grid-package.html) allows more control
 #' over plot layouts, and
 #' [`colorspace`](https://cran.r-project.org/web/packages/colorspace/vignettes/colorspace.html)
 #' provides some predefined color palettes for plotting.
-#' See the [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-#' for other required libraries 
-library(here)
-source(here('R/get_helperfun.R'))
 library(raster)
 library(grid)
 library(colorspace)
@@ -426,19 +430,4 @@ if(!file.exists(here(landuse.meta['img_swat_landuse', 'file'])))
 }
 
 #+ include=FALSE
-# Development code
-
-# download link for SWAT+ SQLite Datasets
-
-# # this code is a temporary workaround to get the plants_plt data imported into QSWAT
-# library(DBI)
-# library(RSQLite)
-# swat.ds.conn = dbConnect(SQLite(), 'swatplus_datasets.sqlite')
-# plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
-# dbDisconnect(swat.ds.conn)
-# 
-# 
-# 
-
-
-#my_markdown('get_landuse')
+#my_markdown('get_landuse', 'R/get_data')

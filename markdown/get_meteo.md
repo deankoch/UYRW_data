@@ -1,7 +1,7 @@
 get\_meteo.R
 ================
 Dean Koch
-2020-12-18
+2021-03-05
 
 **Mitacs UYRW project**
 
@@ -74,16 +74,24 @@ should be run before this script.
 
 ## libraries
 
-\[`daymetr`\] automates the retrieval of Daymet rasters and
-[`RColorBrewer`](https://colorbrewer2.org/) loads some nice colour
-palettes See the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-for other required libraries
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
 
 ``` r
 library(here)
-source(here('R/get_helperfun.R'))
-#library(R.utils)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+```
+
+\[`daymetr`\] automates the retrieval of Daymet rasters and
+[`RColorBrewer`](https://colorbrewer2.org/) loads some nice colour
+palettes
+
+``` r
 library(daymetr)
 library(stringr)
 library(RColorBrewer)
@@ -100,7 +108,7 @@ this information to disk:
 meteo.meta = my_metadata('get_meteo', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "writing to data/get_meteo_metadata.csv"
+    ## [1] "> writing metadata to: data/get_meteo_metadata.csv"
 
 ``` r
 print(meteo.meta[, c('file', 'type')])

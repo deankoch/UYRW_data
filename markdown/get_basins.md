@@ -1,7 +1,7 @@
 get\_basins.R
 ================
 Dean Koch
-2021-02-02
+2021-03-05
 
 **Mitacs UYRW project**
 
@@ -42,13 +42,16 @@ code portable
 library(here)
 ```
 
-Start by sourcing the [get\_helperfun.R
-script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md),
-which sets up required libraries, directories, and defines some utility
-functions
+Start by sourcing two helper scripts (
+[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+and
+[helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+which set up required libraries and directories and define some utility
+functions.
 
 ``` r
-source(here('R/get_helperfun.R'))
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
 ```
 
 Some additional packages are needed in this script:
@@ -71,19 +74,12 @@ library(nhdplusTools)
 library(smoothr)
 ```
 
-    ## 
-    ## Attaching package: 'smoothr'
-
-    ## The following object is masked from 'package:stats':
-    ## 
-    ##     smooth
-
 ## project data
 
 To keep the project data folder organized, the list `files.towrite` is
 defined at the beginning of each script describing all of the files
 created by that script. This list definition is hidden from the markdown
-output for brevity (see “get\_helperfun.R” source file for details).
+output for brevity (see “helper\_main.R” source file for details).
 
 A helper function writes this file metadata information to a CSV file
 

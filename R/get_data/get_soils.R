@@ -31,16 +31,20 @@
 
 #'
 #' ## libraries
+#' Start by sourcing two helper scripts (
+#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/get_data/helper_get_data.R'))
+
 #' [`FedData`](https://cran.r-project.org/web/packages/FedData/index.html) is used to fetch the
 #' [NRCS SSURGO](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=nrcs142p2_053627)
 #' soils data,
 #' ['RSQLite'](https://cran.r-project.org/web/packages/RSQLite/index.html) is used to open the soil parameters
 #' database (usersoil) that ships with SWAT+, and
-#' ['RODBC'](https://db.rstudio.com/odbc/) connects to MS Access databases using ODBC drivers. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
-#' for other required libraries
-library(here)
-source(here('R/get_helperfun.R'))
+#' ['RODBC'](https://db.rstudio.com/odbc/) connects to MS Access databases using ODBC drivers.
 library(FedData)
 library(rvest)
 library(RSQLite)
@@ -649,4 +653,4 @@ if(!file.exists(here(soils.meta['img_soils', 'file'])))
 
 
 #+ include=FALSE
-#my_markdown('get_soils')
+#my_markdown('get_soils', 'R/get_data')
