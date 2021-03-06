@@ -17,6 +17,10 @@
 #' I may turn some of this into a package eventually, especially the file I/O interface, which took
 #' some work but has proven very useful.
 #' 
+#' references:
+#' [SWAT+](https://swat.tamu.edu/software/plus/)
+#' [SWAT+ Automatic Workflow (AW)](https://celray.github.io/docs/swatplus_aw/introduction.html)
+#' [SWATplusR](https://github.com/chrisschuerz/SWATplusR)
 
 #' ## dependencies
 

@@ -34,18 +34,21 @@
 #' [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md)
 #' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md)
 
-#'
 #' ## libraries
-#' For now we load the `rswat_*` functions (for SWAT+ I/O) by sourcing a helper function script. We plan
-#' to eventually release this as an R package. See the
-#' [get_helperfun.R script](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_helperfun.md)
-#' for other required libraries
+#' Start by sourcing two helper scripts
+#' ([helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
+#' which set up required libraries and directories and define some utility functions.
+library(here)
+source(here('R/helper_main.R'))
+source(here('R/analysis/helper_analysis.R'))
 
+#' load the rswat package
+source(here('R/rswat.R'))
+
+# numeric optimization
 library(dfoptim)
 
-library(here)
-source(here('R/get_helperfun.R'))
-source('R/swat/get_swathelperfun_develop.R')
 
 #'
 #' ## project data

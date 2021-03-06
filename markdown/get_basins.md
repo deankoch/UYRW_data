@@ -42,8 +42,8 @@ code portable
 library(here)
 ```
 
-Start by sourcing two helper scripts (
-[helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
+Start by sourcing two helper scripts
+([helper\_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
 and
 [helper\_get\_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
 which set up required libraries and directories and define some utility

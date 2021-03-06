@@ -33,8 +33,8 @@
 #' The `here` package defines working directories in a way that makes R code portable
 library(here)
 
-#' Start by sourcing two helper scripts (
-#' [helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' Start by sourcing two helper scripts
+#' ([helper_main.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
 #' [helper_get_data.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_get_data.md))
 #' which set up required libraries and directories and define some utility functions.
 source(here('R/helper_main.R'))

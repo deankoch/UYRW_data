@@ -28,8 +28,7 @@ fetches three different gridded meteorological reconstructions of Northwestern N
 * [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
 fetches snow data from SNOTEL and partner networks
 
-Given the DEM and the USGS gage data, we delineate regions within the UYRW that can each be separately
-fitted with a SWAT+ model: 
+Using this data, we delineate regions within the UYRW that can each be separately fitted with a SWAT+ model: 
 
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
