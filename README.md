@@ -34,7 +34,7 @@ Using this data, we delineate regions within the UYRW that can each be separatel
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
 
 Once the SWAT+ model files have been created, we import and edit them using the helper functions in
-[rswat.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md). We may eventually release
+[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md). We may eventually release
 this code as an R package. The R/analysis directory (in development) contains scripts related to building,
 fitting, and calibrating. SWAT+ models. This includes a wrapper for a python module that runs the QSWAT+ workflow automatically (in PyQGIS) to create SWAT+ model files for the catchments in our area of interest
 (python code [available here](https://gitlab.com/rob-yerc/swat)). Check back in the coming weeks as
