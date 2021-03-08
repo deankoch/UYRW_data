@@ -118,10 +118,20 @@ plot(st_geometry(pts.eg), col='red', add=TRUE)
 
 #' helper functions compile all the necessary files to run QSWAT+ and build the model
 
-# write QSWAT+ input files then set up the SWAT+ model via PyQGIS
-qswat.meta = qswat_setup(id.eg, usgs.catchments, wipe=T)
-qswat_run(qswat.meta)
+#######
+#######
+##### testing: different catchments
+id.egs = usgs.catchments$pts %>% 
+  filter(catchment_id %in% id.leaf) %>%
+  filter(end_date > as.Date('1950-01-01'))
+id.eg = id.egs$catchment_id[5]
+#######
+#######
+#######
 
+# write QSWAT+ input files then set up the SWAT+ model via PyQGIS
+qswat.meta = qswat_setup(id.eg, usgs.catchments, wipe=F)
+qswat_run(qswat.meta)
 
 
 #' ## load the SWAT+ project files
@@ -129,58 +139,98 @@ qswat_run(qswat.meta)
 #+ eval=FALSE
 
 # open the project text files with `rswat`
-textio = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Scenarios/Default/TxtInOut')
+textio = file.path(qswat.meta$file[qswat.meta$name=='proj'], 'Scenarios/Default/TxtInOut')
 cio = rswat_cio(file.path(textio, 'file.cio'), ignore='decision_table', reload=TRUE)
 
-# open the watershed shapefiles
+# plot the watershed shapefiles
 wsh = qswat_read(qswat.meta)
-plot(wsh['elev'], nbreaks=100)
+qswat_read(qswat.meta, draw=TRUE)
 
-# define the SWAT+ shapefiles directory then load the reaches and subbasins files
-shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
-riv = read_sf(file.path(shpdir, 'rivs1.shp'))
-subb = read_sf(file.path(shpdir, 'subs1.shp'))
 
-# load the HRUs
+#######
+#######
+##### testing:
+
+# yy = st_read('H:/UYRW_data/data/prepared/swat_mill_c_nr_pray/test/Watershed/Shapes/lsus2.shp')
+# xx = st_read('H:/UYRW_data/data/prepared/swat_mill_c_nr_pray/test/Watershed/Shapes/reservoirs0.shp')
+# 
+# plot(st_geometry(yy))
+# plot(st_geometry(xx)[xx$RES == 1], add=T, pch=16, col='blue')
+# plot(st_geometry(xx)[xx$RES == 1], add=T, pch=2, cex=3, col='red')
+
+
+
+# we need some way of identifying mountainous channel basins and flagging them
+read.csv(qswat.meta$file[qswat.meta$name=='landuse_lookup'])
+plot(raster(qswat.meta$file[qswat.meta$name=='landuse'])==15)
+
+
+# try computing some elevation stats across the floodplain LSUs
+idx.floodplain = wsh$hru$Landscape == 'Floodplain'
+lsu.all = st_geometry( wsh$hru[idx.floodplain, ] )
+
+
+x = lapply(wsh$hru %>% group_split(Channel), function(x) st_union(st_geometry(x)))
+str(x)
+lsu.all
+
+# make a dataframe to store info on all hru geometries
+
+
+
+
+for(idx in 1:5)
+{
+ lsu = lsu.all[idx]
+ #plot(lsu)
+
+  lsu.sp = as(lsu, 'Spatial')
+  
+  dem.lsu = mask(crop(wsh$dem, lsu.sp), lsu.sp)
+  lsu.min = cellStats(dem.lsu, min)
+  lsu.med = cellStats(dem.lsu, median)
+  lsu.mea = cellStats(dem.lsu, mean)
+  lsu.max = cellStats(dem.lsu, max)
+  lsu.ncell = ncell(dem.lsu)
+
+  print(c(lmin = lsu.min, 
+          median = lsu.med, 
+          mean = lsu.mea, 
+          max = lsu.max, 
+          nc = lsu.ncell))
+}
+
+
+
+#######
+#######
+#######
+
+
+
+#######
+#######
+# after much searching, I don't there is a mapping from HRU to aquifer in the SWAT+ tables
+# rswat_find('aqu', intext=TRUE)%>% pull(file) %>% unique
+# rswat_find('aqu011', intext=TRUE, fuzzy=2) %>% pull(file) %>% unique
+# however their metadata seems to be unique enough to match them up
+aquifer.con = rswat_open('aquifer.con')
+hru.con = rswat_open('hru.con')
+aquifer.con$lat %in% hru.con$lat
+aquifer.con$elev %in% wsh$sub$Elev 
+
+aquifer.con$elev %in% wsh$sub$Elev 
+
 hru1 = read_sf(file.path(shpdir, 'hrus1.shp'))
-hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
-lsu1 = read_sf(file.path(shpdir, 'lsus1.shp'))
-lsu2 = read_sf(file.path(shpdir, 'lsus2.shp'))
-plot(hru1['Area'])
-plot(hru2['Area'])
-plot(lsu1['Area'])
-plot(lsu2['Channel'])
-plot(st_geometry(hru1), add=T)
 
-
-hru1
-hru2
-
-
-plot(st_geometry(hru1))
-
-
-hru1 %>% group_split(HRU)
-
-unique(hru2$HRUS)
-unique(hru1$HRUS)
-
-
-names(hru1)
-names(hru2)
-
-# snap gage record site to stream reaches
-idx.riv = which.min(st_distance(usgs.eg$sf[1,], riv))
-id.riv = riv$Channel[idx.riv]
-id.subb = riv$Subbasin[idx.riv]
-
-# plot the result
-plot(st_geometry(subb), col='blue', border='white', lwd=2)
-plot(st_geometry(riv), col='black', add=TRUE)
-plot(st_geometry(subb)[subb$Subbasin==1], border='red', add=TRUE)
-plot(st_geometry(riv)[riv$Channel==1], col='red', lwd=2,  add=TRUE)
-plot(st_geometry(usgs.eg$sf)[3], col='orange', pch=16, cex=2, add=TRUE)
-
+# coordinates of aquifers appear to match with subbasin centroids 
+aqu.centroid = st_transform(st_sfc(st_multipoint(as.matrix(aquifer.con[-39,c('lon', 'lat')])), crs=4326), st_crs(wsh$hru))
+plot(st_geometry(wsh$sub))
+plot(aqu.centroid, add=TRUE)
+sort(aquifer.con$lat)
+# it seems there are two aquifers per subbasin
+#######
+#######
 
 #' ## run a simulation
 
