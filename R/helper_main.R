@@ -53,6 +53,13 @@ library(units)
 
 
 #'
+#' ## global variables
+
+# missing data field (NA) is coded as "-99.0"
+tif.na.val = -99
+
+
+#'
 #' ## project data
 
 #' To avoid downloading things over and over again, we'll use a permanent storage location on
