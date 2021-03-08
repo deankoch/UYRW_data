@@ -33,6 +33,8 @@ library(data.table)
 #' and the path will be platform dependent!)
 #' 
 
+# TODO: make this a package
+
 #' ## config file I/O interface
 #' 
 #' NOTE: an environment `.rswat` is initialized here (overwriting anything with that
@@ -46,12 +48,10 @@ library(data.table)
 #' it robust version-specific differences in SWAT+ parameter names and file structures (and
 #' future changes). 
 
-# TODO: make this a package
-
 #' (internal) environment to store the SWAT+ project file data
 .rswat = new.env(parent=emptyenv())
 
-#' open 'file.cio' and list its contents
+#' open 'file.cio' and listing its contents
 rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=NULL)
 {
   # ARGUMENTS:
@@ -234,7 +234,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
 
 }
 
-#' wrapper for various methods to load SWAT+ files
+#' wrapper for various methods to load SWAT+ files into memory and/or return them as dataframes
 rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FALSE)
 {
   # ARGUMENTS:
@@ -471,10 +471,24 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
 #' write a parameter value to its file
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
-  # 
-  # newvalue: list? dataframe? vector?
+  # In development. Currently only supports writing a single dataframe to (single file),
+  # but vectorization should be simple. I just need to decide the input syntax
   #
-  # `preview`: logical, returns a list of edits, without writing them to disk
+  # ARGUMENTS:
+  #
+  # `value`: dataframe (or list?), the SWAT+ table with desired parameter values
+  # `fname`: (optional) character, name of file containing the table
+  # `tablenum`: (optional) integer, list index for the table within the file
+  # `preview`: logical, whether to return dataframe listing the changes, but not write them
+  # `reload`: logical, whether to reload the file after writing, to update file data in memory
+  # `quiet`: logical, passed to rswat_load if `reload==TRUE` (otherwise ignored)
+  #
+  # RETURN VALUE:
+  #
+  # Returns nothing (but writes `value` to `fname` on disk) when `preview=FALSE`.
+  # Otherwise returns a dataframe with information on the (line-by-line) changes
+  # that would be made to the config file(s)
+  #
   
   # grab a list of all filenames and the input object names
   cio = rswat_cio(trim=FALSE)
@@ -827,9 +841,9 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   return(dat.out)
 }
 
+
 #' ## internal functions for file I/O interface
 #' 
-
 
 #' line reader for SWAT+ text files
 rswat_rlines = function(txtpath, omit=1, nmax=-1L)
@@ -1805,6 +1819,115 @@ rswat_2char = function(value, linedf, quiet=FALSE)
   vstr.pad[linedf$rjust_col] = mapply(paste0, pad, vstr)[linedf$rjust_col]
   vstr.pad[!linedf$rjust_col] = mapply(paste0, vstr, pad)[!linedf$rjust_col]
   return(list(string=vstr, string_padded=vstr.pad))
+  
+}
+
+
+#' ## utility functions for working with QSWAT+ files
+#' 
+
+#' read the map of HRUs and LSUs
+qswat_read = function(qswat_meta, draw=FALSE)
+{
+  # In development
+  #
+  # ARGUMENTS:
+  #
+  # `qswat_meta`: dataframe, the return value of `qswat_setup`
+  # `draw`: logical, indicates to return a tmap  
+  #
+  # RETURN VALUE:
+  #
+  # A list of `sf` objects: the dem that QSWAT+ used to build the model, and the contents
+  # of the channel network, HRUs, and LSUs, and subbasins shapefiles.
+  #
+  # DETAILS:
+  #
+  
+  # identify the shapefiles directory where we can find the HRU and LSU geometries 
+  shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
+  tifdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Rasters')
+  
+  # load dem, outlets, channels and subbasins shapefiles
+  dem = raster(qswat_meta$file[qswat_meta$name=='dem'])
+  out = read_sf(file.path(shpdir, 'outlets_in.shp'))
+  riv = read_sf(file.path(shpdir, 'rivs1.shp'))
+  subb = read_sf(file.path(shpdir, 'subs1.shp'))
+  
+  # 'hrus1.shp' appears to be an early iteration, before merging by dominant HRU
+  hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
+  
+  # 'lsu1.shp' appears to be the same as 'lsus2.shp', but with fewer attributes
+  lsu2 = read_sf(file.path(shpdir, 'lsus2.shp'))
+  
+  # merge LSU polygons with HRU data (they match because we picked "Dominant HRU" method)
+  hru.df = inner_join(as.data.frame(st_drop_geometry(lsu2)), as.data.frame(st_drop_geometry(hru2)))
+  hru = st_sf(hru.df, geometry=lsu2$geometry)
+  
+  # these HRU-specific centroids are to replace the subbasin-level lat/long coordinates 
+  hru.centroids = st_centroid(st_geometry(hru))
+  hru.coords = st_coordinates(st_transform(hru.centroids, crs=4326))
+  
+  # add them to the dataframe along with DEM values and areas, remove some detritus
+  hru.out = hru %>%
+    mutate( long = set_units(hru.coords[, 1], degrees) ) %>%
+    mutate( lat = set_units(hru.coords[, 2], degrees) ) %>%
+    mutate( elev = set_units(extract(dem, st_sf(hru.centroids)), m) ) %>%
+    mutate( area = st_area(st_geometry(hru)) ) %>%
+    mutate( id = HRUS, frac = X.Subbasin ) %>%
+    select( -c(Area, Lat, Lon, Elev, X.Landscape, X.Subbasin, HRUS) ) %>%
+    select( id, Channel, LINKNO, everything() )
+  
+  # TODO: option to take a random sample of points from each HRU to get elevation medians
+  # st_sample(st_geometry(hru), rep(10, nrow(hru)))
+  
+  # TODO: print a dataframe of stats about the watershed: # subbasins, channels etc
+  
+  # make the tmap object if requested
+  if(draw)
+  {
+    # aesthetics for palette, scalebar, lat/long gridlines, title, and legend
+    dem.pal = hcl.colors(1e3, palette='Dark 3', rev=TRUE)
+    km.breaks = pretty(0.3 * 1e-3 * res(dem)[2] * dim(dem)[2], 2, min.n=2)
+    if( km.breaks[1] != 0 ) km.breaks = c(0, km.breaks)
+    
+    # bundle all these tmap config objects ahead of time
+    layout = tm_grid(n.x=2, n.y=2, projection=4326, alpha=0.2) +
+      tm_scale_bar(breaks=km.breaks, position=c('RIGHT', 'BOTTOM'), text.size=0.7) +
+      tm_layout(main.title=qswat.meta$file[qswat.meta$name=='name'],
+                main.title.fontface ='bold',
+                main.title.size=1,
+                main.title.position='right',
+                legend.position = c('RIGHT', 'top'),
+                inner.margins = rep(1e-2, 4),
+                frame=FALSE)
+    
+    # make the tmap object
+    tmap.out = 
+      tm_shape(dem) +
+        tm_raster('dem_in.tif', 
+                  alpha=0.75,
+                  legend.reverse = TRUE,
+                  palette = dem.pal, 
+                  style = 'cont', 
+                  legend.format = list(suffix=' m'), 
+                  title = 'elevation') +
+      tm_shape( hru  ) + 
+        tm_polygons(alpha=0, border.col=adjustcolor('white', alpha=0.25), lwd=1) +
+      tm_shape( subb ) +
+        tm_polygons(alpha=0, border.col='black') +
+      tm_shape( riv ) +
+        tm_lines(col='darkblue', alpha=0.25, lwd='Order', scale=5, legend.lwd.show=FALSE) +
+      tm_shape( out ) +
+        tm_dots(size=0.5, col='darkblue', alpha=0.8) +
+      layout
+    
+    # finish
+    return(tmap.out)
+    
+  }
+  
+  return(list(dem=dem, cha=riv, hru=hru.out, lsu=lsu2, sub=subb))
   
 }
 
