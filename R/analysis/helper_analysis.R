@@ -1839,7 +1839,7 @@ qswat_run = function(jsonpath, quiet=FALSE)
   # or the dataframe returned by that function call
   
   # handle dataframe input
-  if(is.data.frame(jsonpath)) jsonpath = qswat_meta$file[qswat_meta$name=='config']
+  if(is.data.frame(jsonpath)) jsonpath = jsonpath$file[jsonpath$name=='config']
   
   # path to the python launcher
   exepath = 'H:/UYRW_data/python/run_qswatplus.cmd'
@@ -1849,45 +1849,6 @@ qswat_run = function(jsonpath, quiet=FALSE)
   if(!quiet) cat('\n>> finished')
 }
 
-#' read the map of HRUs and LSUs
-qswat_read = function(qswat_meta)
-{
-  # load the project DEM
-  dem = raster(qswat_meta$file[qswat_meta$name=='dem'])
-  
-  # identify the shapefiles directory where we can find the HRU and LSU geometries 
-  shpdir = file.path(qswat_meta$file[qswat_meta$name=='proj'], 'Watershed/Shapes')
-  
-  # 'hrus1.shp' appears to be an early iteration, before merging by dominant HRU
-  hru2 = read_sf(file.path(shpdir, 'hrus2.shp'))
-  
-  # 'lsu1.shp' appears to be the same as 'lsus2.shp', but with fewer attributes
-  lsu2 = read_sf(file.path(shpdir, 'lsus2.shp'))
-  
-  # merge LSU polygons with HRU data (they match because we picked "Dominant HRU" method)
-  hru.df = inner_join(as.data.frame(st_drop_geometry(lsu2)), as.data.frame(st_drop_geometry(hru2)))
-  hru = st_sf(hru.df, geometry=lsu2$geometry)
-  
-  # these HRU-specific centroids are to replace the subbasin-level lat/long coordinates 
-  hru.centroids = st_centroid(st_geometry(hru))
-  hru.coords = st_coordinates(st_transform(hru.centroids, crs=4326))
-  
-  # add them to the dataframe along with DEM values and areas, remove some detritus
-  hru.out = hru %>%
-    mutate( long = set_units(hru.coords[, 1], degrees) ) %>%
-    mutate( lat = set_units(hru.coords[, 2], degrees) ) %>%
-    mutate( elev = set_units(extract(dem, st_sf(hru.centroids)), m) ) %>%
-    mutate( area = st_area(st_geometry(hru)) ) %>%
-    mutate( id = HRUS, frac = X.Subbasin ) %>%
-    select( -c(Area, Lat, Lon, Elev, X.Landscape, X.Subbasin, HRUS) ) %>%
-    select( id, Channel, LINKNO, everything())
-  
-  # TODO: option to take a random sample of points from each HRU to get elevation medians
-  # st_sample(st_geometry(hru), rep(10, nrow(hru)))
-  
-  return(hru.out)
-  
-}
 
 
 
