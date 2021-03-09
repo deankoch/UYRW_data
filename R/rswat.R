@@ -1823,8 +1823,314 @@ rswat_2char = function(value, linedf, quiet=FALSE)
 }
 
 
-#' ## utility functions for working with QSWAT+ files
+#' ## functions for running QSWAT+ and opening its output files
 #' 
+
+#' assembles requisite inputs for a QSWAT+ project
+qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, quiet=FALSE)
+{
+  # `cid`: integer, the 'catchment_id' of the subwatershed in `catchments$boundary`
+  # `catchments` list of sf objects, the output of `my_find_catchments(...)`
+  # `projdir`: character, the path to the desired QSWAT+ project directory 
+  # `wipe`: logical, indicating to erase all existing data in `projdir` 
+  # `config`: named list, name-value pairs to add to the configuration JSON
+  # `quiet`: logical, suppresses console messages
+  #
+  # this requires the UYRW_data workflow to be completed to generate the input data files
+  # listed in the metadata CSVs loaded by `my_metadata()`.
+  #
+  # Note that since we are using the stock SSURGO/STATSGO mukeys, there should be no need to
+  # import a custom usersoil database
+  #
+  # TODO: add lakes
+  # Some data prep will be required for QSWAT+ to delineate channels correctly around lakes,
+  # possibly using the [SWAT2Lake](https://projects.au.dk/wet/software/#c55181) QGIS plugin
+  # described [here](https://www.sciencedirect.com/science/article/abs/pii/S1364815218302500).
+  # This remains a work in progress.
+  
+  # NAs are represented in the GeoTiff by an integer -- usually something large and negative.
+  # The default value for this integer when using `raster::writeRaster` is so large that
+  # it can cause an integer overflow error in one of the python modules used by QSWAT+ (at 
+  # least on my 64bit machine). We instead use the value recommended in the QSWAT+ manual:
+  tif.na.val = -32767
+  
+  # unpack input
+  boundary = catchments$boundary[catchments$boundary$catchment_id == cid, ]
+  io = catchments$io[catchments$io$catchment_id == cid, ]
+  pts = catchments$pts[catchments$pts$catchment_id == cid, ]
+  demnet = catchments$demnet[catchments$demnet$catchment_id == cid, ] %>% na.exclude
+  
+  # for now we are testing with the PNWNAMet weather data
+  wname = 'pnwnamet_uyrw'
+  
+  # look up input data file locations
+  dem.path = here(my_metadata('get_dem')['swat_dem', 'file'])
+  soils.path = here(my_metadata('get_soils')['swat_soils_tif', 'file'])
+  landuse.path = here(my_metadata('get_landuse')['swat_landuse_tif', 'file'])
+  landuselu.path = here(my_metadata('get_landuse')['swat_landuse_lookup', 'file'])
+  wdat.path = here(my_metadata('get_meteo')[wname, 'file'])
+  subwatersheds.meta = my_metadata('get_subwatersheds')
+  taudem.meta = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
+  
+  # set default project directory
+  if( is.null(projdir) ) 
+  {
+    # default name from USGS gage site name
+    projnm = paste0('swat_', boundary$catchment_name)
+    
+    # default location from parent of dem raster file
+    projdir = here(file.path(dirname(dem.path), projnm))
+  } 
+  
+  # project name is the same as project directory name
+  projnm = basename(projdir)
+  
+  # handle overwrite calls and create the directory if necessary
+  if(wipe & file.exists(projdir)) unlink(projdir, recursive=TRUE)
+  my_dir(projdir)
+  
+  # data inputs go into a subdirectory
+  datadir = file.path(projdir, 'inputs')
+  my_dir(datadir)
+  
+  # define the files to write
+  {
+    files.towrite = list(
+      
+      # path to QSWAT project folder
+      c(name='proj',
+        file=projdir, 
+        type='directory',
+        description='QSWAT+ project directory'),
+      
+      # watershed boundary polygon (the AOI, a subwatershed from `my_find_catchments`)
+      c(name='boundary',
+        file=file.path(datadir, 'boundary.geojson'), 
+        type='GeoJSON',
+        description='polygon delineating subwatershed for the SWAT+ model'),
+      
+      # DEM raster ('swat_dem' from 'get_dem.R', cropped to AOI)  
+      c(name='dem',
+        file=file.path(datadir, 'dem_in.tif'), 
+        type='GeoTIFF',
+        description='QSWAT+ DEM'),
+      
+      # land use raster for the UYRW ('swat_landuse_tif' from 'get_landuse.R', cropped to AOI)
+      c(name='landuse',
+        file=file.path(datadir, 'landuse_in.tif'), 
+        type='GeoTIFF',
+        description='SWAT+ land use classification'),
+      
+      # soils raster for the UYRW ('swat_tif' from 'get_soils.R', cropped to AOI)
+      c(name='soils',
+        file=file.path(datadir, 'soil_in.tif'), 
+        type='GeoTIFF',
+        description='SWAT soils classification, maps to soil table in SWAT+ database'),
+      
+      # lookup table for 'landuse' ('swat_landuse_lookup' from 'get_landuse.R')
+      c(name='landuse_lookup',
+        file=file.path(datadir, 'landuse_lookup_in.csv'), 
+        type='CSV',
+        description='integer code for landuse, maps to `plants_plt` table in SWAT+ database'), 
+      
+      # outlets shapefile (for now based on 'USGS_sites' from 'get_streamgages.R')
+      c(name='outlets',
+        file=file.path(datadir, 'outlets_in.shp'), 
+        type='ESRI Shapefile',
+        description='outlet point locations, used by QSWAT+ to delineate subbasins'),
+      
+      # streams shapefile (simplified 'flowlines' from 'get_basins.R')
+      c(name='streams',
+        file=file.path(datadir, 'streams_in.shp'), 
+        type='ESRI Shapefile',
+        description='stream geometries to "burn" into DEM prior to running TauDEM'),
+      
+      # directory to write SWAT weather data (input text files)
+      c(name='wdat',
+        file=file.path(datadir, wname),
+        type='directory',
+        description='directory for writing SWAT weather input text files'),
+      
+      # JSON containing metadata and parameters for QSWAT+ workflow in PyQGIS
+      c(name='config',
+        file=file.path(datadir, paste0(projnm, '.json')),
+        type='JSON',
+        description='configuration file for run_qswatplus.py module')
+      
+    )
+  }
+  
+  # write metadata to csv in QSWAT+ project directory
+  qswat.meta = my_metadata(projnm, files.towrite, overwrite=TRUE, data.dir=projdir, v=!quiet)
+  if(!quiet) print(qswat.meta[, c('type', 'description')])
+  
+  # extract  boundary polygon, write GeoJSON, coerce to `sp` for compatibility with `raster`
+  boundary.path = here(qswat.meta['boundary', 'file'])
+  if( file.exists(boundary.path) ) unlink(boundary.path)
+  st_write(boundary, boundary.path, quiet=quiet)
+  boundary.sp = as(boundary, 'Spatial')
+  
+  # crop/mask the DEM, soils, and land use rasters
+  dem = mask(crop(raster(dem.path) , boundary.sp), boundary.sp)
+  landuse = mask(crop(raster(landuse.path) , boundary.sp), boundary.sp)
+  soils = mask(crop(raster(soils.path) , boundary.sp), boundary.sp)
+  
+  # write to new location
+  writeRaster(dem, here(qswat.meta['dem', 'file']), NAflag=tif.na.val, overwrite=TRUE)
+  writeRaster(landuse, here(qswat.meta['landuse', 'file']), NAflag=tif.na.val, overwrite=TRUE)
+  writeRaster(soils, here(qswat.meta['soils', 'file']), NAflag=tif.na.val, overwrite=TRUE)
+  
+  # drop attributes from stream network before writing as shapefile 
+  st_write(st_geometry(demnet), here(qswat.meta['streams', 'file']), append=FALSE, quiet=quiet)
+  
+  # copy outlet point geometries to shapefile, adding required QSWAT+ attributes 
+  id.empty = as.integer(0)
+  io.df = data.frame(ID=as.integer(1:nrow(io)), INLET=io$inlet, RES=id.empty, PTSOURCE=id.empty)
+  st_write(st_sf(io.df, geom=st_geometry(io)), 
+           here(qswat.meta['outlets', 'file']), 
+           append=FALSE, 
+           quiet=quiet)
+  
+  # open the table, drop redundant rows, copy to QSWAT+ project folder
+  landuse.lu = read.csv(landuselu.path) %>% filter( Value %in% unique(landuse) )
+  write.csv(landuse.lu, qswat.meta['landuse_lookup', 'file'], row.names=FALSE)
+  
+  # delete/create weather directory as needed
+  wdat.dir = qswat.meta['wdat', 'file']
+  if(dir.exists(wdat.dir)) unlink(wdat.dir, recursive=TRUE)
+  my_dir(wdat.dir)
+  
+  # for now we are testing weather inputs with PNWNAMet data
+  wdat = readRDS(wdat.path)
+  
+  # load weather data and set NA values for humidity (bugfix for SWAT+ Editor)
+  wdat$tables$hmd = wdat$tables$tmax
+  wdat$tables$hmd[] = NA
+  
+  # add 5km buffer for grabbing weather grid points
+  boundary.buff = st_buffer(boundary, dist=set_units(5, km))
+  include = as.vector(st_intersects(wdat$coords_sf, boundary.buff, sparse=FALSE))
+  
+  # load DEM and call the weather station data export function
+  if(!quiet) print('writing weather station data files...')
+  invisible(my_swat_wmeteo(wdat, exdir=wdat.dir, form='qswat', include=include, quiet=quiet))
+  
+  # TODO: change my_metadata() (and all dependencies) to use JSON?
+  # convert the metadata csv to JSON (adding line breaks for readability)
+  qswat.meta.out = cbind(name=rownames(qswat.meta), data.frame(qswat.meta, row.names=NULL))
+  
+  # TODO: put these defaults in a JSON file in /data
+  
+  # derive initial (dummy) start/end dates from first 2 days of available weather
+  wdat.start = min(wdat$dates)
+  
+  # set default channel drop threshold from earlier taudem analysis (may be too low)
+  drop.channel = as.integer(gsub('stream threshold:', '', taudem.meta['nstream', 'description']))
+  
+  # set default stream drop threshold to 3X the channel drop
+  drop.stream = 3 * drop.channel
+  
+  # set default reservoir threshold percentage (based on landuse 'WATR')
+  res.threshold = 50
+
+  # define default QSWAT+ parameters
+  {
+    config.def.list = list(
+      
+      # the QSWAT+ project name
+      c(name='name',
+        file=projnm, 
+        type='parameter',
+        description='QSWAT+ project name'),
+      
+      # the source of the input weather data 
+      c(name='wname',
+        file=wname, 
+        type='parameter',
+        description='initial input weather data for SWAT+ simulation'),
+      
+      # initial value for start_yr
+      c(name='start_yr',
+        file=format(wdat.start, '%Y'), 
+        type='parameter',
+        description='initial value of start year for SWAT+ simulations'),
+      
+      # initial value for start_day 
+      c(name='start_day',
+        file=as.integer(format(wdat.start, '%d')), 
+        type='parameter',
+        description='initial value of start day for SWAT+ simulations'),
+      
+      # initial value for end_yr
+      c(name='end_yr',
+        file=format(wdat.start + 1, '%Y'), 
+        type='parameter',
+        description='initial value of end year for SWAT+ simulations'),
+      
+      # initial value for end_day 
+      c(name='end_day',
+        file=as.integer(format(wdat.start + 1, '%d')), 
+        type='parameter',
+        description='initial value of end day for SWAT+ simulations'),
+      
+      # channel drop threshold
+      c(name='drop_channel',
+        file=drop.channel, 
+        type='parameter',
+        description='threshold for channel delineation (in number of cells)'),
+      
+      # stream drop threshold
+      c(name='drop_stream',
+        file=drop.stream, 
+        type='parameter',
+        description='threshold for stream delineation (in number of cells)'),
+      
+      # reservoir threshold percentage
+      c(name='res_thresh',
+        file=res.threshold, 
+        type='parameter',
+        description='threshold for resrevoir delineation (percent)')
+      
+    )
+  }
+  
+  # reshape as dataframe
+  config.def.out = data.frame(do.call(rbind, config.def.list))
+  
+  # overwrite with user supplied settings 
+  if( !is.null(config) )
+  {
+    # TODO
+    
+  } 
+  
+  # copy the metadata csv and `config` to JSON
+  config.path = qswat.meta['config', 'file']
+  config.out = rbind(qswat.meta.out, config.def.out)
+  writeLines(toJSON(config.out, pretty=TRUE), config.path)
+  
+  # finish
+  return(config.out)
+}
+
+#' run the QSWAT+ workflow for a project created by `my_prepare_qswatplus`
+qswat_run = function(jsonpath, quiet=FALSE)
+{
+  # `quiet`: logical, suppresses console messages
+  # 'jsonpath': character, the path to the JSON config file created by `my_prepare_qswatplus`
+  #
+  # or the dataframe returned by that function call
+  
+  # handle dataframe input
+  if(is.data.frame(jsonpath)) jsonpath = jsonpath$file[jsonpath$name=='config']
+  
+  # path to the python launcher
+  exepath = 'H:/UYRW_data/python/run_qswatplus.cmd'
+  
+  # call the launcher with this JSON file (runs a python script)
+  system2(exepath, normalizePath(jsonpath), stdout=ifelse(quiet, FALSE, ''))
+  if(!quiet) cat('\n>> finished')
+}
 
 #' read the map of HRUs and LSUs
 qswat_read = function(qswat_meta, draw=FALSE)
@@ -1929,6 +2235,375 @@ qswat_read = function(qswat_meta, draw=FALSE)
   
   return(list(dem=dem, cha=riv, hru=hru.out, lsu=lsu2, sub=subb))
   
+}
+
+
+#' ## helper functions for calibrating SWAT+ and running simulations
+#' 
+
+#' run the SWAT+ executable (NOTE: requires `rswat` helper function)
+rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
+{
+  # 'textio': character, path to the text I/O directory for the SWAT+ model 
+  # `dates`: (optional) vector of Dates from which to derive simulation period
+  # `info`: logical, whether to return current time.sim and print.prt instead of running SWAT+
+  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
+  # `quiet`: logical, suppresses console messages
+  #
+  # `object`, if supplied, specifies the output files to write, where the default is to not print
+  # with exceptions listed in `object` as varname-timestep pairs. eg. `object=c(basin_wb='yearly')`
+  # specifies to print only the yearly data for the 'basin_wb' file (and none of the others).
+  # Unnamed strings in `object` specify to print all files for that timestep (regardless of any
+  # more specific exceptions in `object`), eg. both `object=c(basin_wb='yearly', 'yearly')` and
+  # `object='yearly'` have the effect of printing all yearly files. 
+  #
+  # If `dates` is supplied, the 'print.prt' and 'time.sim' files are updated to match the
+  # its range, so that the simulation runs the full time period in `dates`.
+  #
+  # Note: this does not alter the time step of the simulation (in parameter `step` of
+  # "time.sim"), or attempt to detect it from `dates`
+  
+  # TODO: detect this in pyqgis module
+  # set the default executable path
+  exe = 'C:/SWAT/SWATPlus/SWATPlusEditor/resources/app.asar.unpacked/swat_exe/rev60.5.2_64rel.exe'
+  
+  # handle dates
+  if( !is.null(dates) )
+  {
+    # check for valid input 
+    dates = dates[!is.na(dates)]
+    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
+    if( !is(dates, 'Date') ) stop('supplied `dates` not of "Date" class')
+    
+    # set the start and end dates
+    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
+    dstart = as.integer(format(min(dates), '%j'))
+    ystart = as.integer(format(min(dates), '%Y'))
+    dend = as.integer(format(max(dates), '%j'))
+    yend = as.integer(format(max(dates), '%Y'))
+    
+    # write any date changes to time.sim
+    if( !quiet ) print('> writing time.sim')
+    time.sim = rswat_open('time.sim', quiet=quiet)
+    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(time.sim, preview=F, quiet=quiet)
+    
+    # write any date changes for print.prt
+    if( !quiet ) print('> writing print.prt')
+    print.prt = rswat_open('print.prt', quiet=quiet)
+    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(print.prt[[1]], preview=F, quiet=quiet)
+  }
+  
+  # deal with the effects of `object` on print.prt
+  if( !is.null(object) )
+  {
+    # load print.prt if we don't have it already
+    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=quiet)
+    
+    # grab the full list of valid objectect names
+    object.all = print.prt[[5]]$objectects
+    object.nm = names(object)
+    
+    # expand the unnamed entries to include all files for that timestep
+    object.exp = lapply(object, function(x) setNames(rep(x, length(object.all)), object.all))
+    object.exp[ object.nm != '' ] = object[object.nm != '']
+    object = do.call(c, object.exp)
+    
+    # reset all values to no-print
+    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+    
+    # a simple loop suffices as this array shouldn't ever get very large
+    for(idx in 1:length(object))
+    {
+      nm = names(object[idx])
+      print.prt[[5]][print.prt[[5]]$object == nm, object[idx]] = 'y'
+    }
+    
+    # write the changes to print.prt
+    rswat_write(print.prt[[5]], preview=F, quiet=quiet)
+  }
+  
+  # shell command prefix to change to the directory (avoids changing R's working directory)
+  shell.prefix = paste0('pushd ', normalizePath(textio), ' &&')
+  
+  # build system call and run SWAT
+  syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
+  invisible(shell(syscall.string, intern=quiet))
+  if(!quiet) cat('\n>> finished')
+}
+
+#' evaluate errors in prediction for a SWAT+ model
+my_gage_objective = function(gage, textio, oid=NULL, quiet=FALSE, draw=FALSE, exec=TRUE)
+{
+  # 'gage': dataframe of flow and date
+  # 'textio': character, path to the text I/O directory for the SWAT+ model 
+  # 'oid': (optional) sf point or integer id code
+  # 'draw': logical, indicates to plot the results (or add to plot, if one exists already)
+  # 'exec': logical, indicates to run the simulation (else uses existing output files)
+  #
+  # for now we only support daily timesteps
+  
+  # find the channel id value associated with the supplied point if necessary
+  if( !is.integer(oid) )
+  {
+    # attempt to find the watershed shapefile
+    shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
+    shp.fn = list.files(shp.dir)
+    shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
+    
+    # warn of multiple matches
+    if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
+    
+    # handle no-match case
+    if( length(shp.path) > 0 ) 
+    {
+      # set default `oid` when the shapefile can't be found 
+      oid = 1
+      
+    } else {
+      
+      # load the first of the results and snap gage record site 
+      riv = read_sf(shp.path)
+      idx.riv = which.min(st_distance(oid, riv))
+      oid = riv$Channel[idx.riv]
+    }
+  }
+  
+  # TODO: detect this automatically from `gage`
+  # assign objects to write and dates to simulate
+  object = c(channel_sd='daily')
+  vname = 'flo_out'
+  dates = gage$date
+  fname = paste0(names(object), '_day')
+  
+  # run the simulation and extract response data
+  if(exec) rswat_run(textio, dates=dates, object=object, quiet=quiet)
+  sim = rswat_output(fname, vname) %>% filter(gis_id==oid)
+  
+  # TODO: optimize this inner join
+  # handle skipped years, missing days etc
+  idx.gage = match(sim$date, gage$date)
+  qsim = gage$flow[idx.gage]
+  qobs = sim[[vname]]
+  
+  # TODO: add alternatives
+  # compute objective function value
+  obj.val = my_nse(qsim, qobs, L=2)
+  
+  # plot the data, if requested 
+  if(ifelse(is.logical(draw), draw, TRUE))
+  {
+    # find a color for the normalized NSE
+    qalpha = 0.5
+    tcol = rainbow(60)[as.integer(format(Sys.time(), '%M'))]
+    qcol = ifelse(is.logical(draw), tcol, draw)
+    if(is.numeric(qcol))
+    {
+      qalpha = qcol
+      qcol = 'blue'
+    }
+    
+    # initialize the plot if required
+    idx.plot = gage$date %in% sim$date
+    if( dev.cur()==1 ) plot(flow~date, data=gage[idx.plot,], pch='')
+    
+    # add new simulation data
+    lines(flow~date, data=gage[idx.plot,], lwd=2)
+    lines(flo_out~date, data=sim, col=adjustcolor(qcol, alpha=qalpha))
+    
+    # wipe title and overwrite with objective value
+    obj.msg = paste('score =', round(obj.val, 3))
+    ovr.msg = paste(rep('\U2588', 25), collapse='')
+    title(ovr.msg, col.main='white', adj=0)
+    title(obj.msg, col.main=qcol, adj=0)
+    
+  }
+  
+  return(obj.val)
+  # TODO: allow different return value (residuals, fitted, etc)
+}
+
+#' returns an objective function whose argument is vector of parameter values, output is NSE
+my_objective = function(cal, gage, textio, quiet=TRUE)
+{
+  # ARGUMENTS:
+  # 
+  # `cal`: dataframe, the SWAT+ parameters to modify
+  # `gage`: dataframe, containing flow and date (see `my_gage_objective`)
+  # `textio`: character, path to the text I/O directory for the SWAT+ model 
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN VALUE:
+  #
+  # Returns a function `f(x)` that computes the NSE score for a given parameter set (specified
+  # in `cal`), supplied in vector `x`, where errors are computed over the time series of flow
+  # data in `gage`.
+  #
+  # DETAILS:
+  #
+  # `cal` should be the output of one or several (row-binded) `rswat_find(..., trim=T)` calls,
+  # having columns for 'name', 'i', 'j', etc. It specifies n parameters of interest, around
+  # which an n-to-1 objective function, suitable for numerical optimizers, is constructed and
+  # returned. When calling this function, the order of the paramaters in `x` must match the
+  # order in `cal` (there is no checking of names etc). 
+  #
+  # On multirow tables, `i=NA` in `cal` is taken to mean "write all rows of this parameter
+  # column". This is the default (trim=TRUE) return value for rswat_find when a match appears
+  # in a multirow table. To specify individual rows, either use rswat_find(..., trim=FALSE)
+  # or set `i` manually as needed.
+  #
+  
+  # scan for non-numerics
+  idx.nn = cal$class != 'numeric'
+  if( any(idx.nn) )
+  {
+    # print a warning
+    msg.info = paste(cal$name[idx.nn], collapse=', ')
+    warning(paste('removed non-numeric entries from cal:', msg.info))
+    
+    # remove the non-numeric entries
+    cal = cal[!idx.nn,]
+  }
+  
+  # length check
+  if( nrow(cal) == 0 ) stop('no numeric parameters found in cal')
+  
+  # fetch the file data - a copy of this (and `cal`) gets baked in to the function below
+  cal.fn = setNames(nm=unique(cal$file))
+  n.fn = length(cal.fn)
+  cal.values = lapply(cal.fn, rswat_open)
+  
+  # R makes a copy of the above objects as well as cal and gage upon defining the function
+  # below. This is everything we need for optimization baked in a tidy single-argument function
+  # TODO: optimize and check for issues related to function closure and lazy evaluation
+  
+  # begin definition of return function
+  function(x=NULL, refresh=FALSE, draw=FALSE)
+  {
+    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
+    # order as they appeared in `cal`, when this function was created (via a call to
+    # `my_objective`). To view this order, call the function without arguments.
+    
+    # TODO: write up arguments and return sections
+    
+    # refresh cal.values to get any modifications since the function was defined
+    if(refresh) cal.values = lapply(cal.fn, rswat_open)
+    
+    # if user supplied no parameter values, return the parameter info dataframe
+    if( is.null(x) )
+    {
+      # initialize a new column in cal for values and fill it by looping over filenames
+      cal = cal %>% select( -c(string, class, table) ) %>% mutate(value=NA)
+      for(fn in cal.fn)
+      {
+        # loop over cal entries for this file
+        fn.idx = which( cal$file == fn )
+        for(idx.par in 1:length(fn.idx))
+        {
+          # index in the cal.values table
+          i = cal$i[ fn.idx[idx.par] ]
+          j = cal$j[ fn.idx[idx.par] ]
+          
+          # extract the values, making list of unique ones in multivariate case
+          if( !is.na(i) ) par.value = unique(cal.values[[fn]][i,j])
+          if( is.na(i) ) par.value = unique(cal.values[[fn]][,j])
+          
+          # write the value if unique (non-uniqueness indicated by NA)
+          if( length(par.value) == 1 ) cal$value[ fn.idx[idx.par] ] = par.value
+        }
+      }
+      
+      # tidy and finish 
+      return( cal %>% select(value, name, file, dim, everything()) )
+    }
+    
+    # user supplied parameter values: loop over filenames to write them
+    for(fn in cal.fn)
+    {
+      # grab the subset of `cal` and replacement values in x
+      fn.idx = which( cal$file == fn )
+      fn.x = x[fn.idx]
+      
+      # loop over cal entries for this file
+      for(idx.par in 1:length(fn.idx))
+      {
+        # index in the cal.values table
+        i = cal$i[ fn.idx[idx.par] ]
+        j = cal$j[ fn.idx[idx.par] ]
+        
+        # make the replacement
+        if( !is.na(i) ) cal.values[[fn]][i,j] = fn.x[idx.par]
+        if( is.na(i) ) cal.values[[fn]][,j] = fn.x[idx.par]
+      }
+      
+      # finished with the table, write the changes
+      rswat_write(cal.values[[fn]], fname=fn, preview=FALSE, quiet=quiet)
+    }
+    
+    # TODO: memoize so we can skip this?
+    # run the simulation and return the objective function value
+    return(my_gage_objective(gage, textio, quiet=quiet, draw=draw))
+  }
+}
+
+# TODO: work on this
+#' set default bounds for a calibration parameter using data in cal_parms.cal
+my_bounds = function(param, fuzzy=TRUE)
+{
+  # initialize defaults and open cal_parms.cal
+  bds.out = c(-Inf, Inf)
+  bds.all = rswat_open('cal_parms.cal')
+  
+  # find exact matches
+  idx.exact = bds.all$name == param
+  if(any(idx.exact))
+  {
+    # finished
+    return(c(bds.all$abs_min[idx.exact], bds.all$abs_max[idx.exact]))
+    
+  } else {
+    
+    # TODO: vectorize (or at least put in a loop)
+    warn.msg = paste(param, 'had no exact matches in cal_parms.cal.')
+    
+    # handle fuzzy matching
+    if(fuzzy)
+    {
+      # try fuzzy matching at different levels (Levenshtein edits distances)
+      idx.f1 = agrep(param, bds.all$name, max.distance=1)[1]
+      idx.f2 = agrep(param, bds.all$name, max.distance=2)[1]
+      idx.f3 = agrep(param, bds.all$name, max.distance=3)[1]
+      
+      # fuzzy level 1
+      if( !is.na(idx.f1 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f1], '(distance=1)'))
+        bds.out = c(bds.all$abs_min[idx.f1], bds.all$abs_max[idx.f1])
+        return(bds.out)
+      }
+      
+      # fuzzy level 2
+      if( !is.na(idx.f2 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f2], '(distance=2)'))
+        bds.out = c(bds.all$abs_min[idx.f2], bds.all$abs_max[idx.f2])
+        return(bds.out)
+      }
+      
+      # fuzzy level 3
+      if( !is.na(idx.f3 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f3], '(distance=3)'))
+        bds.out = c(bds.all$abs_min[idx.f3], bds.all$abs_max[idx.f3])
+        return(bds.out)
+        
+      }
+    } else { warning(paste(warn.msg, 'Reverting to -Inf, Inf')) }
+    
+  }
+  
+  return(bds.out)
 }
 
 
