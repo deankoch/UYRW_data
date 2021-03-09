@@ -1038,16 +1038,16 @@ my_plants_plt = function(nvc.df)
   
   plt.list = list(
     
-    # generic for sparsely vegetated or barren land
-    data.frame(swatdesc='barren',
-               swatcode='barr',
-               kwdiv='barren|urban|mines'),
-    
-    # generic for sparsely vegetated land
+    # (default value) generic for sparsely vegetated land
     data.frame(swatdesc='barren_or_sparsley_vegetated',
                swatcode='bsvg',
-               kwgroup='scree|badland'),
+               kwdiv=''),
     
+    # water bodies
+    data.frame(swatdesc='testing', 
+               swatcode='watr',
+               kwdiv='open water'),
+
     # generic for cropland
     data.frame(swatdesc='agricultural_land_generic', 
                swatcode='agrl',
@@ -1178,7 +1178,7 @@ my_plants_plt = function(nvc.df)
 #' For example, to load the `plants.plt` in "swatplus_datasets.sqlite", do:
 # library(DBI) 
 # library(RSQLite)
-# swat.ds.conn = dbConnect(SQLite(), 'H:/UYRW_SWAT/SWATPlus/Databases/swatplus_datasets.sqlite')
+# swat.ds.conn = dbConnect(SQLite(), 'C:/SWAT/SWATPlus/Databases/swatplus_datasets.sqlite')
 # plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
 # dbDisconnect(swat.ds.conn)
 
