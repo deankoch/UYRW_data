@@ -73,7 +73,8 @@ meteo.eg = readRDS(here(meteo.meta['pnwnamet_uyrw', 'file']))
 date.start = range(meteo.eg$dates)[1]
 
 # build a sequence of end dates
-date.end.seq = date.start + ( 365 * c(1, 2, 4, 8, 16) ) 
+yr.seq = c(1, 2, 4, 8, 16)
+date.end.seq = date.start + ( 365 * yr.seq ) 
 
 # append storage for benchmark times
 execnames = c('texec1', 'texec2', 'texec4', 'texec8', 'texec16')
@@ -159,6 +160,34 @@ for(idx in 1:n.total)
   print(drop.df)
 }
 
+# save the results to disk
+write.csv(drop.df, file=file.path(bench.dir, paste0(eg.name, '.csv')))
+
+# reshape to include nyear column
+drop.list = as.list(drop.df[, ! names(drop.df) %in% execnames])
+drop.df.long = data.frame(lapply(drop.list, function(x) rep(x, length(execnames)))) %>%
+  mutate(texec = unlist(drop.df[, execnames])) %>%
+  mutate(n_year = rep(yr.seq, each=nrow(drop.df))) %>%
+  mutate(n_channel = as.factor(ncha)) %>%
+  mutate(n_subbasin = as.factor(nsub))
+
+# plot the results
+texec.mean = drop.df.long %>% group_by(n_channel, n_year) %>% 
+  summarize(texec=mean(texec), .groups='drop_last') %>%
+  mutate(n_subbasin=11)
+
+ggplot(drop.df.long, aes(n_year, texec, group=n_subbasin)) +
+  geom_point(aes(col=n_channel, size=n_subbasin), alpha=0.2) +
+  geom_line(aes(n_year, texec, group=n_channel, col=n_channel), data=texec.mean)
+
+ggplot(drop.df.long, aes(n_channel, texec, group=n_subbasin)) +
+  geom_point(aes(col=as.factor(n_year), size=n_subbasin), alpha=0.2) +
+  geom_line(aes(n_channel, texec, group=n_year, col=as.factor(n_year)), data=texec.mean)
+  
+12 * 60 * 60 / 1000
+
+
+50 * 1000 / ( 60 * 60 )
 
 
 
