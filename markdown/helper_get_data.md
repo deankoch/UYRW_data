@@ -1,7 +1,7 @@
 helper\_get\_data.R
 ================
 Dean Koch
-2021-03-05
+2021-03-10
 
 **Mitacs UYRW project**
 
@@ -1050,7 +1050,7 @@ and the latter can be found in the `plants_plt` table of the SWAT+
 ‘datasets’ SQLite file.
 
 ``` r
-my_plants_plt = function(nvc.df)
+my_plants_plt = function(nvc.df=NULL)
 {
   # ARGUMENTS:
   #
@@ -1059,7 +1059,8 @@ my_plants_plt = function(nvc.df)
   # RETURN VALUE:
   #
   # the `nvc.df` dataframe with two appended columns, `swatcode` and `swatdesc`, containing
-  # the matching SWAT+ plant code and its description 
+  # the matching SWAT+ plant code and its description. If `nvc.df` is not supplied, returns
+  # the lookup table (as dataframe)
   # 
   # DETAILS:
   #
@@ -1073,16 +1074,16 @@ my_plants_plt = function(nvc.df)
   
   plt.list = list(
     
-    # generic for sparsely vegetated or barren land
-    data.frame(swatdesc='barren',
-               swatcode='barr',
-               kwdiv='barren|urban|mines'),
-    
-    # generic for sparsely vegetated land
+    # (default value) generic for sparsely vegetated land
     data.frame(swatdesc='barren_or_sparsley_vegetated',
                swatcode='bsvg',
-               kwgroup='scree|badland'),
+               kwdiv=''),
     
+    # water bodies
+    data.frame(swatdesc='wetlands_non_forested', 
+               swatcode='wetn',
+               kwdiv='open water'),
+
     # generic for cropland
     data.frame(swatdesc='agricultural_land_generic', 
                swatcode='agrl',
@@ -1185,6 +1186,7 @@ my_plants_plt = function(nvc.df)
   
   # combine rows from all dataframes, filling missing kw fields with empty character ('') 
   plt = plt.list %>% bind_rows %>% mutate_all(~replace(., is.na(.), ''))
+  if( is.null(nvc.df) ) return(plt)
   
   # copy the input dataframe, appending two new (empty) columns
   nvc.out.df = nvc.df %>% mutate(swatcode=NA, swatdesc=NA)
@@ -1219,7 +1221,7 @@ SWAT+ SQLite databases For example, to load the `plants.plt` in
 ``` r
 # library(DBI) 
 # library(RSQLite)
-# swat.ds.conn = dbConnect(SQLite(), 'H:/UYRW_SWAT/SWATPlus/Databases/swatplus_datasets.sqlite')
+# swat.ds.conn = dbConnect(SQLite(), 'C:/SWAT/SWATPlus/Workflow/editor_api/swatplus_datasets.sqlite')
 # plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
 # dbDisconnect(swat.ds.conn)
 ```

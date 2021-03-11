@@ -1015,7 +1015,7 @@ my_usersoil = function(soils.tab, my.mukeys=NA)
 #' [here](http://usnvc.org/data-standard/natural-vegetation-classification), and the latter can
 #' be found in the `plants_plt` table of the SWAT+ 'datasets' SQLite file.
 #' 
-my_plants_plt = function(nvc.df)
+my_plants_plt = function(nvc.df=NULL)
 {
   # ARGUMENTS:
   #
@@ -1024,7 +1024,8 @@ my_plants_plt = function(nvc.df)
   # RETURN VALUE:
   #
   # the `nvc.df` dataframe with two appended columns, `swatcode` and `swatdesc`, containing
-  # the matching SWAT+ plant code and its description 
+  # the matching SWAT+ plant code and its description. If `nvc.df` is not supplied, returns
+  # the lookup table (as dataframe)
   # 
   # DETAILS:
   #
@@ -1044,8 +1045,8 @@ my_plants_plt = function(nvc.df)
                kwdiv=''),
     
     # water bodies
-    data.frame(swatdesc='testing', 
-               swatcode='watr',
+    data.frame(swatdesc='wetlands_non_forested', 
+               swatcode='wetn',
                kwdiv='open water'),
 
     # generic for cropland
@@ -1150,6 +1151,7 @@ my_plants_plt = function(nvc.df)
   
   # combine rows from all dataframes, filling missing kw fields with empty character ('') 
   plt = plt.list %>% bind_rows %>% mutate_all(~replace(., is.na(.), ''))
+  if( is.null(nvc.df) ) return(plt)
   
   # copy the input dataframe, appending two new (empty) columns
   nvc.out.df = nvc.df %>% mutate(swatcode=NA, swatdesc=NA)
@@ -1178,7 +1180,7 @@ my_plants_plt = function(nvc.df)
 #' For example, to load the `plants.plt` in "swatplus_datasets.sqlite", do:
 # library(DBI) 
 # library(RSQLite)
-# swat.ds.conn = dbConnect(SQLite(), 'C:/SWAT/SWATPlus/Databases/swatplus_datasets.sqlite')
+# swat.ds.conn = dbConnect(SQLite(), 'C:/SWAT/SWATPlus/Workflow/editor_api/swatplus_datasets.sqlite')
 # plants_plt = dbReadTable(swat.ds.conn, 'plants_plt')
 # dbDisconnect(swat.ds.conn)
 
