@@ -633,7 +633,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   
   # pull the project directory
   ciodir = dirname(.rswat$ciopath)
-  if(is.null(ciopath)) stop('ciopath not found. Have you run rswat_cio() yet?')
+  if(is.null(ciodir)) stop('ciopath not found. Have you run rswat_cio() yet?')
   
   # anything in SWAT+ project dir with .txt extension is checked
   txt.fname = grep('.txt', list.files(ciodir), value=TRUE)
@@ -2316,9 +2316,23 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   msg.sub = titles$sub
   msg.legend = titles$legend
   
-  # TODO: add lat/long coordinates to title
-  # set default main title, collapsing as needed
-  if( is.null(msg.main) ) msg.main = gsub('_', ' ', stats$name)
+  # set default main title
+  if( is.null(msg.main) )
+  {
+    # format in decimal degrees
+    coords = round(abs(colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])), 3)
+    msg.coords = paste( paste0( paste0(coords, '°'), c('N', 'W') ), collapse=' ')
+    
+    # DMS alternative
+    # coords = colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])
+    # NS.dms = gsub('d', '°', as.character(dd2dms(coords['Lat'], NS=TRUE)))
+    # EW.dms = gsub('d', '°', as.character(dd2dms(coords['Lon'], NS=FALSE)))
+    # msg.coords = paste0('(', NS.dms, ' ', EW.dms, ')')
+    
+    msg.main = paste0(gsub('_', ' ', stats$name), ' (', msg.coords, ')')
+  }
+  
+  # collapse vectors as needed
   if( length(msg.main) > 1 ) msg.main = paste(msg.main, collapse='\n')
   
   # generate default subtitle as needed
@@ -2364,7 +2378,7 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   }
   
   # default palette is like an improved rainbow()
-  if( is.null(pal) ) pal = hcl.colors(1e3, palette='Dark 3', rev=TRUE)
+  if( is.null(pal) ) pal = hcl.colors(1e3, palette='Dark 3')
   
   # set up legend breaks and labels as needed
   is.lookup = FALSE
@@ -2516,7 +2530,7 @@ rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
     # load print.prt if we don't have it already
     if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=quiet)
     
-    # grab the full list of valid objectect names
+    # grab the full list of valid object names
     object.all = print.prt[[5]]$objectects
     object.nm = names(object)
     
@@ -3074,6 +3088,21 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
                 data=lapply(wstn.ts.path, basename)))
   }
   
+}
+
+#'  compute Nash–Sutcliffe model efficiency coefficient (NSE) 
+my_nse = function(qobs, qsim, L=2, normalized=FALSE)
+{
+  # compute the standard NSE coefficient
+  nse = 1 - drop_units( sum( abs(qsim - qobs)^L ) / sum( abs(qobs - mean(qobs))^L ) )
+  
+  # normalize, if requested
+  if(normalized)
+  {
+    nse = 1 / (2 - nse)
+  }
+  
+  return(nse)
 }
 
 
