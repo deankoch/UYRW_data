@@ -1,7 +1,7 @@
 make\_subwatersheds.R
 ================
 Dean Koch
-2021-03-05
+2021-03-10
 
 **Mitacs UYRW project**
 
@@ -77,11 +77,12 @@ subwatersheds.meta = my_metadata('get_subwatersheds', files.towrite, overwrite=T
 print(subwatersheds.meta[, c('file', 'type')])
 ```
 
-    ##                                                  file          type
-    ## img_my_catchments          graphics/my_catchments.png   png graphic
-    ## taudem                      data/prepared/taudem_uyrw     directory
-    ## usgs_catchments     data/prepared/usgs_catchments.rds R list object
-    ## metadata          data/get_subwatersheds_metadata.csv           CSV
+    ##                                                    file          type
+    ## usgs_allcatchments data/prepared/usgs_allcatchments.rds R list object
+    ## img_my_catchments            graphics/my_catchments.png   png graphic
+    ## taudem                        data/prepared/taudem_uyrw     directory
+    ## usgs_catchments       data/prepared/usgs_catchments.rds R list object
+    ## metadata            data/get_subwatersheds_metadata.csv           CSV
 
 ``` r
 # load the DEM and basins info
@@ -186,6 +187,26 @@ if(!file.exists(usgs.catchments.path))
   usgs.catchments = readRDS(usgs.catchments.path)
   
 }
+```
+
+Repeat for all sites (\>0 records total)
+
+``` r
+# delineate subwatersheds based on these outlet locations, or load results list if this is already done
+usgs.allcatchments.path = here(subwatersheds.meta['usgs_allcatchments', 'file'])
+if(!file.exists(usgs.allcatchments.path))
+{
+  # run the catchments workflow (~1-5 mins, depending on thresholds)
+  usgs.allcatchments = my_find_catchments(usgs.pts, demnet, subb, areamin)
+  saveRDS(usgs.allcatchments, usgs.allcatchments.path)
+  
+} else {
+  
+  # load the list of file paths and descriptions
+  usgs.allcatchments = readRDS(usgs.catchments.path)
+  
+}
+
 
 # TODO: add a graphic to show the subwatershed delineation results
 ```

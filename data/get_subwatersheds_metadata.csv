@@ -1,4 +1,5 @@
 "","file","type","description"
+"usgs_allcatchments","data/prepared/usgs_allcatchments.rds","R list object","list of demnet outputs and derived catchment polygons upstream of USGS records"
 "img_my_catchments","graphics/my_catchments.png","png graphic","image of catchments based on long-term USGS gage locations"
 "taudem","data/prepared/taudem_uyrw","directory","raster and shapefiles from TauDEM, at max complexity (by drop analysis)"
 "usgs_catchments","data/prepared/usgs_catchments.rds","R list object","list of demnet outputs and derived catchment polygons upstream of USGS gages"

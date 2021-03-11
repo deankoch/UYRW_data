@@ -57,11 +57,17 @@ files.towrite = list(
     type='directory',
     description='raster and shapefiles from TauDEM, at max complexity (by drop analysis)'),
   
-  # list of catchment information for all USGS gage sites
+  # list of catchment information for USGS gage sites with long records (>1000 records)
   c(name='usgs_catchments',
     file=file.path(out.subdir, 'usgs_catchments.rds'), 
     type='R list object',
     description='list of demnet outputs and derived catchment polygons upstream of USGS gages'),
+  
+  # list of catchment information at all sites cooresponding to a USGS record
+  c(name='usgs_allcatchments',
+    file=file.path(out.subdir, 'usgs_allcatchments.rds'), 
+    type='R list object',
+    description='list of demnet outputs and derived catchment polygons upstream of USGS records'),
   
   # graphic showing GHCND site locations on the UYRW
   c(name='img_my_catchments',
@@ -161,8 +167,26 @@ if(!file.exists(usgs.catchments.path))
   
 }
 
-# TODO: add a graphic to show the subwatershed delineation results
+#' Repeat for all sites (>0 records total)
+#' 
 
+# delineate subwatersheds based on these outlet locations, or load results list if this is already done
+usgs.allcatchments.path = here(subwatersheds.meta['usgs_allcatchments', 'file'])
+if(!file.exists(usgs.allcatchments.path))
+{
+  # run the catchments workflow (~1-5 mins, depending on thresholds)
+  usgs.allcatchments = my_find_catchments(usgs.pts, demnet, subb, areamin)
+  saveRDS(usgs.allcatchments, usgs.allcatchments.path)
+  
+} else {
+  
+  # load the list of file paths and descriptions
+  usgs.allcatchments = readRDS(usgs.catchments.path)
+  
+}
+
+
+# TODO: add a graphic to show the subwatershed delineation results
 
 #+ eval=FALSE
 #my_markdown('make_subwatersheds', 'R/analysis')
