@@ -45,15 +45,24 @@ library(gdalUtilities)
 #' [`rvest`](https://cran.r-project.org/web/packages/rvest/rvest.pdf) web scraping
 library(rvest) 
 
-#' [`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle JSON I/O
-library(jsonlite)
-
 #' [`units`](https://cran.r-project.org/web/packages/units/index.html) handle units
 library(units)
 
 
 #'
 #' ## global variables
+#+ results='hide'
+
+# TODO: wrap these in a function or make their variable names more unique
+
+# 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
+graphics.dir = 'graphics'
+markdown.dir = 'markdown'
+data.dir = 'data'
+
+# subdirectories of `data` contain source files and their processed output 
+src.subdir = 'data/source'
+out.subdir = 'data/prepared'
 
 # missing data field (NA) is coded as "-99.0"
 tif.na.val = -99
@@ -73,15 +82,7 @@ tif.na.val = -99
 #' 
 #' We start by defining a project directory tree
 
-#+ results='hide'
-# 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
-graphics.dir = 'graphics'
-markdown.dir = 'markdown'
-data.dir = 'data'
 
-# subdirectories of `data` contain source files and their processed output 
-src.subdir = 'data/source'
-out.subdir = 'data/prepared'
 
 #' Define a helper function for creating folders then create project folders as needed
 my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE)} }

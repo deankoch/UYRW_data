@@ -1,7 +1,7 @@
 helper\_main.R
 ================
 Dean Koch
-2021-03-05
+2021-03-10
 
 **Mitacs UYRW project**
 
@@ -80,18 +80,29 @@ scraping
 library(rvest) 
 ```
 
-[`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle
-JSON I/O
-
-``` r
-library(jsonlite)
-```
-
 [`units`](https://cran.r-project.org/web/packages/units/index.html)
 handle units
 
 ``` r
 library(units)
+```
+
+## global variables
+
+``` r
+# TODO: wrap these in a function or make their variable names more unique
+
+# 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
+graphics.dir = 'graphics'
+markdown.dir = 'markdown'
+data.dir = 'data'
+
+# subdirectories of `data` contain source files and their processed output 
+src.subdir = 'data/source'
+out.subdir = 'data/prepared'
+
+# missing data field (NA) is coded as "-99.0"
+tif.na.val = -99
 ```
 
 ## project data
@@ -106,21 +117,8 @@ detected in the local data storage directory, then that code chunk can
 be skipped (to avoid redundant downloads, *etc*), and the files are
 loaded from disk instead.
 
-We start by defining a project directory tree
-
-``` r
-# 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
-graphics.dir = 'graphics'
-markdown.dir = 'markdown'
-data.dir = 'data'
-
-# subdirectories of `data` contain source files and their processed output 
-src.subdir = 'data/source'
-out.subdir = 'data/prepared'
-```
-
-Define a helper function for creating folders then create project
-folders as needed
+We start by defining a project directory tree Define a helper function
+for creating folders then create project folders as needed
 
 ``` r
 my_dir = function(path) { if(!dir.exists(path)) {dir.create(path, recursive=TRUE)} }
