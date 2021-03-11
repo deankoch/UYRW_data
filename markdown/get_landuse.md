@@ -1,7 +1,7 @@
 get\_landuse.R
 ================
 Dean Koch
-2021-03-05
+2021-03-10
 
 **Mitacs UYRW project**
 
@@ -46,6 +46,13 @@ library(raster)
 library(grid)
 library(colorspace)
 ```
+
+    ## 
+    ## Attaching package: 'colorspace'
+
+    ## The following object is masked from 'package:raster':
+    ## 
+    ##     RGB
 
 ## project data
 
@@ -214,11 +221,15 @@ swat.lookup.path = here(landuse.meta['swat_landuse_lookup', 'file'])
 swat.landuse.tif.path = here(landuse.meta['swat_landuse_tif', 'file'])
 if(any(!file.exists(c(swat.lookup.path, swat.landuse.tif.path))))
 {
+  
+  # DEBUGGING: Try adding lakes via WATR landuse tag
+  
   # copy relevant fields of land use table, omitting 'Open Water' which is dealt with separately by SWAT+
-  nvc.df = landuse.tab %>% filter(NVC_DIV != 'Open Water') %>% select(Value, NVC_DIV, NVC_MACRO, NVC_GROUP)
+  #nvc.df = landuse.tab %>% filter(NVC_DIV != 'Open Water') %>% select(Value, NVC_DIV, NVC_MACRO, NVC_GROUP)
   
   # append SWAT+ plant codes using a helper function
-  nvc.df = my_plants_plt(nvc.df)
+  #nvc.df = my_plants_plt(nvc.df)
+  nvc.df = my_plants_plt(landuse.tab)
   
   # build and write the output CSV for QSWAT+
   swatcodes.unique = unique(nvc.df$swatcode)
@@ -226,9 +237,10 @@ if(any(!file.exists(c(swat.lookup.path, swat.landuse.tif.path))))
   write.csv(swat.lookup, swat.lookup.path, row.names=FALSE)
   
   # build the reclassification matrix for the raster (mapping open water to NA)
-  waterval = landuse.tab$Value[landuse.tab$NVC_DIV=='Open Water']
+  #waterval = landuse.tab$Value[landuse.tab$NVC_DIV=='Open Water']
   idx.landuse = match(nvc.df$swatcode, swat.lookup$Landuse)
-  rcl = cbind(c(nvc.df$Value, waterval), c(idx.landuse, NA))
+  #rcl = cbind(c(nvc.df$Value, waterval), c(idx.landuse, NA))
+  rcl = cbind(nvc.df$Value, idx.landuse)
   
   # build the raster, crop and mask to UYRW, and write the output GeoTIFF
   swat.landuse.tif = reclassify(landuse.tif, rcl)
