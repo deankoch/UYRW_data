@@ -13,20 +13,6 @@
 
 
 #'
-#'  compute Nash–Sutcliffe model efficiency coefficient (NSE) 
-my_nse = function(qobs, qsim, L=2, normalized=FALSE)
-{
-  # compute the standard NSE coefficient
-  nse = 1 - drop_units( sum( abs(qsim - qobs)^L ) / sum( abs(qobs - mean(qobs))^L ) )
-  
-  # normalize, if requested
-  if(normalized)
-  {
-    nse = 1 / (2 - nse)
-  }
-  
-  return(nse)
-}
 
 #' identify contiguous time series within a longer record
 my_split_series = function(dates, template=NULL)
