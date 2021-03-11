@@ -54,11 +54,11 @@ drop.min = as.integer(gsub('stream threshold:', '', taudem.meta['nstream', 'desc
 
 # sequence up to 10X and 25X this minimum
 n.each = 5
-drop.channel.seq = round(seq(drop.min, 10*drop.min, length=n.each))
-drop.stream.seq = round(seq(drop.min, 25*drop.min, length=n.each))
+drop.channel.seq = c(round(drop.min/2), round(seq(drop.min, 10*drop.min, length=n.each)))
+drop.stream.seq = c(round(drop.min/2), round(seq(drop.min, 25*drop.min, length=n.each)))
 
 # subbasin threshold must be >= than channel threshold
-drop.stream.list = lapply(1:n.each, function(x) drop.stream.seq[drop.stream.seq > drop.channel.seq[x]])
+drop.stream.list = lapply(1:(n.each + 1), function(x) drop.stream.seq[drop.stream.seq > drop.channel.seq[x]])
 n.streamdrop = sapply(drop.stream.list, length)
 
 # store as data.frame 
@@ -67,6 +67,9 @@ drop.df = data.frame(sdrop = unlist(drop.stream.list),
                      cdrop = unlist(mapply(function(x, y) rep(x, length(y)), 
                                            x=drop.channel.seq, 
                                            y=drop.stream.list)))
+
+
+
 
 # for now we use the PNWNAmet analysis for weather - load this data and pull start date
 meteo.eg = readRDS(here(meteo.meta['pnwnamet_uyrw', 'file']))
@@ -89,7 +92,6 @@ drop.df = drop.df %>%
   mutate(texec4 = nsub) %>%
   mutate(texec8 = nsub) %>%
   mutate(texec16 = nsub)
-
 
 ## loop over thresholds
 
@@ -168,26 +170,67 @@ drop.list = as.list(drop.df[, ! names(drop.df) %in% execnames])
 drop.df.long = data.frame(lapply(drop.list, function(x) rep(x, length(execnames)))) %>%
   mutate(texec = unlist(drop.df[, execnames])) %>%
   mutate(n_year = rep(yr.seq, each=nrow(drop.df))) %>%
-  mutate(n_channel = as.factor(ncha)) %>%
+  mutate(n_channel = ncha) %>%
   mutate(n_subbasin = as.factor(nsub))
 
-# plot the results
+# compute means by subbasin
 texec.mean = drop.df.long %>% group_by(n_channel, n_year) %>% 
   summarize(texec=mean(texec), .groups='drop_last') %>%
   mutate(n_subbasin=11)
 
-ggplot(drop.df.long, aes(n_year, texec, group=n_subbasin)) +
-  geom_point(aes(col=n_channel, size=n_subbasin), alpha=0.2) +
-  geom_line(aes(n_year, texec, group=n_channel, col=n_channel), data=texec.mean)
-
-ggplot(drop.df.long, aes(n_channel, texec, group=n_subbasin)) +
-  geom_point(aes(col=as.factor(n_year), size=n_subbasin), alpha=0.2) +
-  geom_line(aes(n_channel, texec, group=n_year, col=as.factor(n_year)), data=texec.mean)
+# fit a linear model to the data by n_year
+x.pred = seq(25, 1000, length=100)
+lm.pred.list = vector(mode='list', length=length(yr.seq))
+for(idx in 1:length(yr.seq))
+{
+  # data.exp = setNames(drop.df %>% select(ncha, as.name(execnames[idx])), c('ncha', 'texec'))
+  # lm.loglog = lm(log(texec) ~ log(ncha), data=data.exp)
+  # lm.poly = lm( texec ~ ncha + I(ncha^lm.loglog$coefficients[2]), data=data.exp)
+  # texec.pred = predict(lm.poly, data.frame(ncha=x.pred))
+  # lm.pred.list[[idx]] = data.frame(ncha=x.pred, texec=texec.pred, n_subbasin=11, n_year=yr.seq[idx])
+  # 
   
-12 * 60 * 60 / 1000
+  data.yr = setNames(drop.df %>% select(ncha, as.name(execnames[idx])), c('ncha', 'texec'))
+  lm.yr = lm( texec ~ ncha, data=data.yr)
+  texec.pred = predict(lm.yr, data.frame(ncha=x.pred))
+  lm.pred.list[[idx]] = data.frame(ncha=x.pred, texec=texec.pred, n_subbasin=11, n_year=yr.seq[idx])
+}
 
+# plot the results
 
-50 * 1000 / ( 60 * 60 )
+ggp.yr = ggplot(drop.df.long, aes(n_year, texec/60, group=n_subbasin)) +
+  geom_point(aes(col=as.factor(n_channel), size=n_subbasin), alpha=0.2) +
+  geom_line(aes(n_year, texec/60, group=n_channel, col=as.factor(n_channel)), data=texec.mean) +
+  xlab('number of years simulated') +
+  ylab('simulation runtime (minutes)') +
+  ggtitle('execution time for SWAT+ simulations by years') +
+  guides(col=guide_legend(order=1)) +
+  labs(col = 'number of channels', size = 'number of subbasins') +
+  theme_minimal() +
+  theme(legend.position = c(1e-2, 1-1e-2),
+        legend.justification = c(0, 1),
+        legend.box = 'horizontal',
+        axis.line = element_line())
 
+ggsave(file.path(bench.dir, 'runtime_projection_byyear.png'), plot=ggp.yr)
 
+ggp.ncha = ggplot(drop.df.long, aes(n_channel, texec/60, group=n_subbasin)) +
+  geom_point(aes(col=as.factor(n_year), size=n_subbasin), alpha=0.2) +
+  geom_line(aes(ncha, texec/60, col=as.factor(n_year)), data=lm.pred.list[[1]]) + 
+  geom_line(aes(ncha, texec/60, col=as.factor(n_year)), data=lm.pred.list[[2]]) + 
+  geom_line(aes(ncha, texec/60, col=as.factor(n_year)), data=lm.pred.list[[3]]) + 
+  geom_line(aes(ncha, texec/60, col=as.factor(n_year)), data=lm.pred.list[[4]]) + 
+  geom_line(aes(ncha, texec/60, col=as.factor(n_year)), data=lm.pred.list[[5]]) + 
+  xlab('number of channels') +
+  ylab('simulation runtime (minutes)') +
+  ggtitle('execution time for SWAT+ simulations by number of channels') +
+  guides(col=guide_legend(order=1)) +
+  labs(col = 'years simulated', size = 'number of subbasins') +
+  theme_minimal() +
+  theme(legend.position = c(1e-2, 1-1e-2),
+        legend.justification = c(0, 1),
+        legend.box = 'horizontal',
+        axis.line = element_line())
+    
+ggsave(file.path(bench.dir, 'runtime_projection_bychannel.png'), plot=ggp.ncha)
 
