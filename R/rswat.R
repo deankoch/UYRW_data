@@ -48,8 +48,8 @@ library(jsonlite)
 #' their white-space delineated fields, then merging the results into tables wherever
 #' there is a consistent pattern of row-length and class (as detected by R's built-in
 #' `is.numeric` and some sensible rules for snapping and spacing. This will hopefully make
-#' it robust version-specific differences in SWAT+ parameter names and file structures (and
-#' future changes). 
+#' it robust to version-specific changes in SWAT+ parameter names and file structures
+#' (and whatever changes come with future releases). 
 
 #' (internal) environment to store the SWAT+ project file data
 .rswat = new.env(parent=emptyenv())
@@ -165,7 +165,8 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       mutate(file = string) %>%
       mutate(path = file.path(dirname(ciopath), file)) %>%
       mutate(exists = file.exists(path)) %>%
-      mutate(size = set_units(file.info(path)$size, bytes)) %>%
+      mutate(size = set_units(set_units(file.info(path)$size, bytes), kilobytes)) %>%
+      mutate(modified = file.info(path)$mtime) %>%
       mutate(ignored = FALSE )  %>%
       mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>% 
       as.data.frame() 
@@ -223,7 +224,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   # trim, if requested, and finish 
   if(trim) cio = cio %>% 
     filter(exists) %>% 
-    select(file, group, size, nline, nskip, ntab, nvar) %>%
+    select(file, group, size, modified, nline, nskip, ntab, nvar) %>%
     select_if(~!all(is.na(.)))
   
   # load files if requested then return up to date files list
@@ -249,7 +250,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # RETURN VALUE:
   #
   # With default `reload==FALSE`, the function returns a named list containing all the tabular
-  # data associated with `swatname`. Each list entry is named after a source file, and consists
+  # data associated with `fname`. Each list entry is named after a source file, and consists
   # of either a dataframe (if the file has a single table) or a list of dataframes (if the file
   # has multiple tables). Toggling `simplify==FALSE` will wrap the single-table case(s) in a
   # list, for consistency with the other cases.
@@ -261,7 +262,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # files into memory, overwriting anything already there. This is useful if you need to reload
   # project data after it's been modified on disk by external programs.
   
-  # parse the `swatname` argument, assigning all non-ignored files by default
+  # parse the `fname` argument, assigning all non-ignored files by default
   cio = rswat_cio(trim=FALSE) %>% filter(exists) 
   if(length(fname)==0) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
@@ -474,8 +475,9 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
 #' write a parameter value to its file
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
-  # In development. Currently only supports writing a single dataframe to (single file),
-  # but vectorization should be simple. I just need to decide the input syntax
+  # In development. Currently only supports writing a single dataframe to (single file).
+  #
+  # TODO: vectorization of list input (named according to file, or unnamed) 
   #
   # ARGUMENTS:
   #
@@ -488,9 +490,9 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   #
   # RETURN VALUE:
   #
-  # Returns nothing (but writes `value` to `fname` on disk) when `preview=FALSE`.
-  # Otherwise returns a dataframe with information on the (line-by-line) changes
-  # that would be made to the config file(s)
+  # Returns nothing but writes `value` to the file `fname` on disk when `preview=FALSE`.
+  # Otherwise returns a dataframe with information on the line-by-line changes that would be
+  # made to the config file(s) in non-preview mode.
   #
   
   # grab a list of all filenames and the input object names
@@ -628,6 +630,24 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
 #' load SWAT+ output files as dataframe
 rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
 {
+  # In development. Mostly tested on daily outputs
+  # TODO: tidy up and split dates handler into its own function
+  # TODO: handle vectorization for multiple files, with results returned as list
+  # TODO: set default fname by reading "files_out.out"
+  #
+  # ARGUMENTS:
+  #
+  # `fname`: (optional) character vector, SWAT+ output filename(s), with or without extension
+  # `vname`: (optional) character or integer vector, indexing the columns to read
+  # `add_units`: logical, whether to add units to the columns (where available) 
+  # `add_dates`: logical, whether to replace default time-index columns with a column of Dates
+  #
+  # RETURN VALUE:
+  #
+  # Returns a dataframe containing the requested variables, 'gis_id', and either 'jday', 'yr'
+  # (if `add_dates=FALSE`) or a column of Date objects ('date') generated from 'jday', 'yr'
+  #
+  
   # add .txt extension (if it has none)
   fname = ifelse(grepl('.txt', fname), fname, paste0(fname, '.txt'))
   
@@ -650,12 +670,12 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   if( grepl('warnings', fname) ) return(data.frame(msg=readLines(fpath)))
   
   # define the magic line numbers
-  ln.msg = 1
-  ln.head = 2
-  ln.unit = 3
-  ln.tab = 4
+  ln.msg = 1  # comment
+  ln.head = 2 # headers (variable names)
+  ln.unit = 3 # units (for a subset of headers)
+  ln.tab = 4 # first row of the tabular data
   
-  # run the first few lines into memory and parse them using the package worflow
+  # read the first few lines into memory and parse them using helper functions
   rswat_rlines(fpath, nmax=ln.tab)
   rswat_rtext(fname)
   linedf = .rswat$stor$temp[[fname]]$linedf
@@ -665,7 +685,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   .rswat$stor$temp[[fname]] = list()
   .rswat$stor$txt[[fname]] = list()
   
-  # check for structural problems with the tables
+  # counts to check for structural problems with the tables
   n.unit = sum(linedf$line_num == ln.unit)
   n.head = sum(linedf$line_num == ln.head)
   n.tab = sum(linedf$line_num == ln.tab)
@@ -843,6 +863,182 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   
   return(dat.out)
 }
+
+#' load or write a backup of all SWAT+ text config files (or a subset of them)
+rswat_backup = function(bpath=NULL, fname=NULL, reload=FALSE, overwrite=FALSE)
+{
+  # In development. 
+  #
+  # ARGUMENTS:
+  #
+  # `bpath`: (optional) character, the path to the directory to write the backup
+  # `fname`: (optional) character vector, name of config files to copy
+  # `reload`: logical, whether to load the backup instead of writing it
+  # `overwrite`: logical, whether to overwrite any existing files in `bpath`
+  # `allf`: logical, whether to copy the full contents of the text I/O directory
+  #
+  # RETURN VALUE:
+  #
+  # Returns nothing, with behaviour depending on argument `reload`:
+  #
+  # if `reload=FALSE`, copies the requested files to `bpath` folder
+  # if `reload=TRUE`, loads the requested files from `bpath` into memory
+  # 
+  # DETAILS:
+  #
+  # This function serves both for creating backups (`reload=FALSE`), and for loading
+  # SWAT+ files from text I/O directories external to the currently loaded one (ie.
+  # `ciopath`, as defined in the last call to `rswat_cio`). Note however that a backup
+  # can only be loaded when the current text I/O directory contains a like-named file
+  # (when this is not the case you can simply copy the file manually).
+  #
+  # Once loaded into memory, backup parameters can be accessed via `rswat_open(fname)`.
+  # To reset the parameters for a file, simply reload using `rswat_open(fname, reload=TRUE)`
+  #
+  # By default (`fname=NULL`) the function loads or copies all available config files.
+  # The special argument `fname='.'` in write-mode (`reload=FALSE`) also copies any
+  # non-config files found in the text I/O directory (such as weather input files), but
+  # not subdirectories.
+  #
+  # If `bpath` is not supplied, the function assigns the default `ciopath/rswat_backup`.
+  # If the `bpath` folder does not exist, it is created, unless we are in read-mode
+  # (ie `reload=TRUE`). `bpath` can be either an absolute path, or a string (containing
+  # no '/' or '\' characters, naming a subdirectory of the current text I/O directory)
+  #
+
+  # pull the current text I/O directory
+  cio = rswat_cio(trim=F)
+  textio = cio %>% pull(path) %>% dirname %>% unique
+  
+  # set default backup path as needed
+  if( is.null(bpath) ) bpath = file.path(textio, 'rswat_backup')
+  
+  # if `bpath` has slashes, treat as a path, otherwise treat as a subdirectory name
+  if( !grepl('\\\\|\\/', bpath) ) bpath = file.path(textio, bpath)
+ 
+  # default files list includes everything listed in 'file.cio'
+  if( is.null(fname) ) fname = c('file.cio', cio$file)
+  
+  # special argument '.' copies all files (eg. including weather data)
+  if( all(fname=='.') ) fname = list.files(textio, include.dirs=FALSE)
+  
+  # define proposed backup file paths
+  bfile.path = file.path(bpath, fname)
+  bfile.exists = file.exists(bfile.path)
+  
+  # define file paths of currently loaded environment
+  main.path = file.path(textio, fname)
+  main.exists = file.exists(main.path)
+  
+  # write-mode
+  if( !reload )
+  {
+    # check for and fix bad fname input
+    if( !all(main.exists) )
+    {
+      # warn of missing source files
+      msg1 = 'the following files were not found in current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname[!main.exists], collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.exists]
+      main.path = main.path[main.exists]
+      main.exists = main.exists[main.exists]
+      bfile.path = bfile.path[main.exists]
+      bfile.exists = bfile.exists[main.exists]
+    }
+    
+    # handle overwrites 
+    if( !overwrite & any(bfile.exists) )
+    {
+      # warn of existing backups
+      fname.existing = fname[bfile.exists]
+      msg1 = 'the following files already exist in backup directory'
+      msg2 = '(change `bpath` or set `overwrite=FALSE` to overwrite the old copies):\n'
+      warning(paste(msg1, bpath, msg2, paste(fname.existing, collapse=', ')))
+      
+      # update the source and destination file lists
+      fname = fname[!bfile.exists]
+      main.path = main.path[!bfile.exists]
+      main.exists = main.exists[!bfile.exists]
+      bfile.path = bfile.path[!bfile.exists]
+      bfile.exists = bfile.exists[!bfile.exists]
+    }
+    
+    # count number of files to be written
+    n.tocopy = length(fname)
+    
+    # error if we are left with nothing to write
+    if( n.tocopy == 0 ) stop('Nothing to write')
+    
+    # create the directory as needed
+    my_dir(bpath)
+    
+    # copy the files in a loop
+    pb = txtProgressBar(max=n.tocopy, style=3)
+    for(idx.file in 1:n.tocopy)
+    {
+      file.copy(main.path[idx.file], bfile.path[idx.file])
+      setTxtProgressBar(pb, idx.file)
+    }
+    close(pb)
+    return(invisible())
+  }
+  
+  # read-mode
+  if( reload )
+  {
+    # check for and fix bad fname input
+    if( !all(bfile.exists) )
+    {
+      # warn of missing backup files
+      msg1 = 'the following files were not found in backup directory'
+      warning(paste(msg1, bpath, ':\n', paste(fname[!main.exists], collapse=', ')))
+      
+      # update the source file lists
+      fname = fname[bfile.exists]
+      bfile.path = bfile.path[bfile.exists]
+      bfile.exists = bfile.exists[bfile.exists]
+    }
+    n.toload = length(bfile.path)
+    
+    # check the requested backups all match a currently loaded file
+    main.loaded = fname %in% cio$file
+    if( any( !main.loaded ) )
+    {
+      # warn of backups for files not found in current text I/O directory 
+      fname.notloaded = fname[!main.loaded]
+      msg1 = 'the following backup(s) matched no file in the current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname.notloaded, collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.loaded]
+      main.path = main.path[main.loaded]
+      main.exists = main.exists[main.loaded]
+      bfile.path = bfile.path[main.loaded]
+      bfile.exists = bfile.exists[main.loaded]
+    }
+    
+    # error if we are left with nothing to load
+    if( n.toload == 0 ) stop('Nothing to load')
+    
+    # temporarily modify master text I/O files list to point to the backup(s)
+    fpath.original = .rswat$cio$path
+    .rswat$cio$path[ match(fname, cio$file) ] = bfile.path
+    
+    # TODO: dimensional sanity check 
+    # load the files
+    rswat_open(fname, reload=TRUE)
+    
+    # restore the current text I/O paths in master list
+    .rswat$ciopath$path = fpath.original
+    return(invisible())
+  }
+  
+}
+
 
 
 #' ## internal functions for file I/O interface
@@ -1882,7 +2078,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
   if( is.null(projdir) ) 
   {
     # default name from USGS gage site name, default location from parent of dem raster file
-    projnm = paste0('swat_', boundary$catchment_name)
+    projnm = boundary$catchment_name
     projdir = here(file.path(dirname(dem.path), projnm))
   } 
   
@@ -2321,7 +2517,7 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   {
     # format in decimal degrees
     coords = round(abs(colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])), 3)
-    msg.coords = paste( paste0( paste0(coords, '°'), c('N', 'W') ), collapse=' ')
+    msg.coords = paste( paste0( paste0(coords, '\u00B0'), c('N', 'W') ), collapse=' ')
     
     # DMS alternative
     # coords = colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])
@@ -2340,7 +2536,7 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   {
     # computed from 'bou' (boundary geometry) and 'stats' in `dat`
     msg.sub = c(paste(round(set_units(stats$area, km^2), 1), 'square km'),
-                paste(stats$counts['nhru'], 'HRUs'),
+                paste(stats$counts['ncha'], 'channels'),
                 paste(stats$counts['nsub'], 'subbasins')) 
   }
 
@@ -2648,7 +2844,7 @@ my_gage_objective = function(gage, textio, oid=NULL, quiet=FALSE, draw=FALSE, ex
     title(obj.msg, col.main=qcol, adj=0)
     
   }
-  
+
   return(obj.val)
   # TODO: allow different return value (residuals, fitted, etc)
 }
