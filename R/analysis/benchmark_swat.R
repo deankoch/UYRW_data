@@ -95,75 +95,88 @@ drop.df = drop.df %>%
 
 ## loop over thresholds
 
-# make some dummy response data
-gage = data.frame(date=seq(date.start, date.end.seq[length(date.end.seq)], by='day'))
-gage$flow = set_units(rep(0, nrow(gage)), m^3/s)
-
-# loop over drop thresholds
-for(idx in 1:n.total)
+# do this only once then reload the results in future
+drop.csv = file.path(bench.dir, paste0(eg.name, '.csv'))
+if( !file.exists(drop.csv) )
 {
-  cat(paste('running job', idx, 'of', n.total))
+  # make some dummy response data
+  gage = data.frame(date=seq(date.start, date.end.seq[length(date.end.seq)], by='day'))
+  gage$flow = set_units(rep(0, nrow(gage)), m^3/s)
   
-  # set the drop thresholds
-  drop_stream = drop.df$sdrop[idx]
-  drop_channel = drop.df$cdrop[idx]
-  
-  # set the project name and directory
-  projnm = drop.df$name[idx]
-  projdir = file.path(bench.dir, projnm)
-  
-  # set QSWAT+ config parameters and build the model (timing it and writing result to df)
-  config = list(skip_editor=FALSE, drop_stream=drop_stream, drop_channel=drop_channel)
-  qswat = qswat_setup(eg.id, usgs.sw, projdir, wipe=TRUE, config=config, quiet=T)
-  drop.df$tbuild[idx] = system.time({ 
-    qswat_run(qswat, quiet=T) 
-    })['elapsed']
-  
-  # load in the data and make a plot  
-  qswat.dat = qswat_read(qswat)
-  titles = list(main = pts.noinlet$station_nm[pts.noinlet$catchment_id == eg.id])
-  tmap.out = qswat_plot(qswat.dat, titles=titles)
-  tmap_save(tm=tmap.out, 
-            filename = file.path(projdir, paste0(projnm, '.png')), 
-            width = 3000, 
-            pointsize = 12)
-  
-  # copy the watershed element counts to storage
-  drop.df[idx, c('nsub', 'ncha', 'nhru')] = qswat.dat$sta$counts
-  
-  # load the config files
-  textio = qswat.dat$sta$paths['txtio']
-  cio.path = file.path(textio, 'file.cio')
-  cio = rswat_cio(cio.path, ignore='decision_table', reload=TRUE)
-   
-  # turn off burn-in period to avoid truncated output and missing weather issues
-  print.prt = rswat_open('print.prt', quiet=T)
-  print.prt[[1]]$nyskip = 0
-  rswat_write(print.prt[[1]], preview=F, quiet=T)
-  
-  # loop over time periods, running the model and timing its execution
-  pb = txtProgressBar(max=length(date.end.seq), style=3)
-  for(idx.len in 1:length(date.end.seq))
+  # loop over drop thresholds
+  for(idx in 1:n.total)
   {
-    setTxtProgressBar(pb, idx.len)
+    cat(paste('running job', idx, 'of', n.total))
     
-    # filter dummy gage data to time period of interest 
-    execnm = execnames[idx.len]
-    date.end = date.end.seq[idx.len]
-    gage.temp = gage %>% filter(date < date.end)
+    # set the drop thresholds
+    drop_stream = drop.df$sdrop[idx]
+    drop_channel = drop.df$cdrop[idx]
     
-    # run and time execution of simulation
-    drop.df[idx, execnm] = system.time({ 
-      my_gage_objective(gage.temp, qswat.dat$sta$paths['txtio'], 1, quiet=T)
+    # set the project name and directory
+    projnm = drop.df$name[idx]
+    projdir = file.path(bench.dir, projnm)
+    
+    # set QSWAT+ config parameters and build the model (timing it and writing result to df)
+    config = list(skip_editor=FALSE, drop_stream=drop_stream, drop_channel=drop_channel)
+    qswat = qswat_setup(eg.id, usgs.sw, projdir, wipe=TRUE, config=config, quiet=T)
+    drop.df$tbuild[idx] = system.time({ 
+      qswat_run(qswat, quiet=T) 
     })['elapsed']
+    
+    # load in the data and make a plot  
+    qswat.dat = qswat_read(qswat)
+    titles = list(main = pts.noinlet$station_nm[pts.noinlet$catchment_id == eg.id])
+    tmap.out = qswat_plot(qswat.dat, titles=titles)
+    tmap_save(tm=tmap.out, 
+              filename = file.path(projdir, paste0(projnm, '.png')), 
+              width = 3000, 
+              pointsize = 12)
+    
+    # copy the watershed element counts to storage
+    drop.df[idx, c('nsub', 'ncha', 'nhru')] = qswat.dat$sta$counts
+    
+    # load the config files
+    textio = qswat.dat$sta$paths['txtio']
+    cio.path = file.path(textio, 'file.cio')
+    cio = rswat_cio(cio.path, ignore='decision_table', reload=TRUE)
+    
+    # turn off burn-in period to avoid truncated output and missing weather issues
+    print.prt = rswat_open('print.prt', quiet=T)
+    print.prt[[1]]$nyskip = 0
+    rswat_write(print.prt[[1]], preview=F, quiet=T)
+    
+    # loop over time periods, running the model and timing its execution
+    pb = txtProgressBar(max=length(date.end.seq), style=3)
+    for(idx.len in 1:length(date.end.seq))
+    {
+      setTxtProgressBar(pb, idx.len)
+      
+      # filter dummy gage data to time period of interest 
+      execnm = execnames[idx.len]
+      date.end = date.end.seq[idx.len]
+      gage.temp = gage %>% filter(date < date.end)
+      
+      # run and time execution of simulation
+      drop.df[idx, execnm] = system.time({ 
+        my_gage_objective(gage.temp, qswat.dat$sta$paths['txtio'], 1, quiet=T)
+      })['elapsed']
+    }
+    close(pb)
+    
+    print(drop.df)
   }
-  close(pb)
   
-  print(drop.df)
+  # save the results to disk
+  write.csv(drop.df, file=drop.csv)
+  
+} else {
+  
+  # load from disk
+  drop.df = read.csv(drop.csv)
+  
 }
 
-# save the results to disk
-write.csv(drop.df, file=file.path(bench.dir, paste0(eg.name, '.csv')))
+## make some plots
 
 # reshape to include nyear column
 drop.list = as.list(drop.df[, ! names(drop.df) %in% execnames])
