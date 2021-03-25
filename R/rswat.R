@@ -26,8 +26,6 @@ library(dplyr)
 # `data.table` faster table loading
 library(data.table)
 
-#' [`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle JSON I/O
-library(jsonlite)
 
 #' ## initialization:
 #' We may later add a start-up script to scan for likely paths to the SWAT+ executable,
