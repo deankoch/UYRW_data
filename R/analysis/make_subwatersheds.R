@@ -281,7 +281,7 @@ if(!file.exists(img.all.path))
 }
 
 #' Now make a version of only the multi-year records, and headwaters catchments shaded
-#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments_all.png)
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments_full.png)
 
 if(!file.exists(img.longterm.path))
 {
