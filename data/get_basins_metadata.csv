@@ -1,4 +1,6 @@
 "","file","type","description"
+"ynp_boundary","data/prepared/ynp_boundary.rds","R sf object","reprojected administrative boundary for Yellostone National Park"
+"nps_boundary","data/source/nps_boundary","directory","contains national parks administrative boundaries shapefiles"
 "poi","data/uyrw_poi.rds","R list object","points of interest in the watershed"
 "nhd","data/source/uyrw_nhd.gpkg","geopackage","source geometries from NHDPlus"
 "crs","data/uyrw_crs.rds","R list object","details of projection/extent for the project"

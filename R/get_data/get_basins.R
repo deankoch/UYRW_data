@@ -26,6 +26,8 @@
 # we may want to also fetch the current watershed boundary (HUC) map, either from: 
 # https://developers.google.com/earth-engine/datasets/catalog/USGS_WBD_2017_HUC10
 # or http://prd-tnm.s3-website-us-west-2.amazonaws.com/?prefix=StagedProducts/Hydrography/WBD/National/GDB/
+#
+
 
 #'
 #' ## libraries
@@ -122,6 +124,18 @@ files.towrite = list(
      file=file.path(out.subdir, 'millcreek_nhd.rds'), 
      type='R list object', 
      description='flowlines, catchments, and boundary polygon for mill creek'),
+   
+   # national park boundaries
+   c(name='nps_boundary',
+     file=file.path(src.subdir, 'nps_boundary'), 
+     type='directory', 
+     description='contains national parks administrative boundaries shapefiles'),
+  
+   # yellowstone park boundary
+   c(name='ynp_boundary',
+     file=file.path(out.subdir, 'ynp_boundary.rds'), 
+     type='R sf object', 
+     description='reprojected administrative boundary for Yellostone National Park'),
    
    # aesthetic parameters for plotting
    c(name='pars_tmap',
@@ -348,7 +362,49 @@ if(!file.exists(here(basins.meta['millcreek', 'file'])))
 }
 
 
+#'
+#' ## national parks boundaries
+#' It will be helpful to have a Yellowstone Park boundary for plotting. This is available at the
+#' [NPS Data Store](https://irma.nps.gov/DataStore/Reference/Profile/2224545?lnv=True). We access this
+#' from within R using the helper function (`my_get_irma`), which handles API requests to irmaservices.nps.gov 
+#' 
 
+# define the folder to store the downloaded files and the projected Yellowstone boundary file
+
+dest.nps = here(basins.meta['nps_boundary', 'file'])
+dest.ynp = here(basins.meta['ynp_boundary', 'file'])
+
+# download as required
+if( !dir.exists(dest.nps) )
+{
+  # search for park boundaries shapefiles
+  irma.search = my_get_irma('national park administrative boundaries') 
+  
+  # narrow down to the correct entry and download/extract
+  nps.title = 'Administrative Boundaries of National Park System Units 12/31/2020'
+  irma.bound = irma.search %>% filter( grepl(nps.title, title) ) 
+  irma.result = my_get_irma(irma.bound, dest=dirname(dest.nps))
+  
+  # delete the zip archive (leaving the extracted files)
+  unlink(irma.result$path)
+}
+
+# transform as required
+if( !file.exists(dest.ynp) )
+{
+  # load the boundaries and extract YNP in correct projection
+  ynp.sf = st_read(dest.nps) %>% 
+    filter(grepl('Yellowstone', UNIT_NAME)) %>%
+    st_transform(crs=crs.list$epsg)
+  
+  # save to disk
+  saveRDS(ynp.sf, dest.ynp)
+  
+} else {
+  
+  # reload from disk
+  ynp.sf = readRDS(dest.ynp)
+}
 
 #'
 #' ## visualization
@@ -393,8 +449,18 @@ if(!file.exists(here(basins.meta['pars_tmap', 'file'])))
 #' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/uyrw_flowlines.png)
 if(!file.exists(here(basins.meta['img_flowline', 'file'])))
 {
+  # make a dummy polygon enclosing both the park and watershed boundaries
+  outer.sf = st_union(st_geometry(ynp.sf), st_geometry(uyrw.poly))
+
+  # pick an anchor point for the YNP text label near intersection with Idaho state line
+  line.idaho = my_maps('state', st_crs(ynp.sf)) %>% filter(name == 'idaho') %>% st_geometry %>% st_cast('LINESTRING')
+  line.ynp = ynp.sf %>% st_geometry %>% st_cast('POLYGON') %>% st_cast('LINESTRING')
+  ynp.pt = st_cast(st_intersection(line.ynp, line.idaho), 'POINT')
+  ynp.pt = st_sf(data.frame(name='Yellowstone Park boundary'), geometry=ynp.pt[2,]) 
+  
   # make the plot grob
   tmap.watercourses = 
+    tm_shape(outer.sf) + tm_borders(alpha=0) +
     tm_shape(uyrw.poly) + 
       tm_polygons(col='greenyellow', border.col='yellowgreen') +
     tm_shape(uyrw.flowline) +
@@ -410,8 +476,12 @@ if(!file.exists(here(basins.meta['img_flowline', 'file'])))
     tm_text('request', size=tmap.pars$label.txt.size, ymod=0.5) +
       tm_shape(st_sf(st_centroid(millcreek.list$boundary), data.frame(request='Mill Creek pilot study'))) +   
       tm_text('request', size=tmap.pars$label.txt.size, xmod=5) +
+    tm_shape(ynp.sf) + 
+      tm_borders(col='purple') +
+    tm_shape(ynp.pt) + 
+      tm_text('name', col='purple', size=0.6, just='left', ymod=0.5) +
     tmap.pars$layout +
-    tm_layout(main.title='major watercourses in the UYRW') 
+      tm_layout(main.title='major watercourses in the UYRW') 
   
   # render the plot
   tmap_save(tm=tmap.watercourses, 
