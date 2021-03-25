@@ -11,7 +11,7 @@
 #' 
 #' This script runs the TauDEM workflow on the DEM for the UYRW to determine the channel network and
 #' drainage layout for the entire watershed. It then partitions this area into subwatersheds based
-#' on the locations of long-term (1e3+ daily records) USGS streamflow gages, and a minimum area threshold.
+#' on the locations of long-term (2+yr daily records) USGS streamflow gages, and a minimum area threshold.
 #' 
 #' Our algorithm delineates subwatersheds along catchment boundaries such that each one has gets an outlet
 #' at the site of a unique long-term USGS gage record. In some cases a subwatershed located at the headwaters
@@ -37,11 +37,14 @@ library(here)
 source(here('R/helper_main.R'))
 source(here('R/analysis/helper_analysis.R'))
 
-#' load the rswat
+# the rswat library reads/writes SWAT+ files and builds/runs the model
 source(here('R/rswat.R'))
 
+# source of the stateline polygons for the plots
+library(maps)
+
 # set the minimum number of daily gage records for each subwatershed outlet
-obsmin = 3*365
+obsmin = 2*365
 
 # set the minimum subwatershed area in km^2
 areamin = 5
@@ -69,11 +72,17 @@ files.towrite = list(
     type='R list object',
     description='list of demnet outputs and derived catchment polygons upstream of USGS records'),
   
-  # graphic showing GHCND site locations on the UYRW
+  # graphic showing GHCND site locations and their catchments on the UYRW
   c(name='img_my_catchments',
     file=file.path(graphics.dir, 'my_catchments.png'),
     type='png graphic', 
-    description='image of catchments based on long-term USGS gage locations')
+    description='image of catchments based on long-term USGS gage locations'),
+  
+  # graphic showing GHCND site locations and their catchments on the UYRW
+  c(name='img_my_catchments_full',
+    file=file.path(graphics.dir, 'my_catchments_full.png'),
+    type='png graphic', 
+    description='image of catchments based on all USGS gage locations (includes singletons)')
   
 )
 
@@ -91,8 +100,8 @@ streamgages.meta = my_metadata('get_streamgages')
 
 # load some watershed geometry data
 uyrw.dem = raster(here(dem.meta['dem', 'file']))
-uyrw.poly = readRDS(here(basins.meta['boundary', 'file']))
 uyrw.flowline = readRDS(here(basins.meta['flowline', 'file']))
+uyrw.waterbody = readRDS(here(basins.meta['waterbody', 'file']))
 crs.list = readRDS(here(basins.meta['crs', 'file']))
 
 # load the point representing the main outlet of the UYRW (Carter's Bridge)
@@ -145,8 +154,8 @@ usgs.dat = readRDS(here(streamgages.meta['USGS_data', 'file']))$dat
 # these are arranged in a list, where each entry corresponds to a distinct site (n=105)
 usgs.pts = do.call(rbind, lapply(usgs.dat, function(site) site$sf[1,]))
 
-# TODO: do this character > integer change in get_streamgages.R
-usgs.pts$count_nu = as.integer(usgs.pts$count_nu)
+# TODO: these totals weren't correct (counting only first dataframe?) - go back and fix the bug in get_streamgages.R
+usgs.pts$count_nu = sapply(usgs.dat, function(x) sum(sapply(x$dat, nrow)))
 
 # the number of observations varies a lot - pick out the sites with > 1000 records
 usgs.nobs = sapply(usgs.dat, function(site) sum(sapply(site$dat, function(record) nrow(record))))
@@ -181,12 +190,140 @@ if(!file.exists(usgs.allcatchments.path))
 } else {
   
   # load the list of file paths and descriptions
-  usgs.allcatchments = readRDS(usgs.catchments.path)
+  usgs.allcatchments = readRDS(usgs.allcatchments.path)
   
 }
 
 
-# TODO: add a graphic to show the subwatershed delineation results
+#' ## plotting
+#' Add a graphic to show the subwatershed delineation results
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments.png)
+#' 
+
+# output paths defined above
+img.longterm.path = here(subwatersheds.meta['img_my_catchments', 'file'])
+img.all.path = here(subwatersheds.meta['img_my_catchments_full', 'file'])
+
+if(!file.exists(img.all.path))
+{
+  # get parks boundaries polygons
+  uyrw.nps = readRDS(here(basins.meta['ynp_boundary', 'file']))
+  
+  # get polygons for state lines from `maps` package
+  states.sf = my_maps('state', outcrs=st_crs(bou)) %>% 
+    filter(name %in% c('montana', 'wyoming', 'idaho'))
+  
+  # make a text label for the park boundary
+  line.idaho = states.sf %>% filter(name == 'idaho') %>% st_geometry %>% st_cast('LINESTRING')
+  line.nps = uyrw.nps %>% st_geometry %>% st_cast('POLYGON') %>% st_cast('LINESTRING')
+  pt.parkbou = st_cast(st_intersection(line.nps, line.idaho), 'POINT')
+  pt.parkbou = st_sf(data.frame(name='Yellowstone Park boundary'), geometry=pt.parkbou[2]) 
+  
+  # create boundary polygon and grab outlets points
+  bou = st_union(st_geometry(usgs.allcatchments$boundary))
+  pts = usgs.allcatchments$pts
+  
+  # print some counts of the outlets points
+  idx.pts.multiyear = pts$count_nu > 2 * 365
+  
+  # make labels for point legend
+  msg.usgs = paste(nrow(usgs.allcatchments$pts), 'streamflow record sites')
+  msg.multi = paste(sum(idx.pts.multiyear), 'sites have 2+ year records')
+  
+  # make a copy of the catchments with multiyear records
+  mainout.idx = usgs.catchments$boundary$catchment_name == 'main_nr_livingston'
+  bou.cat = usgs.catchments$boundary
+  
+  # define breaks for the scale bar
+  km.breaks = c(0, pretty(1e-3 * diff(st_bbox(bou)[c('xmin', 'xmax')]) / 4, 2))
+  
+  # define layout options for the plot
+  layout = tm_layout(main.title = 'USGS daily streamflow record sites in the UYRW and their catchments',
+                     main.title.fontface ='bold',
+                     main.title.size = 1,
+                     main.title.position = 'center',
+                     legend.outside = TRUE,
+                     legend.outside.position = c('right', 'top'),
+                     legend.outside.size = 0.3,
+                     legend.text.size = 0.8,
+                     inner.margins = rep(1e-2, 4),
+                     frame = FALSE)
+  
+  # initialize tmap object with elevation raster
+  tmap.dem = tm_shape(bou) + 
+    tm_polygons(alpha=0, col='black') + 
+    tm_add_legend('symbol', 
+                  labels=c(msg.usgs, msg.multi), 
+                  col=c('black', 'red'), 
+                  title='USGS sites') +
+    tm_shape(uyrw.dem) +
+    tm_raster(legend.reverse=TRUE, 
+              palette=hcl.colors(1e3, 'Dark 3'), 
+              style='cont', 
+              title='elevation (m)')
+  
+  # add shapes and annotations
+  tmap.out = tmap.dem +
+    tm_shape(states.sf) + tm_borders(alpha=0.5, lty='dotted') +
+    tm_shape(usgs.allcatchments$boundary) + tm_borders(alpha=0.8, col='black') +
+    tm_shape(uyrw.nps) + tm_borders(col='white', lty='dashed') +
+    tm_shape(pt.parkbou) + tm_text('name', col='white', size=0.6, just='left', ymod=0.5) +
+    tm_shape(uyrw.flowline) + tm_lines(alpha=0.2, col='white', lwd=1) +
+    tm_shape(uyrw.waterbody) + tm_polygons(col='blue', border.col=NULL) +
+    tm_shape(pts) + tm_dots(alpha=0.7, size=0.2) + 
+    tm_shape(pts[idx.pts.multiyear,]) + tm_dots(col='red', size=0.05) +
+    tm_scale_bar(breaks=km.breaks, position=c('left', 'bottom'), text.size=0.8) + 
+    tm_grid(n.x=2, n.y=2, projection=crs.list$epsg.geo, alpha=0.5) +
+    layout
+  
+  # save a copy to disk
+  tmap_save(tm=tmap.out, filename=img.all.path, height=3000, width=3000, pointsize=14)
+}
+
+#' Now make a version of only the multi-year records, and headwaters catchments shaded
+#' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments_all.png)
+
+if(!file.exists(img.longterm.path))
+{
+  # grab the (smaller subset of) outlets and identify subwatersheds without inlets
+  pts2 = usgs.catchments$pts
+  idx.hw = usgs.catchments$boundary$n_inlet == 0
+  
+  # modify the legend to include only the red points
+  tmap.dem2 = tm_shape(bou) + 
+    tm_polygons(alpha=0, col='black') + 
+    tm_add_legend('symbol', 
+                  labels=c(msg.usgs, msg.multi), 
+                  col=c('black', 'red'), 
+                  title='USGS sites') +
+    tm_add_legend('title', title='(catchments without upstream gages shaded)') +
+    tm_shape(uyrw.dem) +
+    tm_raster(legend.reverse=TRUE, 
+              palette=hcl.colors(1e3, 'Dark 3'), 
+              style='cont', 
+              title='elevation (m)')
+  
+  # add shapes and annotations
+  tmap.out2 = tmap.dem2 +
+    tm_shape(states.sf) + tm_borders(alpha=0.5, lty='dotted') +
+    tm_shape(usgs.catchments$boundary) + tm_borders(alpha=0.8, col='black') +
+    tm_shape(uyrw.nps) + tm_borders(col='white', lty='dashed') +
+    tm_shape(pt.parkbou) + tm_text('name', col='white', size=0.6, just='left', ymod=0.5) +
+    tm_shape(usgs.catchments$boundary[idx.hw,]) + tm_polygons(alpha=0.2, col='black', border.col=NULL) +
+    tm_shape(uyrw.flowline) + tm_lines(alpha=0.2, col='white', lwd=1) +
+    tm_shape(uyrw.waterbody) + tm_polygons(col='blue', border.col=NULL) +
+    tm_shape(pts) + tm_dots(alpha=0.7, size=0.2) + 
+    tm_shape(pts2) + tm_dots(col='red', size=0.05) +
+    tm_scale_bar(breaks=km.breaks, position=c('left', 'bottom'), text.size=0.8) + 
+    tm_grid(n.x=2, n.y=2, projection=crs.list$epsg.geo, alpha=0.5) +
+    layout + 
+    tm_layout(main.title = 'headwaters catchments with long-term USGS streamflow records')
+  
+  # save a copy to disk
+  tmap_save(tm=tmap.out2, filename=img.longterm.path, height=3000, width=3000, pointsize=14)
+
+}
+
 
 #+ eval=FALSE
 #my_markdown('make_subwatersheds', 'R/analysis')
