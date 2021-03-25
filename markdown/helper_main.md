@@ -1,7 +1,7 @@
 helper\_main.R
 ================
 Dean Koch
-2021-03-10
+2021-03-25
 
 **Mitacs UYRW project**
 
@@ -81,10 +81,17 @@ library(rvest)
 ```
 
 [`units`](https://cran.r-project.org/web/packages/units/index.html)
-handle units
+units for numerics
 
 ``` r
 library(units)
+```
+
+[`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle
+JSON I/O
+
+``` r
+library(jsonlite)
 ```
 
 ## global variables
@@ -306,5 +313,77 @@ my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
   # note: run_pandoc=FALSE appears to cause output_dir to be ignored. So this call also generates an html file
   paste('rendering markdown file', path.output, 'from the R script', path.input)
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+}
+```
+
+R has a built-in library of `map` objects, the geographical coordinates
+of adminstrative boundaries and point locations (eg states, countries,
+cities) in list form. Since we are working with the `sf` package in a
+projected coordinate system it’s handy to have a helper function to wrap
+`maps::map` calls
+
+``` r
+my_maps = function(db, outcrs=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `db`, character, name of geographical database (see `help(package='maps')`)
+  # `outcrs`, integer or character, passed to `st_transform`
+  #
+  # RETURN VALUE:
+  #
+  # sf object containing all polygons from the maps database
+  #
+  # DETAILS: 
+  #
+  # Output sf will have columns 'name' (the polygon name, usually a placename or qualifier)
+  # and 'mapsdb' (the name of the maps database it came from).
+  #
+  # If `db` matches none of the exported databases from `maps`, the function loads the
+  # `world` database and does a case insensitive search among its 1000+ names. If this
+  # matches nothing, the function returns an empty  
+  # 
+  
+  # default is unprojected lat/long
+  crs.geo = 4326
+  if( is.null(outcrs)) outcrs = crs.geo
+  
+  # hack to check if supplied database is a valid name 
+  maps.nmspc = get('.__NAMESPACE__.', inherits=FALSE, envir=asNamespace('maps', base.OK=FALSE))
+  db.found = paste0(db, 'MapEnv') %in% names(maps.nmspc$lazydata)
+  
+  # fetch the data if `db` is lazyloaded from maps
+  if(db.found)
+  {
+    # open the database and extract polygon names and coordinates
+    maps.out = maps::map(db, plot=F, fill=T)
+    db.nm = maps.out$names
+    db.xy = do.call(cbind, maps.out[c('x', 'y')])
+    
+    # distinct polygons are separated by NAs in the coords vectors
+    x.isdelim = is.na(db.xy[,1])
+    
+    # make an indexing vector to split over NA delimiters (omitting them)
+    idx.out = split( seq_along(db.xy[,1])[ !x.isdelim ], cumsum( x.isdelim )[ !x.isdelim ] )
+    db.list = lapply(setNames(idx.out, db.nm), function(x) db.xy[x,])
+    
+    # convert this list to a single sf object
+    db.sfc = lapply(db.list, function(x) st_sfc(st_polygon(list(x)), crs=crs.geo))
+    db.sf = st_sf(data.frame(nm=names(db.sfc), db=db), do.call(c, db.sfc))
+
+    # clean up column names, transform to `outcrs` projection, and finish
+    names(db.sf) = c('name', 'mapsdb', 'geometry')
+    return( st_transform( st_set_geometry(db.sf, 'geometry'), crs=outcrs ) )
+    
+  } else {
+    
+    # otherwise grep for the supplied string in `world` database
+    world.result = my_maps('world')
+    idx.world = grepl(db, world.result$name, ignore.case=TRUE)
+    
+    # return any matches, and print a warning if there were none
+    if(sum(idx.world) == 0) warning('no matches for supplied `db`')
+    return( world.result[idx.world,] )
+  }
 }
 ```
