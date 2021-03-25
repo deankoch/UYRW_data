@@ -742,8 +742,7 @@ my_nwcc_import = function(files, varname=NULL)
   
 }
 
-
-#' Some functions for dealing with SNODAS grids
+# TODO: work on fetching SNODAS grids
 my_get_snodas = function()
 {
   
@@ -753,7 +752,170 @@ my_get_snodas = function()
   
 }
 
+#' search and download/extract files from the US NPS Data Store (irmaservices.nps.gov)
+my_get_irma = function(query='boundaries', resoid=NULL, dest=NULL, nmax=1000, ow=FALSE, uz=TRUE)
+{
+  # A (somewhat limited) R implementation of the NPS REST API, documented here:
+  # https://irmaservices.nps.gov/datastore/v4/documentation/datastore-api.html#/
+  #
+  # Browse the data store 
+  #
+  # ARGUMENTS:
+  #
+  # `query`: character or integer vector, reference search query string(s) or id(s)
+  # `resoid`: (optional) integer vector, resource ID numbers 
+  # `dest`: character, path to destination folder for downloaded file(s)
+  # `nmax`: integer, the maximum number of results to return
+  # `ow`: logical, whether to overwrite existing files on disk
+  # `uz`: logical, whether to extract files from zip archives into a subfolder of `dest`
+  #
+  # RETURN VALUE:
+  #
+  # When `query` is a character (vector) its contents are treated as search strings
+  # and the function returns a dataframe of matches in the NPS digital reference database,
+  # including reference ID codes (but downloads nothing).
+  #
+  # When `query` is a an integer (vector) its contents are treated as reference ID codes,
+  # and the function returns a dataframe of file metadata associated with the references
+  # (downloading the files only if `dest` is supplied).
+  #
+  # DETAILS:
+  #
+  # If requested by `uz=TRUE`, any zipped files are extracted to like-named subfolders
+  # of `dest` (without deleting the original zip).
+  #
+  # Since there can be several files to a reference, `resoid` allows users to specify a
+  # subset of files rather than downloading in batches by reference. These must be a subset
+  # of the resource IDs associated with the reference IDs in `query`. Get a table containing
+  # both keys by calling `my_get_irma` with `dest=NULL` (the default).
+  #
+  # `query` can also be a dataframe, in which case the function expects column(s)
+  # 'referenceID' and, optionally, 'resourceID' (copied to `resoid`). eg. typical usage
+  # would be to query a keyword to get a dataframe of relevant references, then (after
+  # reviewing and selecting the desired entries, and possibly building a vector of resource
+  # IDs), pass a subset of this dataframe back to `my_get_irma` to download the files.
+  # 
+  
+  # URL for REST API
+  url.irmabase = 'https://irmaservices.nps.gov/datastore/v4/rest'
+  
+  # dataframe `query` assumed to include column 'referenceId' (and possibly 'resourceId')
+  if( is.data.frame(query) )
+  {
+    # un-tibble input
+    query = data.frame(query)
+    
+    #  pull IDs from the dataframe if available
+    if( is.null(resoid) & !is.null(query$resourceId) ) resoid = unique(query$resourceId)
+    if( !is.null(query$referenceId) ) query = unique(query$referenceId)
+    
+  }
 
+  # character type `query` interpreted as simple search string
+  if( any(is.character(query)) )
+  {
+    # construct request URL (collapsing vectors into space delimited strings)
+    query = paste(query, collapse='%20')
+    gsub('/', '\\/', query)
+    rest.search = paste0('QuickSearch?q=', query, '&top=', as.integer(nmax))
+    url.rest = file.path(url.irmabase, rest.search)
+    
+    # download JSON to a tempfile
+    json.temp = tempfile()
+    download.file(url.rest, json.temp, quiet=TRUE)
+    
+    # open and parse the results as dataframe
+    result.json = read_json(json.temp, simplifyVector=TRUE) 
+    result.df = result.json$items 
+    
+    # halt on zero-length results
+    if(length(result.df)==0) stop('search query matched no results')
+    
+    # clean up output
+    result.df = result.df %>% 
+      mutate( dateOfIssue = as.POSIXlt(gsub('T', ' ', dateOfIssue)) ) %>%
+      select( referenceId, dateOfIssue, title ) %>% as_tibble
+
+    # print a message
+    n.response = result.json$pageDetail$responseCount
+    n.total = result.json$pageDetail$totalCount
+    cat(paste('showing', n.response, 'of', n.total, 'results'))
+    
+    # delete the tempfile and finish
+    unlink(json.temp)
+    return(result.df)
+    
+  }
+  
+  # handle vectorized requests
+  if(length(query) > 1) 
+  {
+    # recursive call to build list of metadata about each query code
+    result.list = lapply(query, function(x) my_get_irma(x, dest=NULL) %>% mutate(referenceId=x) )
+    result.df = do.call(rbind, result.list) %>% select( referenceId, everything() )
+    
+  } else {
+    
+    # construct metadata request URL and open JSON result as dataframe via tempfile
+    json.temp = tempfile()
+    rest.dlmeta = file.path('Reference', as.integer(query), 'DigitalFiles')
+    download.file(file.path(url.irmabase, rest.dlmeta), json.temp, quiet=TRUE)
+    result.df = read_json(json.temp, simplifyVector=TRUE) 
+    unlink(json.temp) 
+    
+    # clean up output
+    result.df = result.df %>%
+      mutate( lastUpdate = as.POSIXlt(gsub('T', ' ', lastUpdate)) ) %>%
+      mutate( fileSize = set_units(set_units(fileSize, 'bytes'), 'megabytes') ) %>%
+      select( fileName, everything() ) %>% as_tibble
+  }
+  
+  # trim to supplied resource IDs, if needed
+  if( is.null(resoid) ) resoid = result.df$resourceId
+  result.df = result.df %>% filter( resourceId %in% resoid )
+  result.n = nrow(result.df)
+  if( result.n == 0 ) stop('supplied `resoid` does not match any records in `query`')
+  
+  # handle download requests
+  if( !is.null(dest) )
+  {
+    # make the directory if it doesn't exist already and set up path(s)
+    my_dir(dest)
+    dest.paths = file.path(dest, result.df$fileName)
+    
+    # halt on filename collisions
+    idx.exists = file.exists(dest.paths)
+    msg.exists1 = paste(result.df$fileName[idx.exists], collapse=', ')
+    msg.exists2 = paste('the following files were found on the destination path:', msg.exists1)
+    if( length( unique(result.df$fileName) ) < result.n ) stop('non-unique destination filenames')
+    if( !ow & any(idx.exists) ) stop(paste(msg.exists2, '\ntry setting `ow=TRUE`'))
+    
+    # download all files to disk
+    msg.info = paste0('(', round(sum(result.df$fileSize), 2), ' MB total)...')
+    cat(paste('downloading', result.n, 'files', msg.info))
+    pb = txtProgressBar(0, result.n, style=3)
+    for(idx.file in 1:result.n)
+    {
+      # download the file
+      result.dl = download.file(result.df$downloadLink[idx.file], dest.paths[idx.file], mode='wb')
+      setTxtProgressBar(pb, idx.file)
+      
+      # unzip if requested, to subfolder of `dest` named after the zip filename
+      if(uz & result.df$extension[idx.file] == 'zip')
+      {
+        dest.dir = file.path(dest, gsub('.zip', '', result.df$fileName[idx.file]))
+        unzip(dest.paths[idx.file], exdir = dest.dir)
+      }
+    }
+    
+    # append paths on disk to output dataframe
+    result.df = result.df %>% mutate(path=dest.paths)
+    
+  }
+  
+  return(result.df)
+  
+}
 
 
 #' This is a kludge combining various `FedData` functions with some of my own code, in order to import STATSGO2 data and produce
