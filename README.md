@@ -39,7 +39,7 @@ finds snow data at [SNOTEL and partner networks](https://wcc.sc.egov.usda.gov)
 watershed model with a very long development history dating back to the early 90s. Read more about
 it [here](https://swat.tamu.edu/media/90102/azdezasp.pdf). These days SWAT has a
 [large and active community of users](https://swat.tamu.edu/support/) running one of the two
-public-domain Fortran-based implementationsmaintained by the USDA and Texas A&M:
+public-domain Fortran-based implementations maintained by the USDA and Texas A&M:
 
 * [SWAT2012](https://swat.tamu.edu/software/swat-executables/) is the legacy version. Advantages include: a larger
 community, a very long development and testing history, more
