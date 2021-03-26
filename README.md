@@ -36,23 +36,23 @@ finds snow data at [SNOTEL and partner networks](https://wcc.sc.egov.usda.gov)
 ### SWAT
 
 [The Soil and Water Assessment Tool (SWAT)](https://swat.tamu.edu/) is a widely-used river basin
-watershed model with a very long development history, dating back to the early 90s. Read more about
+watershed model with a very long development history dating back to the early 90s. Read more about
 it [here](https://swat.tamu.edu/media/90102/azdezasp.pdf). These days SWAT has a
 [large and active community of users](https://swat.tamu.edu/support/) running one of the two
-public-domain FORTRAN-based implementations (with windows executables) maintained by the USDA and Texas A&M:
+public-domain Fortran-based implementationsmaintained by the USDA and Texas A&M:
 
-* [SWAT2012](https://swat.tamu.edu/software/swat-executables/) a legacy version. Advantages: larger
-community, very long development and testing history, more
-[extensions and helper software available](https://swat.tamu.edu/software/), better documentation,
-larger presence in the scientific literature.
+* [SWAT2012](https://swat.tamu.edu/software/swat-executables/) is the legacy version. Advantages include: a larger
+community, a very long development and testing history, more
+[extensions and helper software available](https://swat.tamu.edu/software/), better documentation, and a
+larger presence in the hydrology literature.
 
-* [SWAT+](https://swat.tamu.edu/software/plus/), a newer revised version. Advantages: more flexibility in
+* [SWAT+](https://swat.tamu.edu/software/plus/) is the newer revised version. Advantages include more flexibility in
 [spatial representation of watershed features](https://onlinelibrary.wiley.com/doi/abs/10.1111/1752-1688.12482), 
-modernized file structure, the likely focus of future R&D
+a modernized file structure. This seems the likely focus of future R&D by the SWAT development team.
 
 Both versions continue to be updated and patched regularly (don't be fooled by the "2012"). However, although
 the mathematical models behind the names are largely the same, their project files are not interchangeable
-(SWAT+ uses different variable names and file structures). Our project will focus on building extensions
+- SWAT+ uses different variable names and file structures. Our project will focus on building extensions
 of the newest official release of SWAT+.
 
 
@@ -72,7 +72,7 @@ utilities for creating and calibrating SWAT+ models in R
 
 ### rswat
 
-Parametrization of a SWAT+ model is not trivial - a typical use case will involve dozens of config files
+The parametrization of a SWAT model is not trivial - a typical use case will involve dozens of config files
 containing many thousands of model parameters. Fortunately, SWAT is largely made up of process-based components
 whose physically-based parameters can (at least initially) be set using empirical data. 
 
