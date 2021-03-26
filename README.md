@@ -51,8 +51,7 @@ larger presence in the hydrology literature.
 a modernized file structure. This seems the likely focus of future R&D by the SWAT development team.
 
 Both versions continue to be updated and patched regularly (don't be fooled by the "2012"). However, although
-the mathematical models behind the names are largely the same, their project files are not interchangeable
-- SWAT+ uses different variable names and file structures. Our project will focus on building extensions
+the mathematical models behind the names are largely the same, their project files are not interchangeable as SWAT+ uses different variable names and file structures. Our project will focus on building extensions
 of the newest official release of SWAT+.
 
 
