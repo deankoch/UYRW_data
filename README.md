@@ -9,7 +9,7 @@ our research.
 
 ### data
 
-/R/get_data contains R scripts to fetch public datasets on the hydrology of UYR:
+R/get_data contains R scripts to fetch public datasets on the hydrology of UYR:
 
 * [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md)
 defines the study area and loads some hydrology info from
@@ -33,26 +33,62 @@ fetches
 * [get_snow](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_snow.md)
 finds snow data at [SNOTEL and partner networks](https://wcc.sc.egov.usda.gov)
 
+### SWAT
 
-### rswat
+[The Soil and Water Assessment Tool (SWAT)](https://swat.tamu.edu/) is a widely-used river basin
+watershed model with a very long development history, dating back to the early 90s. Read more about
+it [here](https://swat.tamu.edu/media/90102/azdezasp.pdf). These days SWAT has a
+[large and active community of users](https://swat.tamu.edu/support/) running one of the two
+public-domain FORTRAN-based implementations (with windows executables) maintained by the USDA and Texas A&M:
 
-[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) provides an easy-to-use R
-interface to the configuration files in a SWAT+ project directory, helping to manage the large number
-of parameters in this model. We may polish this code and release it as an R package at some point.
+* [SWAT2012](https://swat.tamu.edu/software/swat-executables/) a legacy version. Advantages: larger
+community, very long development and testing history, more
+[extensions and helper software available](https://swat.tamu.edu/software/), better documentation,
+larger presence in the scientific literature.
+
+* [SWAT+](https://swat.tamu.edu/software/plus/), a newer revised version. Advantages: more flexibility in
+[spatial representation of watershed features](https://onlinelibrary.wiley.com/doi/abs/10.1111/1752-1688.12482), 
+modernized file structure, the likely focus of future R&D
+
+Both versions continue to be updated and patched regularly (don't be fooled by the "2012"). However, although
+the mathematical models behind the names are largely the same, their project files are not interchangeable
+(SWAT+ uses different variable names and file structures). Our project will focus on building extensions
+of the newest official release of SWAT+.
 
 
 ### analysis
 
 The R/analysis directory (in development) is for building, fitting and analysing SWAT+ models in R.
-This includes R wrappers for running the QSWAT+ workflow [in PyQGIS](https://gitlab.com/rob-yerc/swat)
-and executing simulations, as well as helper functions for visualizing and analyzing the results. Using the
-output from /R/get_data, we plan to fit SWAT+ models sequentially on small catchments in the UYRW. Check
-back in the coming weeks as we add to this section to demonstrate the model building code:
+
+Using the output from /R/get_data, we plan to fit SWAT+ models sequentially on small catchments in the UYRW.
+Check back in the coming weeks as we add to this section to demonstrate the model building code:
 
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
 * [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md)
 utilities for creating and calibrating SWAT+ models in R
+
+
+
+### rswat
+
+Parametrization of a SWAT+ model is not trivial - a typical use case will involve dozens of config files
+containing many thousands of model parameters. Fortunately, SWAT is largely made up of process-based components
+whose physically-based parameters can (at least initially) be set using empirical data. 
+
+For example after running [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md) to fetch our DEM, we can run the [TauDEM workflow](https://hydrology.usu.edu/taudem/taudem5/) to define subbasins and construct a routing network connecting them. After running [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md)
+and [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md), we can then delineate
+HRUs and assign their plant/soil parameters to survey values. These steps are usually carried out using
+[QSWAT](https://swat.tamu.edu/software/qswat/)/[QSWAT+](https://swatplus.gitbook.io/docs/installation)
+(GUI-based QGIS plugins). Our code runs them programmatically from within R:
+
+* [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) provides an easy-to-use R
+interface to the configuration files in a SWAT+ project directory, helping to manage the large number
+of parameters in this model. This includes R wrappers for running the QSWAT+ workflow
+[in PyQGIS](https://gitlab.com/rob-yerc/swat), calling SWATEditor.exe to build model config files,executing simulations. We are also developing helper functions for visualizing and analyzing the results. 
+
+We may polish some/all of this code and release it as an R package at some point. Those interested in script-based workflows for SWAT are encouraged to also check out the [SWAT+AW](https://github.com/celray/swatplus-automatic-workflow) and [SWATPlusR](https://github.com/chrisschuerz/SWATplusR) projects. 
+
 
 ## about us
 
