@@ -56,6 +56,7 @@ library(jsonlite)
 #' ## global variables
 #+ results='hide'
 
+#' We start by defining a project directory tree
 # TODO: wrap these in a function or make their variable names more unique
 
 # 'graphics', 'markdown', 'data' are top level directories in the RStudio project folder
@@ -83,8 +84,6 @@ tif.na.val = -99
 #' then that code chunk can be skipped (to avoid redundant downloads, *etc*), and the files are
 #' loaded from disk instead. 
 #' 
-#' We start by defining a project directory tree
-
 
 
 #' Define a helper function for creating folders then create project folders as needed
@@ -97,40 +96,46 @@ lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my
 #' of the contents. This function handles the construction of the table. To call up the table for
 #' a specific script, simply use `my_metadata(script.name)`.
 #' 
-my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data', v=TRUE)
+my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, 
+                       data.dir='data', v=TRUE)
 {
   # creates and/or adds to a data frame of metadata documenting a given script, and (optionally)
   # writes it to disk as a CSV file 
   #
   # ARGUMENTS:
   #
-  # `script.name` is a string indicating the filename (without the .R extension) of the R script to document.
-  # `entries.list` is a list of character vectors, whose entries are named: 'name', 'file', 'type', and 'description'.
-  # `data.dir` is the subdirectory of the project folder in which to write the CSV file: /data/`script.name`_metadata.csv 
-  # `use.file` is a boolean indicating whether to read/write the CSV file
-  # `overwrite` allows an existing CSV file to be modified 
-  # `v` boolean, set FALSE to suppress console message
+  # `script.name`: character, filename of the R script to document (without the .R extension)
+  # `entries.list`: list of character vectors, with entries 'name', 'file', 'type', 'description'
+  # `data.dir`: character, subdirectory for CSV file (/<data.dir>/<scriptname>_metadata.csv) 
+  # `use.file`: boolean, indicating whether to read/write the CSV file
+  # `overwrite`: boolean, indicating to overwrite existing CSV files 
+  # `v`: boolean, indicating to print a console message
   #
   # RETURN VALUE:
   #
-  # a data frame containing a table of file info, combining the elements of `entries.list` with data from the CSV corresponding
-  # to the script name (if it exists)
+  # a data frame containing a table of file info, combining the elements of `entries.list` with
+  # data from the CSV corresponding to the script name (if it exists)
   #
   # BEHAVIOUR: 
   #
-  # With use.file==FALSE, the function simply returns `entries.list`, reshaped as a data.frame. 
+  # With `use.file==FALSE` the function simply returns `entries.list`, reshaped as a data.frame. 
   #
-  # With use.file==TRUE, the function looks for an existing CSV file, reads it, and combines it with the elements of `entries.list`.
-  # New entries take precedence: ie. any element of `entries.list` whose 'name' field matches an existing row in the CSV will replace
-  # that row. Elements with names not appearing the CSV are added to the top of the table in the order they appear in `entries.list`.
+  # With `use.file==TRUE`, the function looks for an existing CSV file, reads it, and combines it
+  # with the elements of `entries.list`. New entries take precedence: ie. any element of
+  # `entries.list` whose 'name' field matches an existing row in the CSV will replace that row.
+  # Elements with names not appearing the CSV are added to the top of the table in the order they
+  # appear in `entries.list`.
   #
-  # Existing CSV files are never modified, unless `use.file` and `overwrite` are both TRUE, in which case the CSV is overwritten with
-  # the modified data frame. If the CSV file does not already exist on disk, it will be created. The default `entries.list==NA`, 
-  # combined with `overwrite=TRUE` and `use.file=TRUE` will overwrite the CSV with a default placeholder - a table containing only a
-  # single row, which describes the CSV file itself.
+  # Existing CSV files are never modified unless `use.file` and `overwrite` are both TRUE. In this
+  # cse, if the CSV file does not already exist on disk it will be created. The default
+  # `entries.list==NA`, combined with `overwrite=TRUE` and `use.file=TRUE` will overwrite the CSV
+  # with a default placeholder - a table containing only a single row, which describes the CSV file
+  # itself.
   
-  # define the CSV filename, and define a flag that will indicate to wipe it replace with a default if requested
+  # define the CSV filename
   csv.relpath = file.path(data.dir, paste0(script.name, '_metadata.csv'))
+  
+  # flag to wipe CSV replace with a default
   csv.wipe = FALSE
   
   # create the directory if necessary
@@ -138,7 +143,10 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   
   # prepare the default one-row data.frame 
   entry.names = c('name', 'file', 'type', 'description')
-  entry.default = c(name='metadata', file=csv.relpath, type='CSV', description=paste0('list files of files written by ', script.name, '.R'))
+  entry.default = c(name='metadata', 
+                    file=csv.relpath, 
+                    type='CSV', 
+                    description=paste0('list files of files written by ', script.name, '.R'))
   
   # parse `entries.list` to check for wrong syntax or NA input
   if(!is.list(entries.list))
@@ -174,16 +182,18 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
     # halt on incorrectly named vectors
     if(!all(sapply(entries.list, function(entry) all(names(entry)==entry.names))))
     {
-      stop(paste0('each element of entries.list must be a named vector with names: ', paste(entry.names, collapse=', ')))
+      msg.badnm = paste(entry.names, collapse=', ')
+      stop(paste0('each element of entries.list must be a named vector with names: ', msg.badnm))
     }
     
     # entries.list is valid input. Construct the data frame
     input.df = data.frame(do.call(rbind, entries.list), row.names='name')
   }
   
-  # data.frame() appears to ignore row.names when nrows==1. Detect this and fix it
+  # data.frame() ignores row.names when nrows==1
   if(!is.null(input.df$name))
   {
+    # fix names
     rownames(input.df) = input.df$name
     input.df = input.df[,-which(names(input.df)=='name')]
   }
@@ -205,8 +215,10 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
       csv.df = read.csv(here(csv.relpath), header=TRUE, row.names=1)
     }
     
-    # identify any entries in csv.df with names matched in entries.list, update them, delete those rows from input.df
+    # identify any entries in csv.df with names matched in entries.list
     names.updating = rownames(csv.df)[rownames(csv.df) %in% rownames(input.df)]
+    
+    # update them, and delete those rows from input.df
     csv.df[names.updating,] = input.df[names.updating,]
     input.df = input.df[!(rownames(input.df) %in% names.updating),]
     
@@ -233,13 +245,13 @@ my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
 {
   # ARGUMENTS:
   #
-  # `script.name` is a string indicating the filename (without the .R extension) of the R script to document.
-  # `script.dir` is a string indicating which folder in the project directory contains the R script.
-  # `markdown.dir` is a string indicating a folder in the project directory to write the output file.
+  # `script.name`: character, filename of the R script to render (without the .R extension).
+  # `script.dir`: character, subfolder of project directory containing the R script.
+  # `markdown.dir`: character, subfolder of project directory for output markdown file(s).
   #
   # RETURN VALUE:
   #
-  # (null)
+  # null
   #
   # BEHAVIOUR: 
   #
@@ -249,9 +261,11 @@ my_markdown = function(script.name, script.dir='R', markdown.dir='markdown')
   path.input = here(script.dir, paste0(script.name, '.R'))
   path.output = here(file.path(markdown.dir, paste0(script.name, '.md')))
   
-  # note: run_pandoc=FALSE appears to cause output_dir to be ignored. So this call also generates an html file
+  # note: run_pandoc=FALSE appears to cause output_dir to be ignored...
   paste('rendering markdown file', path.output, 'from the R script', path.input)
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+  # ...so this call may generate an unwanted html file
+  # TODO: fix this or delete the html 
 }
 
 
