@@ -346,7 +346,7 @@ if(!file.exists(img.longterm.path))
 ```
 
 Plot one of the TauDEM raster outputs - upstream contributing area
-![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_taudem.png)
+![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_upslope_areas.png)
 
 ``` r
 if(!file.exists(img.longterm.path))

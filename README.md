@@ -107,5 +107,6 @@ src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/soils.
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/landuse.png" width="45%"> <img
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_landuse.png" width="45%"> <img
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png" width="45%"> </img> <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo_gridded.png" width="100%"></img>
-<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments.png" width="100%"> </img> 
+<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments.png" width="100%"> </img>
+<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_upslope_areas.png" width="100%"> </img>
 
