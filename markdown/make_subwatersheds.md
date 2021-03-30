@@ -1,7 +1,7 @@
 make\_subwatersheds.R
 ================
 Dean Koch
-2021-03-25
+2021-03-29
 
 **Mitacs UYRW project**
 
@@ -78,6 +78,7 @@ print(subwatersheds.meta[, c('file', 'type')])
 ```
 
     ##                                                        file          type
+    ## img_taudem                    graphics/my_upslope_areas.png   png graphic
     ## img_my_catchments_full      graphics/my_catchments_full.png   png graphic
     ## usgs_allcatchments     data/prepared/usgs_allcatchments.rds R list object
     ## img_my_catchments                graphics/my_catchments.png   png graphic
@@ -216,54 +217,55 @@ Add a graphic to show the subwatershed delineation results
 
 ``` r
 # output paths defined above
+img.taudem.path = here(subwatersheds.meta['img_taudem', 'file'])
 img.longterm.path = here(subwatersheds.meta['img_my_catchments', 'file'])
 img.all.path = here(subwatersheds.meta['img_my_catchments_full', 'file'])
 
+# create boundary polygon and grab outlets points
+bou = st_union(st_geometry(usgs.allcatchments$boundary))
+pts = usgs.allcatchments$pts
+
+# define breaks for the scale bar
+km.breaks = c(0, pretty(1e-3 * diff(st_bbox(bou)[c('xmin', 'xmax')]) / 4, 2))
+
+# get parks boundaries polygons
+uyrw.nps = readRDS(here(basins.meta['ynp_boundary', 'file']))
+
+# get polygons for state lines from `maps` package
+states.sf = my_maps('state', outcrs=st_crs(bou)) %>% 
+  filter(name %in% c('montana', 'wyoming', 'idaho'))
+
+# make a text label for the park boundary
+line.idaho = states.sf %>% filter(name == 'idaho') %>% st_geometry %>% st_cast('LINESTRING')
+line.nps = uyrw.nps %>% st_geometry %>% st_cast('POLYGON') %>% st_cast('LINESTRING')
+pt.parkbou = st_cast(st_intersection(line.nps, line.idaho), 'POINT')
+pt.parkbou = st_sf(data.frame(name='Yellowstone Park boundary'), geometry=pt.parkbou[2]) 
+
+# print some counts of the outlets points
+idx.pts.multiyear = pts$count_nu > 2 * 365
+
+# make labels for point legend
+msg.usgs = paste(nrow(usgs.allcatchments$pts), 'streamflow record sites')
+msg.multi = paste(sum(idx.pts.multiyear), 'sites have 2+ year records')
+
+# make a copy of the catchments with multiyear records
+mainout.idx = usgs.catchments$boundary$catchment_name == 'main_nr_livingston'
+bou.cat = usgs.catchments$boundary
+
+# define layout options for the plot
+layout.out = tm_layout(main.title = 'USGS daily streamflow record sites in the UYRW and their catchments',
+                       main.title.fontface ='bold',
+                       main.title.size = 1,
+                       main.title.position = 'center',
+                       legend.outside = TRUE,
+                       legend.outside.position = c('right', 'top'),
+                       legend.outside.size = 0.3,
+                       legend.text.size = 0.8,
+                       inner.margins = rep(1e-2, 4),
+                       frame = FALSE)
+
 if(!file.exists(img.all.path))
 {
-  # get parks boundaries polygons
-  uyrw.nps = readRDS(here(basins.meta['ynp_boundary', 'file']))
-  
-  # get polygons for state lines from `maps` package
-  states.sf = my_maps('state', outcrs=st_crs(bou)) %>% 
-    filter(name %in% c('montana', 'wyoming', 'idaho'))
-  
-  # make a text label for the park boundary
-  line.idaho = states.sf %>% filter(name == 'idaho') %>% st_geometry %>% st_cast('LINESTRING')
-  line.nps = uyrw.nps %>% st_geometry %>% st_cast('POLYGON') %>% st_cast('LINESTRING')
-  pt.parkbou = st_cast(st_intersection(line.nps, line.idaho), 'POINT')
-  pt.parkbou = st_sf(data.frame(name='Yellowstone Park boundary'), geometry=pt.parkbou[2]) 
-  
-  # create boundary polygon and grab outlets points
-  bou = st_union(st_geometry(usgs.allcatchments$boundary))
-  pts = usgs.allcatchments$pts
-  
-  # print some counts of the outlets points
-  idx.pts.multiyear = pts$count_nu > 2 * 365
-  
-  # make labels for point legend
-  msg.usgs = paste(nrow(usgs.allcatchments$pts), 'streamflow record sites')
-  msg.multi = paste(sum(idx.pts.multiyear), 'sites have 2+ year records')
-  
-  # make a copy of the catchments with multiyear records
-  mainout.idx = usgs.catchments$boundary$catchment_name == 'main_nr_livingston'
-  bou.cat = usgs.catchments$boundary
-  
-  # define breaks for the scale bar
-  km.breaks = c(0, pretty(1e-3 * diff(st_bbox(bou)[c('xmin', 'xmax')]) / 4, 2))
-  
-  # define layout options for the plot
-  layout = tm_layout(main.title = 'USGS daily streamflow record sites in the UYRW and their catchments',
-                     main.title.fontface ='bold',
-                     main.title.size = 1,
-                     main.title.position = 'center',
-                     legend.outside = TRUE,
-                     legend.outside.position = c('right', 'top'),
-                     legend.outside.size = 0.3,
-                     legend.text.size = 0.8,
-                     inner.margins = rep(1e-2, 4),
-                     frame = FALSE)
-  
   # initialize tmap object with elevation raster
   tmap.dem = tm_shape(bou) + 
     tm_polygons(alpha=0, col='black') + 
@@ -289,7 +291,7 @@ if(!file.exists(img.all.path))
     tm_shape(pts[idx.pts.multiyear,]) + tm_dots(col='red', size=0.05) +
     tm_scale_bar(breaks=km.breaks, position=c('left', 'bottom'), text.size=0.8) + 
     tm_grid(n.x=2, n.y=2, projection=crs.list$epsg.geo, alpha=0.5) +
-    layout
+    layout.out
   
   # save a copy to disk
   tmap_save(tm=tmap.out, filename=img.all.path, height=3000, width=3000, pointsize=14)
@@ -334,12 +336,118 @@ if(!file.exists(img.longterm.path))
     tm_shape(pts2) + tm_dots(col='red', size=0.05) +
     tm_scale_bar(breaks=km.breaks, position=c('left', 'bottom'), text.size=0.8) + 
     tm_grid(n.x=2, n.y=2, projection=crs.list$epsg.geo, alpha=0.5) +
-    layout + 
+    layout.out + 
     tm_layout(main.title = 'headwaters catchments with long-term USGS streamflow records')
   
   # save a copy to disk
   tmap_save(tm=tmap.out2, filename=img.longterm.path, height=3000, width=3000, pointsize=14)
 
+}
+```
+
+Plot one of the TauDEM raster outputs - upstream contributing area
+![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_taudem.png)
+
+``` r
+if(!file.exists(img.longterm.path))
+{
+  # open the raster, convert to m^2, crop to UYRW
+  acell = prod(res(uyrw.dem))
+  ad8 = ( acell * raster(taudem_uyrw['ad8', 'file'])  ) 
+  ad8 = crop(ad8, as(bou, 'Spatial'))
+  
+  # split at drop analysis optimum
+  drop.min = acell * as.integer(gsub('stream threshold:', '', taudem_uyrw['nstream', 'description']))
+  ad8.low = mask(ad8, ad8 > drop.min, maskvalue=1)
+  ad8.high = mask(ad8, ad8 < drop.min, maskvalue=1)
+
+  # log transformation to show detail on lower end of channels range
+  logbase = 1.2
+  ad8.loghigh = log(ad8.high, logbase)
+  
+  # make breakpoints on normal scale for low end
+  n.low = 3
+  ad8.lowbreak = seq(cellStats(ad8, min), drop.min, length=n.low)
+  
+  # make breakpoints on log scale for high end
+  ad8.highquant = pretty(cellStats(ad8.loghigh, range), n.low + 1)
+  ad8.highbreak = ad8.highquant[-1]
+  
+  # make labels
+  ad8.label = format(c(ad8.lowbreak, logbase^ad8.highbreak)/1e6,
+                     scientific=FALSE,
+                     trim=TRUE,
+                     digits=1)
+  
+  # pad them all the same width
+  padlen = max(sapply(ad8.label, nchar))
+  for(i in 1:length(ad8.label)) 
+  {
+    # there has to be an easier way but this works for now...
+    addpad = paste( rep(' ', padlen - nchar(ad8.label[i]) ), collapse='')
+    ad8.label[i] = paste0(addpad, ad8.label[i] )
+  }
+
+  # split by legend
+  ad8.lowlabel = ad8.label[1:n.low]
+  ad8.highlabel = ad8.label[(n.low + 1):length(ad8.label)]
+  
+  # indicate special values in labels
+  ad8.lowlabel[1] = paste( ad8.lowlabel[1], ' << resolution limit')
+  ad8.lowlabel[length(ad8.lowlabel)] = paste( ad8.lowlabel[length(ad8.lowlabel)], ' << drop analysis optimum')
+  ad8.highlabel[length(ad8.highlabel)] = paste( ad8.highlabel[length(ad8.highlabel)], ' << main outlet')
+  
+  # make the palettes
+  fullpal = hcl.colors(1e3, 'Sunset')
+  bgcol = 'grey70'
+  
+  # offset the two ranges to distinguish them better
+  idx.low = 1:200
+  idx.high = 250:1e3
+  lowpal = fullpal[idx.low]
+  highpal =  fullpal[idx.high]
+  
+
+  # initialize the plot object with low values
+  tmap.ad8.low = tm_shape(ad8.low, raster.downsample=FALSE, max.raster=1e9) +
+    tm_raster(palette = lowpal, 
+              style = 'cont',
+              breaks = ad8.lowbreak,
+              labels = ad8.lowlabel,
+              title = 'upslope contributing area (km2)',
+              colorNA = bgcol,
+              showNA = FALSE)
+  
+  # add the high values
+  tmap.ad8 = tmap.ad8.low +
+    tm_shape(ad8.loghigh, raster.downsample=FALSE, max.raster=1e9) +
+    tm_raster(palette = highpal, 
+              style = 'cont',
+              breaks = ad8.highbreak,
+              labels = ad8.highlabel,
+              title = '',
+              colorNA = NULL,
+              showNA = FALSE)
+
+  # add shapes and annotations
+  tmap.out3 = tmap.ad8 +
+    tm_shape(uyrw.waterbody) + tm_polygons(col=bgcol, border.col=NULL) +
+    tm_scale_bar(breaks=km.breaks, position=c('left', 'bottom'), text.size=0.8) + 
+    tm_grid(n.x=2, n.y=2, projection=crs.list$epsg.geo, alpha=0.5) +
+    tm_layout(main.title = 'Channel delineation with D8 flow model in TauDEM (file ad8.tif)',
+              main.title.fontface ='bold',
+              main.title.size = 1,
+              main.title.position = 'center',
+              legend.position = c('right', 'top'),
+              legend.text.size = 0.8,
+              legend.title.fontface ='bold',
+              inner.margins = rep(1e-2, 4),
+              legend.format = list(text.align = 'left'),
+              frame = FALSE)
+  
+  # save a copy to disk
+  tmap_save(tm=tmap.out3, filename=img.taudem.path, height=8000, width=5000, pointsize=28)
+  
 }
 ```
 
