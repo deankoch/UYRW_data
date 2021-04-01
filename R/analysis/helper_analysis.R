@@ -1218,7 +1218,6 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
     boundary = boundary[idx.boundary,]
     n.catchment = nrow(boundary)
     
-    
     # copy link number list, reordering to match boundaries
     linklist = leaf.result$linklist[idx.boundary]
     
@@ -1247,6 +1246,12 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
     demnet$catchment_id = match(demnet$catchment_id, id.old)
     io$catchment_id = match(io$catchment_id, id.old)
     pts$catchment_id = match(pts$catchment_id, id.old)
+    
+    # identify the catchment number associated with main outlet
+    id.out = demnet$catchment_id[ demnet$LINKNO == demnet$USLINKNO1[demnet$DSLINKNO == -1] ]
+    
+    # NA catchment IDs arise near the main outlet - assign these to main outlet catchment
+    demnet$catchment_id[ is.na(demnet$catchment_id) ] = id.out
     
     # For USGS style `pts`, attempt to build catchment names from 'station_nm' field
     if(!(is.null(pts$station_nm)|is.null(pts$count_nu)))
