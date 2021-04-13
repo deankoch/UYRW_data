@@ -4,6 +4,7 @@
 .Ruserdata
 README.html
 R/deprecated
+data/analysis
 data/prepared
 data/source
 data/demo
