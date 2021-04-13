@@ -1,7 +1,7 @@
 rswat
 ================
 Dean Koch
-2021-03-10
+2021-04-13
 
 **Mitacs UYRW project**
 
@@ -24,13 +24,6 @@ library(dplyr)
 
 # `data.table` faster table loading
 library(data.table)
-```
-
-[`jsonlite`](https://cran.r-project.org/web/packages/jsonlite) handle
-JSON I/O
-
-``` r
-library(jsonlite)
 ```
 
 ## initialization:
@@ -57,9 +50,9 @@ The I/O interface functions work by scanning the files listed in
 merging the results into tables wherever there is a consistent pattern
 of row-length and class (as detected by R’s built-in `is.numeric` and
 some sensible rules for snapping and spacing. This will hopefully make
-it robust version-specific differences in SWAT+ parameter names and file
-structures (and future changes). (internal) environment to store the
-SWAT+ project file data
+it robust to version-specific changes in SWAT+ parameter names and file
+structures (and whatever changes come with future releases). (internal)
+environment to store the SWAT+ project file data
 
 ``` r
 .rswat = new.env(parent=emptyenv())
@@ -125,6 +118,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       if(!is.null(ignore))
       {
         cio = cio %>% mutate(ignored = (group %in% ignore) | (file %in% ignore) )
+        .rswat$cio = cio
       }
       
     } else {
@@ -136,8 +130,26 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     
   } else {
   
-    # check that the filename is 'file.cio'
-    if(basename(ciopath) != 'file.cio') warning('path does not point to "file.cio"!')
+    # detect directory input instead of 'file.cio' path
+    if(basename(ciopath) != 'file.cio')
+    {
+      # formulate two likely paths assuming that ciopath is a directory
+      ciopath.a = file.path(ciopath, 'file.cio')
+      ciopath.b = file.path(ciopath, 'Scenarios/Default/TxtInOut/file.cio')
+      
+      # assign the path or else halt if we can't find 'file.cio'
+      ab.exists = file.exists( c(ciopath.a, ciopath.b) )
+      if( any(ab.exists) )
+      {
+        ciopath = c(ciopath.a, ciopath.b)[ which(ab.exists)[1] ]
+        cat(paste('setting `ciopath` to', ciopath, '\n'))
+        
+      } else {  stop('failed to set `ciopath`') }
+      
+    } else {
+      
+      if( !file.exists(ciopath) ) stop('"file.cio" not found')
+    } 
     
     # if this isn't the first call, check current value of `ciopath` in memory
     if( 'ciopath' %in% ls(.rswat) )
@@ -178,7 +190,8 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       mutate(file = string) %>%
       mutate(path = file.path(dirname(ciopath), file)) %>%
       mutate(exists = file.exists(path)) %>%
-      mutate(size = set_units(file.info(path)$size, bytes)) %>%
+      mutate(size = set_units(set_units(file.info(path)$size, bytes), kilobytes)) %>%
+      mutate(modified = file.info(path)$mtime) %>%
       mutate(ignored = FALSE )  %>%
       mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>% 
       as.data.frame() 
@@ -236,7 +249,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   # trim, if requested, and finish 
   if(trim) cio = cio %>% 
     filter(exists) %>% 
-    select(file, group, size, nline, nskip, ntab, nvar) %>%
+    select(file, group, size, modified, nline, nskip, ntab, nvar) %>%
     select_if(~!all(is.na(.)))
   
   # load files if requested then return up to date files list
@@ -266,7 +279,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # RETURN VALUE:
   #
   # With default `reload==FALSE`, the function returns a named list containing all the tabular
-  # data associated with `swatname`. Each list entry is named after a source file, and consists
+  # data associated with `fname`. Each list entry is named after a source file, and consists
   # of either a dataframe (if the file has a single table) or a list of dataframes (if the file
   # has multiple tables). Toggling `simplify==FALSE` will wrap the single-table case(s) in a
   # list, for consistency with the other cases.
@@ -278,7 +291,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # files into memory, overwriting anything already there. This is useful if you need to reload
   # project data after it's been modified on disk by external programs.
   
-  # parse the `swatname` argument, assigning all non-ignored files by default
+  # parse the `fname` argument, assigning all non-ignored files by default
   cio = rswat_cio(trim=FALSE) %>% filter(exists) 
   if(length(fname)==0) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
@@ -397,13 +410,11 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   #
   # `fuzzy < 0` (the default) is for Perl-style regular expressions (see `base::grepl`),
   # `fuzzy = 0` is for exact matches only, and `fuzzy > 0` includes approximate matches
-  # up to the specified (Levenshtein) distance (see `base::agrep`).
+  # up to the specified (Levenshtein) distance (see `base::agrep`). The case (upper or
+  # lower) is ignored in approximate matching.
   # 
-  # check these examples: eg.`pattern` matches an element
+  # TODO: write some examples: eg.`pattern` matches an element
   # of the 'name' column of a table, all parameters in that row are returned.
-  #
-  # eg. `pattern = "time.sim start"` returns matches for the pattern 'start' from
-  # the file "time.sim" only
   #
   
   # default empty string for pattern matches everything in perl mode
@@ -439,10 +450,10 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   if(fuzzy > 0)
   {
     # `agrep` with default max.distance to fuzzy match
-    name.match = 1:n.name %in% agrep(pattern, name.all, max.distance=fuzzy)
-    if(intext) string.match = 1:n.name %in% agrep(pattern, string.all, max.distance=fuzzy)
+    name.match = agrepl(tolower(pattern), tolower(name.all), max.distance=fuzzy)
+    if(intext) string.match = agrepl(tolower(pattern), tolower(string.all), max.distance=fuzzy)
   }
-  
+
   # handle regexp
   if(fuzzy < 0)
   {
@@ -460,14 +471,13 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   }
   
   # extract results
-  linedf.out = .rswat$stor$linedf[which(idx.include)[name.match | string.match], ]
-  
+  linedf.out = .rswat$stor$linedf[ which(idx.include)[name.match | string.match], ]
   
   # for human readability
   if(trim)
   {
     # omit skipped lines, header lines, etc
-    linedf.out = linedf.out %>% filter(!is.na(i))
+    linedf.out = linedf.out %>% filter( !is.na(i) )
     
     # extra trimming when not searching parameter values
     if(!intext)
@@ -497,8 +507,9 @@ write a parameter value to its file
 ``` r
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
-  # In development. Currently only supports writing a single dataframe to (single file),
-  # but vectorization should be simple. I just need to decide the input syntax
+  # In development. Currently only supports writing a single dataframe to (single file).
+  #
+  # TODO: vectorization of list input (named according to file, or unnamed) 
   #
   # ARGUMENTS:
   #
@@ -511,9 +522,9 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   #
   # RETURN VALUE:
   #
-  # Returns nothing (but writes `value` to `fname` on disk) when `preview=FALSE`.
-  # Otherwise returns a dataframe with information on the (line-by-line) changes
-  # that would be made to the config file(s)
+  # Returns nothing but writes `value` to the file `fname` on disk when `preview=FALSE`.
+  # Otherwise returns a dataframe with information on the line-by-line changes that would be
+  # made to the config file(s) in non-preview mode.
   #
   
   # grab a list of all filenames and the input object names
@@ -599,16 +610,19 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   value.old = .rswat$stor$data[[fname]][[tablenum]][, nm.head] 
   cn.new = sapply(1:ncol(value.old), function(x) !identical(value.old[,x], value[,x]) )
   
-  # handle no-change case
-  if(!any(cn.new))
-  {
-    if(preview) return(linedf[integer(0),])
-    return(invisible())
-  }
+  # NOTE: cn.new picks up integer-as-numeric mismatches, which may be ignored later
+  # because we will coerce them to the right type.
   
   # build matrix of changed value indicators
   m.new = matrix(FALSE, nrow(value), ncol(value))
   m.new[,cn.new] = sapply(which(cn.new), function(cn) ! value.old[,cn] == value[,cn])
+  
+  # handle no-change case
+  if(!any(unlist(m.new)))
+  {
+    if(preview) return(linedf[integer(0),])
+    return(invisible())
+  }
   
   # indicate whether an NA is being replaced or not
   isna.old = is.na(value.old)
@@ -654,12 +668,30 @@ load SWAT+ output files as dataframe
 ``` r
 rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
 {
+  # In development. Mostly tested on daily outputs
+  # TODO: tidy up and split dates handler into its own function
+  # TODO: handle vectorization for multiple files, with results returned as list
+  # TODO: set default fname by reading "files_out.out"
+  #
+  # ARGUMENTS:
+  #
+  # `fname`: (optional) character vector, SWAT+ output filename(s), with or without extension
+  # `vname`: (optional) character or integer vector, indexing the columns to read
+  # `add_units`: logical, whether to add units to the columns (where available) 
+  # `add_dates`: logical, whether to replace default time-index columns with a column of Dates
+  #
+  # RETURN VALUE:
+  #
+  # Returns a dataframe containing the requested variables, 'gis_id', and either 'jday', 'yr'
+  # (if `add_dates=FALSE`) or a column of Date objects ('date') generated from 'jday', 'yr'
+  #
+  
   # add .txt extension (if it has none)
   fname = ifelse(grepl('.txt', fname), fname, paste0(fname, '.txt'))
   
   # pull the project directory
   ciodir = dirname(.rswat$ciopath)
-  if(is.null(ciopath)) stop('ciopath not found. Have you run rswat_cio() yet?')
+  if(is.null(ciodir)) stop('ciopath not found. Have you run rswat_cio() yet?')
   
   # anything in SWAT+ project dir with .txt extension is checked
   txt.fname = grep('.txt', list.files(ciodir), value=TRUE)
@@ -676,12 +708,12 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   if( grepl('warnings', fname) ) return(data.frame(msg=readLines(fpath)))
   
   # define the magic line numbers
-  ln.msg = 1
-  ln.head = 2
-  ln.unit = 3
-  ln.tab = 4
+  ln.msg = 1  # comment
+  ln.head = 2 # headers (variable names)
+  ln.unit = 3 # units (for a subset of headers)
+  ln.tab = 4 # first row of the tabular data
   
-  # run the first few lines into memory and parse them using the package worflow
+  # read the first few lines into memory and parse them using helper functions
   rswat_rlines(fpath, nmax=ln.tab)
   rswat_rtext(fname)
   linedf = .rswat$stor$temp[[fname]]$linedf
@@ -691,7 +723,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
   .rswat$stor$temp[[fname]] = list()
   .rswat$stor$txt[[fname]] = list()
   
-  # check for structural problems with the tables
+  # counts to check for structural problems with the tables
   n.unit = sum(linedf$line_num == ln.unit)
   n.head = sum(linedf$line_num == ln.head)
   n.tab = sum(linedf$line_num == ln.tab)
@@ -713,7 +745,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
     n.head = sum(linedf$line_num == ln.head)
   }
   
-  # extract column headers and their start positions, column classes
+  # extract column headers and their classes
   head.nm = linedf$string[linedf$line_num == ln.head]
   head.start = linedf$start_pos[linedf$line_num == ln.head]
   head.class = linedf$class[linedf$line_num == ln.tab]
@@ -733,8 +765,13 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
     # make an empty dataframe with named columns
     dat.out = as.data.frame(matrix(NA, 0, n.head, dimnames=list(NULL, head.nm[idx.head])))
     
-  } else {
-    
+    # turn off 'dates' mode (as they aren't available in the source file)
+    add_dates = FALSE
+  } 
+
+  # handle tables with data
+  if(n.tab > 0)
+  {
     # BUGFIX: 'type' header with empty column (found in "basin_psc_day.txt")
     if(n.head > n.tab)
     {
@@ -758,6 +795,20 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
       
     }
     
+    # BUGFIX: unlabeled output columns! (found in "channel_sdmorph_day.txt")
+    if(n.head < n.tab)
+    {
+      # print a warning when this happens
+      n.unlab = n.tab - n.head
+      msg.warn = paste('omitting', n.unlab, 'unlabeled column(s)')
+      warning(msg.warn)
+      
+      # omit the columns - this assumes they lie in the final column(s) of the table
+      idx.head = c(idx.head, rep(FALSE, n.unlab))
+      head.nm = c(head.nm, paste0('unlabelled_', 1:n.unlab))
+      n.head = n.head + n.unlab
+    }
+    
     # catch invalid variable names
     if(any( !(vname %in% head.nm) ))
     {
@@ -765,8 +816,7 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
       info.msg = paste(vname[!(vname %in% head.nm)], collapse=', ')
       stop(paste(err.msg, info.msg, collapse='\n'))
     }
-    
-    
+
     # load the requested columns using fread
     dat.out = fread(fpath, 
                     header=FALSE, 
@@ -774,100 +824,324 @@ rswat_output = function(fname=NULL, vname=NULL, add_units=TRUE, add_dates=TRUE)
                     col.names=head.nm[idx.head], 
                     colClasses=head.class, 
                     drop=which(!idx.head)) %>% as.data.frame
-
-    # TODO: make this a function
-    if(add_units)
-    {
-      # extract unit strings 
-      unit.nm = linedf$string[linedf$line_num == ln.unit]
-      unit.start = linedf$start_pos[linedf$line_num == ln.unit]
-      
-      # build a dictionary of unusual unit strings and their R-readable equivalents
-      # note: I'm assuming 'mton' means 'metric tonne', and not 'milliton' (ie kilogram)
-      unit.lu = do.call(rbind, list(c('ha-m', 'ha m'),
-                                    c('kgN', 'kg'),
-                                    c('kgP', 'kg'),
-                                    c('kg/ha_N', 'kg/ha'),
-                                    c('kg/ha_P', 'kg/ha'),
-                                    c('mg_pst', 'mg'),
-                                    c('tha', 't ha'),
-                                    c('kgha', 'kg ha'),
-                                    c('mj/m^2', 'mJ/m^2'),
-                                    c('mton', 'tonne'),
-                                    c('frac', NA),
-                                    c('----', NA),
-                                    c('---', NA),
-                                    c('___', NA)))
-      
-      # swap in the R-readable unit strings
-      idx.translate = unit.nm %in% unit.lu[,1]
-      unit.nm[idx.translate] = unit.lu[match(unit.nm[idx.translate], unit.lu[,1]), 2]
-      
-      # snap units to columns
-      head.unit = rep(NA, n.head)
-      head.unit[sapply(unit.start, function(n) which.min(abs(n - head.start)))] = unit.nm 
-      
-      # assign non-NA units to output
-      cn.unit = which( !is.na( head.unit[idx.head] ) )
-      if(length(cn.unit) > 0)
-      {
-        dat.out[cn.unit] = mapply(function(x, y) set_units(x, y, mode='standard'), 
-                                  x = as.list(dat.out)[cn.unit], 
-                                  y = head.unit[idx.head][cn.unit], 
-                                  SIMPLIFY=FALSE)
-      }
-    }
-    
-    # TODO: make this a function
-    if(add_dates & n.tab > 0)
-    {
-      # attempt to detect period of simulation results
-      n.obs = nrow(dat.out)
-      n.gis = ifelse(is.null(dat.out$gis_id), 1, length(unique(dat.out$gis_id)))
-      n.name = ifelse(is.null(dat.out$name), 1, length(unique(dat.out$name)))
-      n.typeno = ifelse(is.null(dat.out$typ_no), 1, length(unique(dat.out$typ_no)))
-      n.id = max(n.gis, n.name, n.typeno)
-      
-      # define the start/end dates
-      date.start = as.Date(paste(dat.out$yr[1], dat.out$jday[1], sep='-'), format='%Y-%j')
-      date.end = as.Date(paste(dat.out$yr[n.obs], dat.out$jday[n.obs], sep='-'), format='%Y-%j')
-      
-      # handle cases where the number of rows is not a multiple of number of unique ids
-      if( n.obs/n.id != round(n.obs/n.id) )
-      {
-        # slower but more robust count 
-        n.id = dat.out %>% group_by(yr, mon, day) %>% 
-          summarize(n=n(), .groups='drop_last') %>% 
-          pull(n) %>% unique
-      }
-      
-      # express period in various time units to detect time step
-      n.da = as.integer(difftime(date.end, date.start, units='days'))
-      n.wk = as.integer(difftime(date.end, date.start, units='weeks'))
-      n.time = c(day=n.da, week=n.wk, month=round(n.wk/4), year=round(n.wk/52))
-      tstep = names(which.min( abs( n.time - (n.obs/n.id) ) ))
-      
-      # catch tables with variable numbers of ids per timestep
-      if(length(n.id) > 1)
-      {
-        # really slow for large datasets - use only as last resort
-        all.dates = mapply(function(x, y, z) as.Date(paste(x, y, z, sep='-')),
-                           x = dat.out$yr, y = dat.out$mon, z = dat.out$day, SIMPLIFY = FALSE)
-        
-      } else {
-        
-        # this should be equivalent to `as.Date(paste(yr, mon, day, sep='-')`, but much faster
-        all.dates = rep(seq(date.start, date.end, tstep), each=n.id)
-      }
-      
-      # merge with output data, omitting redundant columns
-      nm.omit = c('jday', 'mon', 'day', 'yr')
-      dat.out = cbind(data.frame(date=all.dates), dat.out[ !(names(dat.out) %in% nm.omit) ])
-    }
-    
   }
   
+  # TODO: make this a function
+  if(add_dates)
+  {
+    # attempt to detect period of simulation results
+    n.obs = nrow(dat.out)
+    n.gis = ifelse(is.null(dat.out$gis_id), 1, length(unique(dat.out$gis_id)))
+    n.name = ifelse(is.null(dat.out$name), 1, length(unique(dat.out$name)))
+    n.typeno = ifelse(is.null(dat.out$typ_no), 1, length(unique(dat.out$typ_no)))
+    n.id = max(n.gis, n.name, n.typeno)
+    
+    # define the start/end dates
+    date.start = as.Date(paste(dat.out$yr[1], dat.out$jday[1], sep='-'), format='%Y-%j')
+    date.end = as.Date(paste(dat.out$yr[n.obs], dat.out$jday[n.obs], sep='-'), format='%Y-%j')
+    
+    # handle cases where the number of rows is not a multiple of number of unique ids
+    if( n.obs/n.id != round(n.obs/n.id) )
+    {
+      # slower but more robust count 
+      n.id = dat.out %>% group_by(yr, mon, day) %>% 
+        summarize(n=n(), .groups='drop_last') %>% 
+        pull(n) %>% unique
+    }
+    
+    # express period in various time units to detect time step
+    n.da = as.integer(difftime(date.end, date.start, units='days'))
+    n.wk = as.integer(difftime(date.end, date.start, units='weeks'))
+    n.time = c(day=n.da, week=n.wk, month=round(n.wk/4), year=round(n.wk/52))
+    tstep = names(which.min( abs( n.time - (n.obs/n.id) ) ))
+    
+    # catch tables with variable numbers of ids per timestep
+    if(length(n.id) > 1)
+    {
+      # really slow for large datasets - use only as last resort
+      all.dates = mapply(function(x, y, z) as.Date(paste(x, y, z, sep='-')),
+                         x = dat.out$yr, y = dat.out$mon, z = dat.out$day, SIMPLIFY = FALSE)
+      
+    } else {
+      
+      # this should be equivalent to `as.Date(paste(yr, mon, day, sep='-')`, but much faster
+      all.dates = rep(seq(date.start, date.end, tstep), each=n.id)
+    }
+    
+    # merge with output data, omitting redundant columns
+    nm.omit = c('jday', 'mon', 'day', 'yr')
+    idx.redundant = (names(dat.out) %in% nm.omit)
+    dat.out = cbind(data.frame(date=all.dates), dat.out[ !idx.redundant ])
+    
+    # update the indexing variables used below
+    idx.head = idx.head & !( head.nm %in% nm.omit )
+    
+    # # update the indexing variables used below
+    # n.head = ncol(dat.out)
+    # head.nm = names(dat.out)
+    # 
+    # # -Inf ensures that no units field will match the newly added 'date' field
+    # head.start = c(-Inf, head.start[!idx.redundant])
+  }
+  
+  # TODO: make this a function
+  if(add_units)
+  {
+    # extract unit strings 
+    unit.nm = linedf$string[linedf$line_num == ln.unit]
+    unit.start = linedf$start_pos[linedf$line_num == ln.unit]
+    
+    # build a dictionary of unusual unit strings and their R-readable equivalents
+    unit.lu = do.call(rbind, list(c('ha-m', 'ha m'),
+                                  c('kgN', 'kg'),
+                                  c('kgP', 'kg'),
+                                  c('kg/ha_N', 'kg/ha'),
+                                  c('kg/ha_P', 'kg/ha'),
+                                  c('mg_pst', 'mg'),
+                                  c('tha', 't ha'),
+                                  c('kgha', 'kg ha'),
+                                  c('mj/m^2', 'mJ/m^2'),
+                                  c('mton', 'tonne'),
+                                  c('frac', NA),
+                                  c('----', NA),
+                                  c('---', NA),
+                                  c('___', NA)))
+    
+    # note: I'm assuming 'mton' means 'metric tonne', and not 'milliton' (which is
+    # apparently an arcane synonym of 'kilogram')
+    
+    # swap in the R-readable unit strings
+    idx.translate = unit.nm %in% unit.lu[,1]
+    unit.nm[idx.translate] = unit.lu[match(unit.nm[idx.translate], unit.lu[,1]), 2]
+    
+    # snap units to columns (they don't always align)
+    head.unit = rep(NA, n.head)
+    idx.unit = sapply(unit.start, function(n) which.min(abs(n - head.start)))
+    head.unit[idx.unit] = unit.nm 
+    
+    # index of output dataframe columns which have a unit mapped to them
+    cn.unit = which( !is.na( head.unit[idx.head] ) ) + as.integer(add_dates)
+    # ^the as.integer(add_dates) increments index when we've added the new date column 
+    
+    # assign units to output dataframe
+    if(length(cn.unit) > 0)
+    {
+      # the -as.integer(add_dates) decrements index as needed (dates column has no header!)
+      dat.out[cn.unit] = mapply(function(x, y) set_units(x, y, mode='standard'), 
+                                x = as.list(dat.out)[ cn.unit ], 
+                                y = head.unit[idx.head][ cn.unit - as.integer(add_dates) ], 
+                                SIMPLIFY=FALSE)
+      
+      #########
+      # DEBUGGING
+      # for(idx in 1:length(x))
+      # {
+      #   print(idx)
+      #   set_units(x[[idx]], y[[idx]], mode='standard')
+      # }
+      ########
+      
+    }
+  }
+
   return(dat.out)
+}
+```
+
+load or write a backup of all SWAT+ text config files (or a subset of
+them)
+
+``` r
+rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
+{
+  # In development. 
+  #
+  # ARGUMENTS:
+  #
+  # `bpath`: (optional) character, the path to the directory to write the backup
+  # `fname`: (optional) character vector, name of config files to copy
+  # `bmode`: character, one of 'backup', 'reload', or 'restore' (see DETAILS)
+  # `overwrite`: logical, whether to overwrite any existing files in `bpath`
+  #
+  # RETURN VALUE:
+  #
+  # Returns nothing, with behaviour depending on argument `bmode`:
+  #
+  # if 'backup', copies the requested files to `bpath` folder
+  # if 'reload', loads the requested files from `bpath` into memory
+  # if 'restore', overwrites currently loaded project with requested backup in `bpath`
+  # 
+  # DETAILS:
+  #
+  # This function serves both for creating backups (the default), and for opening
+  # SWAT+ files from text I/O directories external to the currently loaded one (ie.
+  # `ciopath`, as defined in the last call to `rswat_cio`). Note however that a backup
+  # can only be loaded when the current text I/O directory contains a like-named file
+  # (when this is not the case you can simply copy the file manually).
+  #
+  # In 'reload' mode, backup parameters can be accessed via `rswat_open(fname)`. To reset
+  # the parameters for a file, simply reload using `rswat_open(fname, reload=TRUE)`. In
+  # 'restore' mode, backup parameters overwrite (on disk) the ones in the currently
+  # loaded project (ie the directory set by `rswat_cio`)
+  #
+  # By default (`fname=NULL`) the function loads or copies all available config files.
+  # The special argument `fname='.'` in write-mode (`reload=FALSE`) also copies any
+  # non-config files found in the text I/O directory (such as weather input files), but
+  # not subdirectories.
+  #
+  # If `bpath` is not supplied, the function assigns the default `ciopath/rswat_backup`.
+  # If the `bpath` folder does not exist, it is created, unless we are in read-mode
+  # (ie `reload=TRUE`). `bpath` can be either an absolute path, or a string (containing
+  # no '/' or '\' characters, naming a subdirectory of the current text I/O directory)
+  #
+
+  # pull the current text I/O directory
+  cio = rswat_cio(trim=F)
+  textio = cio %>% pull(path) %>% dirname %>% unique
+  
+  # set default backup path as needed
+  if( is.null(bpath) ) bpath = file.path(textio, 'rswat_backup')
+  
+  # if `bpath` has slashes, treat as a path, otherwise treat as a subdirectory name
+  if( !grepl('\\\\|\\/', bpath) ) bpath = file.path(textio, bpath)
+ 
+  # default files list includes everything listed in 'file.cio'
+  if( is.null(fname) ) fname = c('file.cio', cio$file)
+  
+  # special argument '.' copies all files (eg. including weather data)
+  if( all(fname=='.') ) fname = list.files(textio, include.dirs=FALSE)
+  
+  # define proposed backup file paths
+  bfile.path = file.path(bpath, fname)
+  bfile.exists = file.exists(bfile.path)
+  
+  # define file paths of currently loaded environment
+  main.path = file.path(textio, fname)
+  main.exists = file.exists(main.path)
+  
+  # write-mode
+  if( bmode == 'backup' )
+  {
+    # check for and fix bad fname input
+    if( !all(main.exists) )
+    {
+      # warn of missing source files
+      msg1 = 'the following files were not found in current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname[!main.exists], collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.exists]
+      main.path = main.path[main.exists]
+      main.exists = main.exists[main.exists]
+      bfile.path = bfile.path[main.exists]
+      bfile.exists = bfile.exists[main.exists]
+    }
+    
+    # handle overwrites 
+    if( !overwrite & any(bfile.exists) )
+    {
+      # warn of existing backups
+      fname.existing = fname[bfile.exists]
+      msg1 = 'the following files already exist in backup directory'
+      msg2 = '(change `bpath` or set `overwrite=FALSE` to overwrite the old copies):\n'
+      warning(paste(msg1, bpath, msg2, paste(fname.existing, collapse=', ')))
+      
+      # update the source and destination file lists
+      fname = fname[!bfile.exists]
+      main.path = main.path[!bfile.exists]
+      main.exists = main.exists[!bfile.exists]
+      bfile.path = bfile.path[!bfile.exists]
+      bfile.exists = bfile.exists[!bfile.exists]
+    }
+    
+    # count number of files to be written
+    n.tocopy = length(fname)
+    
+    # error if we are left with nothing to write
+    if( n.tocopy == 0 ) stop('Nothing to write')
+    
+    # create the directory as needed
+    my_dir(bpath)
+    
+    # copy the files in a loop
+    pb = txtProgressBar(max=n.tocopy, style=3)
+    for(idx.file in 1:n.tocopy)
+    {
+      file.copy(main.path[idx.file], bfile.path[idx.file])
+      setTxtProgressBar(pb, idx.file)
+    }
+    close(pb)
+    return(invisible())
+  }
+  
+  # read-mode or loading files to prep for restore
+  if( bmode %in% c('reload', 'restore') )
+  {
+    # check for and fix bad fname input
+    if( !all(bfile.exists) )
+    {
+      # warn of missing backup files
+      msg1 = 'the following files were not found in backup directory'
+      warning(paste(msg1, bpath, ':\n', paste(fname[!main.exists], collapse=', ')))
+      
+      # update the source file lists
+      fname = fname[bfile.exists]
+      bfile.path = bfile.path[bfile.exists]
+      bfile.exists = bfile.exists[bfile.exists]
+    }
+    n.toload = length(bfile.path)
+    
+    # check the requested backups all match a currently loaded file
+    main.loaded = fname %in% cio$file
+    if( any( !main.loaded ) )
+    {
+      # warn of backups for files not found in current text I/O directory 
+      fname.notloaded = fname[!main.loaded]
+      msg1 = 'the following backup(s) matched no file in the current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname.notloaded, collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.loaded]
+      main.path = main.path[main.loaded]
+      main.exists = main.exists[main.loaded]
+      bfile.path = bfile.path[main.loaded]
+      bfile.exists = bfile.exists[main.loaded]
+    }
+    
+    # error if we are left with nothing to load
+    if( n.toload == 0 ) stop('Nothing to load')
+    
+    # temporarily modify master text I/O files list to point to the backup(s)
+    fpath.original = .rswat$cio$path
+    .rswat$cio$path[ match(fname, cio$file) ] = bfile.path
+    
+    # TODO: dimensional sanity check 
+    # load the files
+    rswat_open(fname, reload=TRUE)
+    
+    # restore the current text I/O paths in master list
+    .rswat$cio$path = fpath.original
+  }
+  
+  # overwrite existing files with backup data
+  if( bmode == 'restore' )
+  {
+    # loop over requested files
+    for(idx in 1:length(fname))
+    {
+      # load the backup data into temporary variable
+      fdat = rswat_open(fname[idx])
+      
+      # reload the (old) file, overwrite with data from memory
+      rswat_open(fname[idx], reload=TRUE, quiet=TRUE)
+      rswat_write(fdat, preview=FALSE)
+    }
+  }
+  
+  return(invisible())
+  
 }
 ```
 
@@ -1936,7 +2210,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
   if( is.null(projdir) ) 
   {
     # default name from USGS gage site name, default location from parent of dem raster file
-    projnm = paste0('swat_', boundary$catchment_name)
+    projnm = boundary$catchment_name
     projdir = here(file.path(dirname(dem.path), projnm))
   } 
   
@@ -2372,13 +2646,27 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   bou = dat[['bou']]
   
   # unpack `titles`
-  msg.main = titles$main
-  msg.sub = titles$sub
-  msg.legend = titles$legend
+  msg.main = titles[['main']]
+  msg.sub = titles[['sub']]
+  msg.legend = titles[['legend']]
   
-  # TODO: add lat/long coordinates to title
-  # set default main title, collapsing as needed
-  if( is.null(msg.main) ) msg.main = gsub('_', ' ', stats$name)
+  # set default main title
+  if( is.null(msg.main) )
+  {
+    # format in decimal degrees
+    coords = round(abs(colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])), 3)
+    msg.coords = paste( paste0( paste0(coords, '\u00B0'), c('N', 'W') ), collapse=' ')
+    
+    # DMS alternative
+    # coords = colMeans(st_drop_geometry(subb)[, c('Lat', 'Lon')])
+    # NS.dms = gsub('d', '°', as.character(dd2dms(coords['Lat'], NS=TRUE)))
+    # EW.dms = gsub('d', '°', as.character(dd2dms(coords['Lon'], NS=FALSE)))
+    # msg.coords = paste0('(', NS.dms, ' ', EW.dms, ')')
+    
+    msg.main = paste0(gsub('_', ' ', stats$name), ' (', msg.coords, ')')
+  }
+  
+  # collapse vectors as needed
   if( length(msg.main) > 1 ) msg.main = paste(msg.main, collapse='\n')
   
   # generate default subtitle as needed
@@ -2386,7 +2674,7 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   {
     # computed from 'bou' (boundary geometry) and 'stats' in `dat`
     msg.sub = c(paste(round(set_units(stats$area, km^2), 1), 'square km'),
-                paste(stats$counts['nhru'], 'HRUs'),
+                paste(stats$counts['ncha'], 'channels'),
                 paste(stats$counts['nsub'], 'subbasins')) 
   }
 
@@ -2424,7 +2712,7 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
   }
   
   # default palette is like an improved rainbow()
-  if( is.null(pal) ) pal = hcl.colors(1e3, palette='Dark 3', rev=TRUE)
+  if( is.null(pal) ) pal = hcl.colors(1e3, palette='Dark 3')
   
   # set up legend breaks and labels as needed
   is.lookup = FALSE
@@ -2517,12 +2805,9 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
 run the SWAT+ executable (NOTE: requires `rswat` helper function)
 
 ``` r
-rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
+rswat_exec = function(quiet=FALSE, textio=NULL)
 {
   # 'textio': character, path to the text I/O directory for the SWAT+ model 
-  # `dates`: (optional) vector of Dates from which to derive simulation period
-  # `info`: logical, whether to return current time.sim and print.prt instead of running SWAT+
-  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
   # `quiet`: logical, suppresses console messages
   #
   # `object`, if supplied, specifies the output files to write, where the default is to not print
@@ -2533,7 +2818,7 @@ rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
   # `object='yearly'` have the effect of printing all yearly files. 
   #
   # If `dates` is supplied, the 'print.prt' and 'time.sim' files are updated to match the
-  # its range, so that the simulation runs the full time period in `dates`.
+  # its range; Otherwise the existing values in the file are used.
   #
   # Note: this does not alter the time step of the simulation (in parameter `step` of
   # "time.sim"), or attempt to detect it from `dates`
@@ -2542,61 +2827,16 @@ rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
   # set the default executable path
   exe = 'C:/SWAT/SWATPlus/SWATPlusEditor/resources/app.asar.unpacked/swat_exe/rev60.5.2_64rel.exe'
   
-  # handle dates
-  if( !is.null(dates) )
+  # set default `textio` directory if `rswat` has been initialized with a project directory
+  if( is.null(textio) )
   {
-    # check for valid input 
-    dates = dates[!is.na(dates)]
-    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
-    if( !is(dates, 'Date') ) stop('supplied `dates` not of "Date" class')
+    # check if rswat has been initialized
+    err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
+    if( !exists('.rswat') ) stop(err.msg)
+    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
     
-    # set the start and end dates
-    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
-    dstart = as.integer(format(min(dates), '%j'))
-    ystart = as.integer(format(min(dates), '%Y'))
-    dend = as.integer(format(max(dates), '%j'))
-    yend = as.integer(format(max(dates), '%Y'))
-    
-    # write any date changes to time.sim
-    if( !quiet ) print('> writing time.sim')
-    time.sim = rswat_open('time.sim', quiet=quiet)
-    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
-    rswat_write(time.sim, preview=F, quiet=quiet)
-    
-    # write any date changes for print.prt
-    if( !quiet ) print('> writing print.prt')
-    print.prt = rswat_open('print.prt', quiet=quiet)
-    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
-    rswat_write(print.prt[[1]], preview=F, quiet=quiet)
-  }
-  
-  # deal with the effects of `object` on print.prt
-  if( !is.null(object) )
-  {
-    # load print.prt if we don't have it already
-    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=quiet)
-    
-    # grab the full list of valid objectect names
-    object.all = print.prt[[5]]$objectects
-    object.nm = names(object)
-    
-    # expand the unnamed entries to include all files for that timestep
-    object.exp = lapply(object, function(x) setNames(rep(x, length(object.all)), object.all))
-    object.exp[ object.nm != '' ] = object[object.nm != '']
-    object = do.call(c, object.exp)
-    
-    # reset all values to no-print
-    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
-    
-    # a simple loop suffices as this array shouldn't ever get very large
-    for(idx in 1:length(object))
-    {
-      nm = names(object[idx])
-      print.prt[[5]][print.prt[[5]]$object == nm, object[idx]] = 'y'
-    }
-    
-    # write the changes to print.prt
-    rswat_write(print.prt[[5]], preview=F, quiet=quiet)
+    # pull the directory from rswat environment
+    textio = dirname(.rswat$ciopath)
   }
   
   # shell command prefix to change to the directory (avoids changing R's working directory)
@@ -2605,101 +2845,168 @@ rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
   # build system call and run SWAT
   syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
   invisible(shell(syscall.string, intern=quiet))
-  if(!quiet) cat('\n>> finished')
+  if(!quiet) cat('\n>> finished\n')
 }
 ```
 
-evaluate errors in prediction for a SWAT+ model
+run a daily SWAT+ simulation of a physical variable, for a given
+location and time period
 
 ``` r
-my_gage_objective = function(gage, textio, oid=NULL, quiet=FALSE, draw=FALSE, exec=TRUE)
+rswat_daily = function(dates=NULL, loc=NULL, vname='flo_out', quiet=FALSE, textio=NULL)
 {
-  # 'gage': dataframe of flow and date
+  # ARGUMENTS:
+  # 
+  # 'dates': vector or dataframe containing the dates to simulate (see DETAILS)
+  # 'loc': integer, character, or sf geometry; specifying the location (see DETAILS) 
+  # 'vname': character vector, the SWAT+ name of the physical variable(s) to return
+  # 'fname': character vector, the SWAT+ filename for the desired output file(s)
+  # 'quiet': boolean, indicating to supress console messages
   # 'textio': character, path to the text I/O directory for the SWAT+ model 
-  # 'oid': (optional) sf point or integer id code
-  # 'draw': logical, indicates to plot the results (or add to plot, if one exists already)
-  # 'exec': logical, indicates to run the simulation (else uses existing output files)
   #
-  # for now we only support daily timesteps
+  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
+  #
+  # RETURN:
+  # 
+  # A dataframe containing the simulated data for the requested time period.
+  #
+  # DETAILS:
+  # 
+  # Runs a simulation by calling the SWAT+ executable (this can be slow!), then loads
+  # the output into R.
+  # 
+  # Argument 'dates' can be a dataframe containing a 'date' column (eg. pass a streamgage
+  # observation dataset to get back matching simulated data), or a vector of dates. The 
+  # function will run a simulation that covers the entire period (filling any gaps), so
+  # the desired time series can also be specified by `dates=c(start_date, end_date)`.
+  # When 'dates' is supplied, the function writes the corresponding values to the files
+  # 'print.prt', and 'time.sim'. Otherwise the simulation runs over whatever period is
+  # currently set in those files.
+  #
+  # TODO: handle different types of physical variables through loc and vname. For now the
+  # function just requests the channel flow data for the main outlet
+  #
+  # The default path for 'textio' is the directory set by `rswat_cio` (if it has been
+  # called already).
   
-  # find the channel id value associated with the supplied point if necessary
-  if( !is.integer(oid) )
+  # set default `textio` directory if `rswat` has been initialized with a project directory
+  if( is.null(textio) )
   {
-    # attempt to find the watershed shapefile
-    shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
-    shp.fn = list.files(shp.dir)
-    shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
+    # check if rswat has been initialized
+    err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
+    if( !exists('.rswat') ) stop(err.msg)
+    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
     
-    # warn of multiple matches
-    if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
-    
-    # handle no-match case
-    if( length(shp.path) > 0 ) 
-    {
-      # set default `oid` when the shapefile can't be found 
-      oid = 1
-      
-    } else {
-      
-      # load the first of the results and snap gage record site 
-      riv = read_sf(shp.path)
-      idx.riv = which.min(st_distance(oid, riv))
-      oid = riv$Channel[idx.riv]
-    }
+    # pull the directory from rswat environment
+    textio = dirname(.rswat$ciopath)
   }
   
-  # TODO: detect this automatically from `gage`
-  # assign objects to write and dates to simulate
-  object = c(channel_sd='daily')
-  vname = 'flo_out'
-  dates = gage$date
-  fname = paste0(names(object), '_day')
+  # default `loc` id value (1) specifies main outlet
+  if( is.null(loc) ) loc = as.integer(1)
   
-  # run the simulation and extract response data
-  if(exec) rswat_run(textio, dates=dates, object=object, quiet=quiet)
-  sim = rswat_output(fname, vname) %>% filter(gis_id==oid)
-  
-  # TODO: optimize this inner join
-  # handle skipped years, missing days etc
-  idx.gage = match(sim$date, gage$date)
-  qsim = gage$flow[idx.gage]
-  qobs = sim[[vname]]
-  
-  # TODO: add alternatives
-  # compute objective function value
-  obj.val = my_nse(qsim, qobs, L=2)
-  
-  # plot the data, if requested 
-  if(ifelse(is.logical(draw), draw, TRUE))
+  # find the object id value associated with the supplied location if necessary
+  if( !is.integer(loc) )
   {
-    # find a color for the normalized NSE
-    qalpha = 0.5
-    tcol = rainbow(60)[as.integer(format(Sys.time(), '%M'))]
-    qcol = ifelse(is.logical(draw), tcol, draw)
-    if(is.numeric(qcol))
-    {
-      qalpha = qcol
-      qcol = 'blue'
-    }
+    # # attempt to find the watershed shapefile
+    # shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
+    # shp.fn = list.files(shp.dir)
+    # shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
+    # 
+    # # warn of multiple matches
+    # if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
+    # 
+    # # handle no-match case
+    # if( length(shp.path) > 0 ) 
+    # {
+    #   # set default `oid` when the shapefile can't be found 
+    #   oid = 1
+    #   
+    # } else {
+    #   
+    #   # load the first of the results and snap gage record site 
+    #   riv = read_sf(shp.path)
+    #   idx.riv = which.min(st_distance(oid, riv))
+    #   oid = riv$Channel[idx.riv]
+    # }
     
-    # initialize the plot if required
-    idx.plot = gage$date %in% sim$date
-    if( dev.cur()==1 ) plot(flow~date, data=gage[idx.plot,], pch='')
+    stop('non-integer `loc` not implemented yet!')
+    # TODO: write methods for finding gis_id based on location
+  }
+  
+  # define "objects" in 'print.prt' (output files) based on the requested 'fname', 'vname'
+  if( vname == 'flo_out' ) 
+  {
+    # TODO: generalize this with a lookup table
     
-    # add new simulation data
-    lines(flow~date, data=gage[idx.plot,], lwd=2)
-    lines(flo_out~date, data=sim, col=adjustcolor(qcol, alpha=qalpha))
+    # the SWAT+ object name as listed in 'print.prt'
+    object = 'channel_sd'
     
-    # wipe title and overwrite with objective value
-    obj.msg = paste('score =', round(obj.val, 3))
-    ovr.msg = paste(rep('\U2588', 25), collapse='')
-    title(ovr.msg, col.main='white', adj=0)
-    title(obj.msg, col.main=qcol, adj=0)
+    # the actual filename on disk (without extension)
+    object.nm = paste0(object, '_day')
+
+  } else {
+    
+    stop('this output variable is not supported yet!')
     
   }
   
-  return(obj.val)
-  # TODO: allow different return value (residuals, fitted, etc)
+  # message before writing any required changes to print.prt and time.sim
+  if( !quiet ) cat('> setting up time.sim and print.prt...\n')
+  
+  # write time period info to print.prt and time.sim
+  if( !is.null(dates) )
+  {
+    # handle dataframe input
+    if( is.data.frame(dates) ) dates = dates$date
+
+    # check for valid input 
+    dates = as.Date( dates[!is.na(dates)] )
+    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
+    
+    # set the start and end dates
+    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
+    dstart = as.integer(format(min(dates), '%j'))
+    ystart = as.integer(format(min(dates), '%Y'))
+    dend = as.integer(format(max(dates), '%j'))
+    yend = as.integer(format(max(dates), '%Y'))
+    
+    # load 'time.sim' and set 'step' = 0 for daily timestep operation
+    time.sim = rswat_open('time.sim', quiet=TRUE)
+    time.sim$step = 0
+    
+    # make any start/end date changes to 'time.sim' and overwrite on disk
+    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(time.sim, preview=F, quiet=TRUE)
+    
+    # load 'print.prt' and set 'nyskip' = 0 to ensure we can see all of the output
+    print.prt = rswat_open('print.prt', quiet=TRUE)
+    print.prt[[1]]$nyskip = 0
+    
+    # make any changes to start/end dates and overwrite 'print.prt' on disk
+    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(print.prt[[1]], preview=F, quiet=TRUE)
+  }
+  
+  # handle specification of output filenames ("objects") in 'print.prt'
+  if( !is.null(object) )
+  {
+    # only load 'print.prt' as needed
+    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=TRUE)
+    
+    # grab the full list of valid object names
+    object.all = print.prt[[5]]$objects
+    
+    # reset all values to no-print, then toggle requested files
+    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+    print.prt[[5]]$daily[ object.all %in% object ] = 'y'
+
+    # write the changes to print.prt
+    rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
+  }
+
+  # run the simulation and return output data as R dataframe
+  rswat_exec(quiet=quiet)
+  return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
 }
 ```
 
@@ -3149,5 +3456,226 @@ my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix=
                 data=lapply(wstn.ts.path, basename)))
   }
   
+}
+```
+
+compute Nash–Sutcliffe model efficiency coefficient (NSE)
+
+``` r
+my_nse = function(qobs, qsim, L=2, normalized=FALSE)
+{
+  # compute the standard NSE coefficient
+  nse = 1 - drop_units( sum( abs(qsim - qobs)^L ) / sum( abs(qobs - mean(qobs))^L ) )
+  
+  # normalize, if requested
+  if(normalized)
+  {
+    nse = 1 / (2 - nse)
+  }
+  
+  return(nse)
+}
+```
+
+TODO: phase out this function (replaced by rswat\_daily) evaluate errors
+in prediction for a SWAT+ model
+
+``` r
+my_gage_objective = function(gage, textio=NULL, oid=NULL, quiet=FALSE, draw=FALSE, exec=TRUE)
+{
+  # 'gage': dataframe of flow and date
+  # 'textio': character, path to the text I/O directory for the SWAT+ model 
+  # 'oid': (optional) sf point or integer id code
+  # 'draw': logical, indicates to plot the results (or add to plot, if one exists already)
+  # 'exec': logical, indicates to run the simulation (else uses existing output files)
+  #
+  # for now we only support daily timesteps
+  
+  # set default `textio` directory if `rswat` has been initialized with a project directory
+  if( is.null(textio) )
+  {
+    # check if rswat has been initialized
+    err.msg = 'Either supply `textio` or run `rswat_cio` to set it memory'
+    if( !exists('.rswat') ) stop(err.msg)
+    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+    
+    # pull the directory from rswat environment
+    textio = dirname(.rswat$ciopath)
+  }
+  
+  # find the channel id value associated with the supplied point if necessary
+  if( !is.integer(oid) )
+  {
+    # attempt to find the watershed shapefile
+    shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
+    shp.fn = list.files(shp.dir)
+    shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
+    
+    # warn of multiple matches
+    if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
+    
+    # handle no-match case
+    if( length(shp.path) > 0 ) 
+    {
+      # set default `oid` when the shapefile can't be found 
+      oid = 1
+      
+    } else {
+      
+      # load the first of the results and snap gage record site 
+      riv = read_sf(shp.path)
+      idx.riv = which.min(st_distance(oid, riv))
+      oid = riv$Channel[idx.riv]
+    }
+  }
+  
+  # TODO: detect this automatically from `gage`
+  # assign objects to write and dates to simulate
+  object = c(channel_sd='daily')
+  vname = 'flo_out'
+  dates = gage$date
+  fname = paste0(names(object), '_day')
+  
+  # run the simulation and extract response data
+  if(exec) rswat_run(textio, dates=dates, object=object, quiet=quiet)
+  sim = rswat_output(fname, vname) %>% filter(gis_id==oid)
+  
+  # TODO: optimize this inner join
+  # handle skipped years, missing days etc
+  idx.gage = match(sim$date, gage$date)
+  qsim = gage$flow[idx.gage]
+  qobs = sim[[vname]]
+  
+  # TODO: add alternatives
+  # compute objective function value
+  obj.val = my_nse(qsim, qobs, L=2)
+  
+  # plot the data, if requested 
+  if(ifelse(is.logical(draw), draw, TRUE))
+  {
+    # find a color for the normalized NSE
+    qalpha = 0.5
+    tcol = rainbow(60)[as.integer(format(Sys.time(), '%M'))]
+    qcol = ifelse(is.logical(draw), tcol, draw)
+    if(is.numeric(qcol))
+    {
+      qalpha = qcol
+      qcol = 'blue'
+    }
+    
+    # initialize the plot if required
+    idx.plot = gage$date %in% sim$date
+    if( dev.cur()==1 ) plot(flow~date, data=gage[idx.plot,], pch='')
+    
+    # add new simulation data
+    lines(flow~date, data=gage[idx.plot,], lwd=2)
+    lines(flo_out~date, data=sim, col=adjustcolor(qcol, alpha=qalpha))
+    
+    # wipe title and overwrite with objective value
+    obj.msg = paste('score =', round(obj.val, 3))
+    ovr.msg = paste(rep('\U2588', 25), collapse='')
+    title(ovr.msg, col.main='white', adj=0)
+    title(obj.msg, col.main=qcol, adj=0)
+    
+  }
+  
+  return(obj.val)
+  # TODO: allow different return value (residuals, fitted, etc)
+}
+```
+
+TODO: phase out this function (replaced by rswat\_exe) run the SWAT+
+executable (NOTE: requires `rswat` helper function)
+
+``` r
+rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
+{
+  # 'textio': character, path to the text I/O directory for the SWAT+ model 
+  # `dates`: (optional) vector of Dates from which to derive simulation period
+  # `info`: logical, whether to return current time.sim and print.prt instead of running SWAT+
+  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
+  # `quiet`: logical, suppresses console messages
+  #
+  # `object`, if supplied, specifies the output files to write, where the default is to not print
+  # with exceptions listed in `object` as varname-timestep pairs. eg. `object=c(basin_wb='yearly')`
+  # specifies to print only the yearly data for the 'basin_wb' file (and none of the others).
+  # Unnamed strings in `object` specify to print all files for that timestep (regardless of any
+  # more specific exceptions in `object`), eg. both `object=c(basin_wb='yearly', 'yearly')` and
+  # `object='yearly'` have the effect of printing all yearly files. 
+  #
+  # If `dates` is supplied, the 'print.prt' and 'time.sim' files are updated to match the
+  # its range, so that the simulation runs the full time period in `dates`.
+  #
+  # Note: this does not alter the time step of the simulation (in parameter `step` of
+  # "time.sim"), or attempt to detect it from `dates`
+  
+  # TODO: detect this in pyqgis module
+  # set the default executable path
+  exe = 'C:/SWAT/SWATPlus/SWATPlusEditor/resources/app.asar.unpacked/swat_exe/rev60.5.2_64rel.exe'
+  
+  # handle dates
+  if( !is.null(dates) )
+  {
+    # check for valid input 
+    dates = dates[!is.na(dates)]
+    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
+    if( !is(dates, 'Date') ) stop('supplied `dates` not of "Date" class')
+    
+    # set the start and end dates
+    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
+    dstart = as.integer(format(min(dates), '%j'))
+    ystart = as.integer(format(min(dates), '%Y'))
+    dend = as.integer(format(max(dates), '%j'))
+    yend = as.integer(format(max(dates), '%Y'))
+    
+    # write any date changes to time.sim
+    if( !quiet ) print('> writing time.sim')
+    time.sim = rswat_open('time.sim', quiet=quiet)
+    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(time.sim, preview=F, quiet=quiet)
+    
+    # write any date changes for print.prt
+    if( !quiet ) print('> writing print.prt')
+    print.prt = rswat_open('print.prt', quiet=quiet)
+    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(print.prt[[1]], preview=F, quiet=quiet)
+  }
+  
+  # deal with the effects of `object` on print.prt
+  if( !is.null(object) )
+  {
+    # load print.prt if we don't have it already
+    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=quiet)
+    
+    # grab the full list of valid object names
+    object.all = print.prt[[5]]$objectects
+    object.nm = names(object)
+    
+    # expand the unnamed entries to include all files for that timestep
+    object.exp = lapply(object, function(x) setNames(rep(x, length(object.all)), object.all))
+    object.exp[ object.nm != '' ] = object[object.nm != '']
+    object = do.call(c, object.exp)
+    
+    # reset all values to no-print
+    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+    
+    # a simple loop suffices as this array shouldn't ever get very large
+    for(idx in 1:length(object))
+    {
+      nm = names(object[idx])
+      print.prt[[5]][print.prt[[5]]$object == nm, object[idx]] = 'y'
+    }
+    
+    # write the changes to print.prt
+    rswat_write(print.prt[[5]], preview=F, quiet=quiet)
+  }
+  
+  # shell command prefix to change to the directory (avoids changing R's working directory)
+  shell.prefix = paste0('pushd ', normalizePath(textio), ' &&')
+  
+  # build system call and run SWAT
+  syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
+  invisible(shell(syscall.string, intern=quiet))
+  if(!quiet) cat('\n>> finished')
 }
 ```
