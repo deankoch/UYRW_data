@@ -1286,6 +1286,44 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
   return(leaf.result)
 }
 
+#' Estimate effective precipitation  by Turc–Mezentsev formula
+my_effp = function(pet, pcp, n=2)
+{
+  # ARGUMENTS:
+  #
+  # `pet`: numeric vector, the catchment-wide potential evapotranspiration, in mm/day
+  # `pcp`: numeric vector, the catchment-wide precipitation, in mm/day
+  # `n`: numeric > 0, exponent of the aridity transformation (the shape parameter)
+  #
+  # RETURN VALUE:
+  #
+  # Units object, a numeric vector of estimated daily effective precipitation values
+  # 
+  # DETAILS:
+  #
+  # Turc–Mezentsev water balance relates (long-term average) streamflow to precipitation and
+  # potential evaporation (see [Lebecherel et al., 2013](https://doi.org/10.1002/2013WR013575)).
+  # It can be rearranged to get a filter for effective precipitation (the portion becoming runoff)
+  # as a function of total precipitation and potential evapotranspiration on a daily timescale.
+  #
+  # The default shape parameter `n=2` if often used out of mathematical convenience and for its
+  # resemblance to a similar formula from Budyko analysis 
+  #
+  
+  # convert to common units as needed then strip to plain numeric 
+  pcp = drop_units(set_units(pcp, 'mm/day'))
+  pet = drop_units(set_units(pet, 'mm/day'))
+  
+  # compute aridity index, replacing zeros in denominator with very small positive constant
+  aindex = pcp / pmax(1e-10, pet) 
+  
+  # generalized Turc–Mezentsev formula with shape parameter `n`
+  pcp.out = pcp * ( 1 - ( 1 / ( 1 + aindex^n )^(1/n) ) )
+  
+  # set units and finish
+  pcp.out = set_units(pcp.out, 'mm/day')
+  return(pcp.out)
+}
 
 
 #+ include=FALSE
