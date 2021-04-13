@@ -755,10 +755,8 @@ my_get_snodas = function()
 #' search and download/extract files from the US NPS Data Store (irmaservices.nps.gov)
 my_get_irma = function(query='boundaries', resoid=NULL, dest=NULL, nmax=1000, ow=FALSE, uz=TRUE)
 {
-  # A (somewhat limited) R implementation of the NPS REST API, documented here:
+  # A very basic R implementation of the NPS REST API, documented here:
   # https://irmaservices.nps.gov/datastore/v4/documentation/datastore-api.html#/
-  #
-  # Browse the data store 
   #
   # ARGUMENTS:
   #

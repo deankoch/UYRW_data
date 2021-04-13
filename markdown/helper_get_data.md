@@ -1,7 +1,7 @@
 helper\_get\_data.R
 ================
 Dean Koch
-2021-03-25
+2021-04-13
 
 **Mitacs UYRW project**
 
@@ -782,10 +782,8 @@ search and download/extract files from the US NPS Data Store
 ``` r
 my_get_irma = function(query='boundaries', resoid=NULL, dest=NULL, nmax=1000, ow=FALSE, uz=TRUE)
 {
-  # A (somewhat limited) R implementation of the NPS REST API, documented here:
+  # A very basic R implementation of the NPS REST API, documented here:
   # https://irmaservices.nps.gov/datastore/v4/documentation/datastore-api.html#/
-  #
-  # Browse the data store 
   #
   # ARGUMENTS:
   #

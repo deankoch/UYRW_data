@@ -7,12 +7,15 @@ source(here('R/helper_main.R'))
 source(here('R/rswat.R'))
 
 
-## file descriptions
+## data from earlier scripts
 
+# drop analysis and subwatershed delineation based on gage locations
 subwatersheds.meta = my_metadata('get_subwatersheds')
+taudem.meta = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
+
+# data on streamflow and weather
 streamgages.meta = my_metadata('get_streamgages')
 meteo.meta = my_metadata('get_meteo')
-taudem.meta = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
 
 
 ## make a directory for output

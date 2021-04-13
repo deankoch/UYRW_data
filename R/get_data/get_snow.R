@@ -176,5 +176,51 @@ uyrw.varnames = unique(unlist(sapply(uyrw.data, function(x) names(x))))
 print(nwcc.descriptions[names(nwcc.descriptions) %in% uyrw.varnames])
 
 
+### 
+###
+# develop
+
+if(0)
+{
+  # print available variables and identify snow-related ones
+  xx.nm = lapply(uyrw.data, function(x) names(x))
+  xx = unique(do.call(c, xx.nm))
+  nwcc.descriptions[names(nwcc.descriptions) %in% xx]
+  snow.nm = c('SNWD', 'WTEQ', 'SNDN')
+  
+  # find stations with snow data
+  xx.idx = sapply(xx.nm, function(x) any(x %in% snow.nm))
+  yy = uyrw.data[xx.idx]
+  zz.sf = uyrw.sf[xx.idx,]
+  
+  # prune the all-NA rows
+  zz = lapply(yy, function(y) y[ apply(y[,snow.nm], 1, function(x) !all(is.na(x))), c('date', snow.nm)])
+  
+  # make a histogram of data availability by year
+  zz.df = do.call(rbind, zz)
+  zz.dates = zz.df$date
+  
+  # R histograms with Dates appears to be broken? No axis labels
+  hist.breaks = seq(as.Date('1918-01-01'), as.Date('2022-01-01'), by='year')
+  hist(zz.dates, breaks=hist.breaks)
+  
+  # ggplot approach
+  freqs = aggregate(zz.dates, by=list(zz.dates), FUN=length)
+  freqs$names <- as.Date(freqs$Group.1, format="%Y-%m-%d")
+  ggplot(freqs, aes(x=names, y=x)) + geom_bar(stat="identity") +
+    scale_x_date(breaks="1 year", labels=date_format("%Y"),
+                 limits=c(as.Date('1987-01-01'), as.Date('2021-01-01'))) +
+    ylab("Frequency") + xlab("Year") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45))
+  
+  plot(uyrw.poly)
+  plot(zz.sf, add=TRUE)
+}
+
+### 
+###
+
+
 #+ include=FALSE
 #my_markdown('get_snow', 'R/get_data')
