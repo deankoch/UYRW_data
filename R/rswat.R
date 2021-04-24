@@ -72,21 +72,20 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   #
   # DETAILS:
   #
-  # When called with default arguments, returns a list of all files that can be imported
-  # with calls to `rswat_open`.
-  #
-  # The function assumes `ciopath` points to a SWAT+ master watershed file (probably
-  # 'file.cio'), which is parsed as a dataframe and written to memory. Subsequent calls may
-  # omit the `ciopath` argument to get a copy of this dataframe without reloading the file.
+  # `ciopath` should point to the SWAT+ master watershed file 'file.cio'. This is parsed to
+  # discover the config files associated with a SWAT+ project, and a dataframe of info on these
+  # files is returned. Subsequent calls may `ciopath` to get this dataframe without reloading
+  # anything. Including `ciopath` in a subsequent call prompts the function to scan again for
+  # files (eg to find newly added ones), and drops any previously assigned argument to 'ignore'.
   #
   # Any filename or group name matching an element of input argument `ignore` will tagged
-  # as such, in order to filter out files that you don't want to have load by default. 
-  # Ignored files can be loaded, they just won't be included by default with `rswat_open()`
+  # as 'ignored' in the return dataframe (and in memory), in order to filter out files that you
+  # don't want to have load by default. Ignored files can still be loaded, they just won't be
+  # included by default with `rswat_open()` calls.
   #
   # `wipe` is used for clearing memory, or for starting over without ending your R session.
-  # It is invoked automatically whenever `rswat_cio` is called with a new `ciopath` location. 
-  # If `ciopath` is not supplied and `wipe==TRUE`, the function flushes everything and 
-  # returns nothing
+  # It is invoked automatically whenever `rswat_cio` is called with `ciopath` location different
+  # from the currently assigned one (if any). 
   #
   # `reload==TRUE` simply chains the `rswat_cio` call with `rswat_open(reload=TRUE)`, for a
   # quick one-liner to load all of the files in a project. Subsequent calls to `rswat_open`
@@ -94,7 +93,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   #
   
   # handle calls with no `ciopath` argument
-  if(is.null(ciopath))
+  if( is.null(ciopath) )
   {
     # check if the function has been run already
     if( 'ciopath' %in% ls(.rswat) )
@@ -126,7 +125,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   } else {
   
     # detect directory input instead of 'file.cio' path
-    if(basename(ciopath) != 'file.cio')
+    if( basename(ciopath) != 'file.cio' )
     {
       # formulate two likely paths assuming that ciopath is a directory
       ciopath.a = file.path(ciopath, 'file.cio')
@@ -155,7 +154,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     
     # initialize master storage list as needed
     is.initial = ( ! 'stor' %in% ls(.rswat) )
-    if(is.initial | wipe)
+    if( is.initial | wipe )
     {
       # initialize empty package storage list objects in memory
       assign('stor', list(data=list()), envir=.rswat, inherits=FALSE)
@@ -192,7 +191,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       as.data.frame() 
     
     # update exclusion list if necessary
-    if(!is.null(ignore))
+    if( !is.null(ignore) )
     {
       cio = cio %>% mutate(ignored = (group %in% ignore) | (file %in% ignore) )
     }
@@ -216,7 +215,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   }
   
   # append metadata from any loaded files
-  if(nrow(.rswat$stor$linedf) > 0)
+  if( nrow(.rswat$stor$linedf) > 0 )
   {
     # compute stats by file
     linedf.stats = .rswat$stor$linedf %>% 
@@ -228,12 +227,12 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
         nskip=list(length(unique(line_num[skipped])))) %>%
       as.data.frame
     
-    # find number of skipped lines
-    .rswat$stor$linedf %>% 
-      filter(skipped) %>%
-      group_by(file) %>% 
-      summarize(.groups='drop_last', nskip=length(unique(line_num))) %>%
-      as.data.frame
+    # # find number of skipped lines
+    # .rswat$stor$linedf %>% 
+    #   filter(skipped) %>%
+    #   group_by(file) %>% 
+    #   summarize(.groups='drop_last', nskip=length(unique(line_num))) %>%
+    #   as.data.frame
     
     # add them to the return dataframe, and overwrite in storage
     nm.stats = c('nline', 'nskip', 'ntab', 'nvar')
@@ -252,7 +251,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
   {
     # load files into memory and update the cio with stats
     rswat_open(reload=TRUE) 
-    cio = rswat_cio(trim=trim, wipe=FALSE, ignore=ignore)
+    cio = rswat_cio(ciopath, reload=FALSE, trim=trim, ignore=ignore)
   }
   
   # return up-to-date files list
@@ -286,7 +285,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   
   # parse the `fname` argument, assigning all non-ignored files by default
   cio = rswat_cio(trim=FALSE) %>% filter(exists) 
-  if(length(fname)==0) fname = cio %>% filter(!ignored) %>% pull(file) 
+  if( length(fname) == 0 ) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
   
   # message if no filenames match input string
@@ -294,8 +293,8 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   
   # check what's been loaded into memory already, enter loading loop if required 
   idx.loaded = cio.match$file %in% names(.rswat$stor$data)
-  if(reload) idx.loaded = rep(FALSE, nrow(cio.match))
-  if(any(!idx.loaded))
+  if( reload ) idx.loaded = rep(FALSE, nrow(cio.match))
+  if( any(!idx.loaded) )
   {
     # initial console message
     if(!quiet) print(paste('loading', sum(!idx.loaded), 'file(s)'))
@@ -339,7 +338,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
 
   # prepare the requested data in a named list, then simplify if requested
   values.out = .rswat$stor$data[cio.match$file]
-  if(simplify)
+  if( simplify )
   {
     # collapse redundant within-file lists, then deal with single-file lists
     idx.singles = sapply(values.out, length) == 1
@@ -350,13 +349,13 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   }
   
   # prepare the requested data in a named list
-  if(!reload)
+  if( !reload )
   {
     # pull a copy of the requested dataframes
     values.out = .rswat$stor$data[cio.match$file]
     
     # simplify as needed before returning the list
-    if(simplify)
+    if( simplify )
     {
       # collapse redundant within-file lists, then collapse any single-file lists
       idx.singles = sapply(values.out, length) == 1
@@ -650,22 +649,23 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
 }
 
 #' read a SWAT+ output file as dataframe, or return a list of files or output variables
-rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
+rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE)
 {
   # ARGUMENTS:
   #
-  # `fname`: character, the SWAT+ output filename, with or without file extension
-  # `vname`: character vector, names of the columns to read
+  # `fname`: character, the SWAT+ output filename with extension
+  # `vname`: character vector, (optional) names of the columns to read
   # `makedates`: boolean, whether to add Date class column, replacing 'day', 'jday', etc
   # `showidx`: boolean, whether to include indexing variables
+  # `loadall`: boolean, whether to run a dummy simulation to discover all possible outputs
   #
   # RETURN VALUE:
   #
   # in read mode (`fname` supplied):
   # 
   # Returns a dataframe containing the requested variable(s) `vname` from file `fname`.
-  # This should match the table in the file, with any available units (on header lines)
-  # automatically assigned. 
+  # This matches the table in the file, with headers assigned to column names, appropriate
+  # classes for the data vectors, and any available units (on header lines) assigned. 
   #
   # in list mode (`fname` not supplied):
   # 
@@ -700,9 +700,6 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
   # magic line numbers for the first data rows in 'ohg' and 'prt' type output files
   ln.magic = list(prt=4, ohg=2)
   
-  # add .txt extension (if it has none)
-  fname = ifelse(grepl('.txt', fname), fname, paste0(fname, '.txt'))
-  
   # set default path for 'textio' when `rswat_cio` has been called
   if( exists('.rswat') )
   {
@@ -715,32 +712,69 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
     
   } else stop('`textio` not found. Either call `rswat_cio` or provide `textio`')
   
-  # scan for output files if necessary (otherwise just copy list from memory)
-  if( is.null( .rswat$stor$output ) )
+  # run dummy simulation to discover output filenames and headers, if requested
+  if( loadall )
   {
-    # 'rescan' lists files, 'reload' opens and parses the first few lines of each one 
-    rescan = is.null(.rswat$stor$output$fname)
-    reload = is.null(.rswat$stor$output$vname)
+    # run a simulation to generate dummy output files to populate databases
+    cat('running SWAT+ to generate all output files...\n')
+    textio.dummy = rswat_odummy(quiet=TRUE)
     
-    # print a message about what's taking so long
-    cat('scanning for SWAT+ output...\n')
-    rswat_oinit(quiet=TRUE, rescan=rescan, reload=reload) 
+    
+    
+    n.dummy = nrow(fdf.dummy)
+    
+    # read the first few lines of each file to determine output variables and units
+    # if( !quiet ) cat(paste('parsing', n.dummy, 'output files... \n'))
+    # headers.list = lapply(fdf.dummy$file, function(f) {
+    #   rswat_oparse(f, textio.dummy) %>% mutate(file=f)
+    # })
+    # 
+    # # reshape as long dataframe and merge with file info, copying result to package storage
+    # .rswat$stor$output$vname = fdf.dummy %>% 
+    #   mutate( fname = name ) %>%
+    #   select( file, fname, type, step ) %>% 
+    #   left_join(do.call(rbind, headers.list), by='file') %>% 
+    #   select( name, units, class, step, everything() )
+    # 
+    # # update files list and toggle to rescan textio directory later
+    # .rswat$stor$output$fname = fdf.dummy %>% select( -c(path, group) )
+    # rescan = TRUE
+    # 
+    # # remove the dummy simulation files
+    # unlink(textio.dummy, recursive=TRUE)
   }
   
-  # these dataframes are created by calls to `rswat_oinit`
-  fname.ref = .rswat$stor$output$fname
-  vname.ref = .rswat$stor$output$vname
-
-  # list mode:
+  # make list of output files in current SWAT+ directory if necessary
+  if( is.null(.rswat$stor$output$fname) | loadall )
+  {
+    # scan project directory for output files, parsing filenames
+    fname.ref = rswat_oscan() 
+    
+  } else {
+    
+    # pull the dataframe from memory
+    fname.ref = .rswat$stor$output$fname
+  }
+  
+  # LIST MODE:
   if( length(fname) == 0 )
   {
-    # scan once more 
-    rswat_oinit(quiet=TRUE, rescan=TRUE, reload=FALSE)
-    fname.ref = .rswat$stor$output$fname
-    
-    # when no variable name is supplied, return a list of all files
+    # when no variable name is supplied, return output filenames list
     if( length(vname) == 0 ) return(fname.ref)
     
+    # parse header information from output files (if necessary)
+    if( is.null(.rswat$stor$output$vname) )
+    {
+      # scans project directory for output files, parsing filenames
+      cat(paste('scanning', sum(!is.na(fname.ref$size)) , 'output files in SWAT+ folder...\n'))
+      vname.ref = rswat_oparse() 
+      
+    } else {
+      
+      # pull the dataframe from memory
+      vname.ref = .rswat$stor$output$vname
+    }
+ 
     # when a variable name is supplied retrieve a list of matching headers data
     idx.match = vname == vname.ref$name
     if(vname == '') idx.match = rep(TRUE, nrow(vname.ref))
@@ -749,7 +783,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
     # if there are no exact matches, look for substring matches
     if( !any(idx.match) )
     {
-      cat(paste0('no exact matches for ', vname, ', trying partial matches...\n'))
+      cat(paste0('no exact matches for "', vname, '", trying partial matches...\n'))
       idx.match = grepl(vname, vname.ref$name) 
     }
     
@@ -759,39 +793,42 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
     if( !any(idx.match) ) idx.match = agrepl(vname, vname.ref$name, 3)
     
     # message if we failed to match anything
-    if( !any(idx.match) ) warning('no results for that search query')
+    msg.info = '. Try rswat_open(loadall=TRUE) to scan in all available SWAT+ outputs'
+    if( !any(idx.match) ) warning(paste0('no results for "', vname, '"', msg.info, '\n'))
     
     # return the relevant subset of the dataframe
     return( vname.ref[idx.match,] )
   }
   
-  # scan once more if `fname` not found among the files on disk
-  if( !(fname %in% fname.ref$file) )
-  {
-    # the lengthy reload can be skipped if we've gotten this far
-    rswat_oinit(quiet=TRUE, rescan=TRUE, reload=FALSE)
-    fname.ref = .rswat$stor$output$fname
-  }
-
+  # if `fname` not found in database, scan SWAT+ folder again
+  if( !(fname %in% fname.ref$file) ) fname.ref = rswat_oscan()
+  
   # catch unrecognized filenames 
   msg.unknown = paste(fname, 'not found in', textio)
   if( !(fname %in% fname.ref$file) ) stop( msg.unknown )
   
-  # catch nonexistent files 
+  # catch recognized but nonexistent files 
   msg.nofile = 'Check that it is enabled in `print.prt`, and run the simulation again.'
   fpath = file.path(textio, fname)
   if( !file.exists(fpath) ) stop(paste(msg.unknown, msg.nofile, sep='. '))
   
+  # initialize variable names database (and entries for this file) if necessary
+  vname.ref = .rswat$stor$output$vname
+  if( ! fname %in% vname.ref$file ) vname.ref = rswat_oparse(fname)
+  
+  # index in database of variable names for this file 
+  idx.vname = fname == vname.ref$file
+  
   # messy plaintext parsing routines (starting here) redirect to fread on errors
-  dat.out = tryCatch(
+  dat = tryCatch(
     
     expr = {
-      
+
       # set expected column types of all columns in the file
-      idx.vname = fname == vname.ref$file
       head.nm = vname.ref[['name']][idx.vname]
       head.class = vname.ref[['class']][idx.vname]
       head.units = vname.ref[['units']][idx.vname]
+      head.index = vname.ref[['index']][idx.vname]
       
       # catch duplicated table headers
       nm.dupe = NULL
@@ -815,7 +852,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
       }
       
       # set up indexing columns if requested - these are all non-numeric class
-      if(showidx) req.nm = c(head.nm[ head.class != 'numeric' ], c('day', 'mon', 'yr'))
+      if(showidx) req.nm = unique( c(head.nm[ head.index ], c('day', 'mon', 'yr')) )
       
       # default behaviour is to load all variables
       if( is.null(vname) ) vname = unique( head.nm[ !head.isdupe ] )
@@ -825,18 +862,16 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
       vname = unique(c(vname, req.nm))
       vname = vname[ order( match(vname, head.nm) ) ]
       
-      # set the number of lines to skip (comments, headers, units)
+      # set the number of lines to skip (comments, headers, units) and timestep
       idx.fname = fname == fname.ref$file
       ln.skip = ln.magic[[ fname.ref[['type']][idx.fname] ]] - 1
-      
-      # copy the time step
       tstep = fname.ref[['step']][idx.fname]
       
       # catch empty tables by scanning in first expected data line
       if( length( readLines(fpath, n = ln.skip + 1) ) < ( ln.skip + 1 ) )
       {
         # prepare an empty dataframe with correctly named columns
-        dat.out = as.data.frame(matrix(NA, 0, length(vname), dimnames=list(NULL, vname)))
+        dat = as.data.frame(matrix(NA, 0, length(vname), dimnames=list(NULL, vname)))
         
         # turn off 'makedates' mode (they aren't available in the source file)
         makedates = FALSE
@@ -845,7 +880,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
         
         # load the requested columns using fread 
         fread.cols = split(match(vname, head.nm), head.class[head.nm %in% vname])
-        dat.out = fread(fpath, header=FALSE, skip=ln.skip, select=fread.cols) %>% 
+        dat = fread(fpath, header=FALSE, skip=ln.skip, select=fread.cols) %>% 
           relocate(order(unlist(fread.cols))) %>%
           as.data.frame %>% 
           setNames(vname)
@@ -856,9 +891,9 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
       has.units = !is.na( out.units )
       if( any(has.units) )
       {
-        # mapply over columns of `dat.out` where units are defined
-        dat.out[has.units] = mapply(function(x, y) set_units(x, y, mode='standard'),
-                                    x = as.list(dat.out)[ has.units ], 
+        # mapply over columns of `dat` where units are defined
+        dat[has.units] = mapply(function(x, y) set_units(x, y, mode='standard'),
+                                    x = as.list(dat)[ has.units ], 
                                     y = out.units[ has.units ], 
                                     SIMPLIFY = FALSE)
       }
@@ -866,75 +901,17 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
       # parse dates and append a 'Date' class column, if requested
       if( makedates )
       {
-        # parse the start/end dates
-        n.obs = nrow(dat.out)
-        nm.ymd = c('yr', 'mon', 'day')
-        date.start = as.Date( paste(dat.out[1, nm.ymd], collapse='-') )
-        date.end = as.Date( paste(dat.out[n.obs, nm.ymd], collapse='-') )
+        # date parsing handled by a helper function
+        all.dates = rswat_makedates(dat)
         
-        # attempt to detect the number of unique spatial id elements
-        
-        # handle 1-row case
-        if( nrow(dat.out) == 1 ) { n.id = 1 } else {
-          
-          # create indicator matrix for change points of time indices
-          dmat = diff(as.matrix(dat.out[nm.ymd])) != 0
-          
-          # use the most frequently changing one to compute number of time steps
-          n.tstep = 1 + max( colSums( dmat ) )
-          n.id = n.obs / n.tstep
-        }
-        
-        # handle cases where the number of rows is not a multiple of number of unique ids
-        if( n.id != round(n.id) )
-        {
-          # slower but more robust count 
-          n.id = dat.out %>% group_by(yr, mon, day) %>% 
-            summarize(n=n(), .groups='drop_last') %>% 
-            pull(n) %>% unique
-        }
-        
-        # disable date parsing over year 1900, to avoid Feb 29 bug (it's not a leap year) 
-        date.bug = ( date.start < as.Date('1900-03-01') ) & ( date.end > as.Date('1900-03-01') )
-        if( date.bug )
-        {
-          warning('date parsing disabled for time series including year 1900')
-          return( dat.out )
-        }
-        
-        # handle tables with variable numbers of within-timestep rows (IDs), and/or 1900 bug
-        if(length(n.id) > 1)
-        {
-          # very slow for large datasets - used only as last resort
-          all.dates.char = sapply(1:n.obs, function(ii) paste(dat.out[ii, nm.ymd], collapse='-'))
-          all.dates = as.Date(all.dates.char, format='%Y-%m-%d')
-          
-        } else {
-          
-          # this should be equivalent to `as.Date(paste(yr, mon, day, sep='-')`, but WAY faster
-          all.dates = rep(seq(date.start, date.end, tstep), each=n.id)
-          
-          # handle end dates that don't coincide with a timestep interval endpoint
-          if( length(all.dates) == n.obs - 1 ) all.dates = c(all.dates, date.end)
-        }
-        
-        # skip appending dates if there is a mismatch in lengths
-        if( length(all.dates) == n.obs )
-        {
-          # merge with output data, omitting redundant columns
-          nm.omit = c('jday', nm.ymd)
-          idx.redundant = (names(dat.out) %in% nm.omit)
-          dat.out = cbind(data.frame(date=all.dates), dat.out[ !idx.redundant ])
-          
-        } else {
-          
-          # halt and report the error
-          stop('failed to parse dates')
-        }
+        # merge with output data, omitting redundant columns
+        nm.omit = c('jday', nm.ymd)
+        idx.redundant = (names(dat) %in% nm.omit)
+        dat = cbind(data.frame(date=all.dates), dat[ !idx.redundant ])
       }
       
       # return from trycatch expression
-      return(dat.out)
+      return(dat)
       
     },
     # handle 
@@ -947,7 +924,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE)
   # end of trycatch
 
   # finish
-  return(dat.out)
+  return(dat)
 }
 
 #' load or write a backup of all SWAT+ text config files (or a subset of them)
@@ -2127,14 +2104,15 @@ rswat_2char = function(value, linedf, quiet=FALSE)
 #' ## functions for manipulating and cataloguing SWAT+ output files and variables
 #' 
 
-#' scans a SWAT+ folder for output files and compiles metadata about them as dataframe
-rswat_oscan = function(textio=NULL, ignore=NULL)
+#' parse a SWAT+ filename/folder for metadata about output files
+rswat_oscan = function(fname=NULL, textio=NULL, db=TRUE)
 {
   #
   # ARGUMENTS:
   #
-  # 'ciopath': character, path to the directory (default NULL uses currently loaded project)
-  # 'ignore': character vector, a list of filenames to exclude from the scan
+  # `fname`: character, (optional) filename of one particular file to scan  
+  # `textio`: character, path to the directory (default NULL uses currently loaded project)
+  # `db`: boolean, whether to save the result to package memory
   #
   # RETURN:
   #
@@ -2156,11 +2134,11 @@ rswat_oscan = function(textio=NULL, ignore=NULL)
   # crop output files currently have a table structure that different from the rest and are
   # not currently supported:
   
-  # set default ignore list to include crop files
-  ignore = c('basin_crop_yld_aa.txt',
-             'basin_crop_yld_yr.txt',
-             'crop_yld_aa.txt',
-             'basin_crop_yld_aa.txt', ignore)
+  # a list of unsupported files (units embedded in headers)
+  nm.unsup = c('basin_crop_yld_aa.txt', 
+               'basin_crop_yld_yr.txt', 
+               'crop_yld_aa.txt', 
+               'basin_crop_yld_aa.txt')
   
   # set default path for 'textio' when `rswat_cio` has been called
   if( is.null(textio) )
@@ -2180,55 +2158,50 @@ rswat_oscan = function(textio=NULL, ignore=NULL)
   # scan all files in textio directory
   textio.fname = list.files(textio, include.dirs=FALSE)
   
-  # exclude filenames appearing in 'ignore' and filenames prefixed with '_'
-  ignore = unique( c(ignore, textio.fname[startsWith(textio.fname, '_')]) )
+  # exclude filenames appearing in 'nm.unsup' and filenames prefixed with '_'
+  nm.unsup = unique( c(nm.unsup, textio.fname[startsWith(textio.fname, '_')]) )
   
-  # scan for files having extension 'txt' or 'out', omit ignored, initialize output fields
+  # case of one single file requested
+  if( !is.null(fname) ) 
+  {
+    # message about unsupported files
+    if( fname %in% nm.unsup ) stop('this file is not yet supported by rswat. Try `fread`')
+    
+    # check for invalid fname
+    if( ! fname %in% textio.fname ) stop(paste(fname, 'not found in `textio`'))
+    
+    # ignore everything but the one file
+    nm.unsup = textio.fname[ textio.fname != fname ]
+  }
+  
+  # scan for files having extension 'txt', 'out', or 'ohg', initialize output fields
   fdf = data.frame( file = textio.fname ) %>%
-    filter( endsWith(file, '.txt') | endsWith(file, '.out')) %>%
-    filter( !( file %in% ignore ) ) %>%
+    filter( endsWith(file, '.txt') | endsWith(file, '.out') | endsWith(file, '.ohg')) %>%
+    filter( !( file %in% nm.unsup ) ) %>%
     mutate( path = file.path(textio, file) ) %>%
     mutate( size = set_units(set_units(file.info(path)$size, bytes), kilobytes) ) %>%
     mutate( modified = file.info(path)$mtime ) %>%
     mutate( type = 'unknown' ) %>%
     mutate( step = NA ) %>%
-    mutate( name = NA )
+    mutate( name = NA ) %>%
+    mutate( group = NA ) %>%
+    mutate( oid = NA )
   
-  # flag for log files
+  # flag for log files and OHG files
   fdf$type[ endsWith(fdf$file, '.out') ] = 'log'
+  fdf$type[ endsWith(fdf$file, '.ohg') ] = 'ohg'
   
-  # 'files_out.out' holds a list of output files created in last simulation
-  fread.prt = fread(file.path(textio, 'files_out.out'), skip=1, fill=T) %>% as.data.frame
-  
-  # BUGFIX: detect and fix spaces in first field causing table parser errors
-  if( ncol(fread.prt) > 2 )
+  # parse the object, group, and gis_id names from the OHG filenames (if any)
+  idx.ohg = fdf$type == 'ohg'
+  if( any(idx.ohg) )
   {
-    # buggy rows have non-empty third field
-    idx.bug = nchar(fread.prt[, 3]) > 0
+    # split filenames into 5 pieces using delimiters '_' and '.'
+    ohg.mat = matrix(unlist( strsplit(fdf$file[idx.ohg], '_|\\.') ), 5)
     
-    # repair filenames (discard whatever follows the space in the first buggy field)
-    fread.prt[idx.bug, 2] = fread.prt[idx.bug, ncol(fread.prt)]
-    
-    # omit the redundant fread column 
-    fread.prt = fread.prt[, 1:2]
-  }
-  
-  # name the fread columns for convenience and clean up names
-  fread.prt = fread.prt %>% setNames(c('group', 'file') ) %>%
-    mutate( group = gsub('_AA', '', group) ) %>%
-    mutate( group = tolower(group) ) %>%
-    mutate( group = gsub('-', '_', group) )
-  
-  # merge 'files_out.out' data with output dataframe and add prt flag
-  fdf = fdf %>% left_join(fread.prt, by='file')
-  fdf$type[ !is.na(fdf$group) ] = 'prt'
-  
-  # add a flag for object hydrograph files
-  if( 'object.prt' %in% rswat_cio()$file )
-  {
-    # these files aren't listed in 'files_out.out' and they have a different structure
-    nm.print = rswat_open('object.prt')$filename
-    fdf$type[ fdf$file %in% nm.print ] = 'ohg'
+    # extract 'group' (object type), 'name' (object component), 'oid' (gis ID)
+    fdf$group[idx.ohg] = ohg.mat[2,]
+    fdf$name[idx.ohg] = ohg.mat[4,]
+    fdf$oid[idx.ohg] = as.integer(ohg.mat[3,])
   }
   
   # construct a timestep field - all OHG files are daily, and all AA files are yearly
@@ -2236,34 +2209,83 @@ rswat_oscan = function(textio=NULL, ignore=NULL)
   fdf$step[  endsWith(fdf$file, '_mon.txt') ] = 'month'
   fdf$step[ endsWith(fdf$file, '_yr.txt') | endsWith(fdf$file, '_aa.txt') ] = 'year'
   
-  # parse the object name from the filename for prt type files
-  regexp.suffix = '(_aa\\.txt)|(_yr\\.txt)|(_mon\\.txt)|(_day\\.txt)'
-  name.prt = gsub(regexp.suffix, '',  fdf$file[ fdf$type == 'prt' ] )
-  fdf$name[ fdf$type == 'prt' ] = name.prt
+  # identify and process prt files as needed
+  if( any( fdf$type == 'unknown' ) )
+  {
+    # 'files_out.out' holds a list of output files created in last simulation
+    fread.prt = fread(file.path(textio, 'files_out.out'), skip=1, fill=T) %>% as.data.frame
+    
+    # BUGFIX: detect and fix spaces in first field causing table parser errors
+    if( ncol(fread.prt) > 2 )
+    {
+      # buggy rows have non-empty third field
+      idx.bug = nchar(fread.prt[, 3]) > 0
+      
+      # repair filenames (discard whatever follows the space in the first buggy field)
+      fread.prt[idx.bug, 2] = fread.prt[idx.bug, ncol(fread.prt)]
+      
+      # omit the redundant fread column 
+      fread.prt = fread.prt[, 1:2]
+    }
+    
+    # rename the fread columns for convenience and clean up names
+    fread.prt = fread.prt %>% setNames(c('group', 'file') ) %>%
+      mutate( group = gsub('_AA', '', group) ) %>%
+      mutate( group = tolower(group) ) %>%
+      mutate( group = gsub('-', '_', group) )
+    
+    # merge 'files_out.out' data with output dataframe and add prt flag
+    idx.update = fdf$file %in% fread.prt$file
+    idx.newval = match(fdf$file[idx.update], fread.prt$file)
+    fdf$group[ idx.update ] = fread.prt$group[idx.newval]
+    fdf$type[ idx.update ] = 'prt'
+    
+    # parse the object name from the filename for prt type files
+    regexp.suffix = '(_aa\\.txt)|(_yr\\.txt)|(_mon\\.txt)|(_day\\.txt)'
+    name.prt = gsub(regexp.suffix, '',  fdf$file[ idx.update ] )
+    fdf$name[ idx.update ] = name.prt
+  }
   
-  # tidy and return
-  fdf %>% arrange(group, file) %>%  select(file, name, type, step, size, modified, path, group)
+  # tidy output
+  fdf = fdf %>% arrange(group, file) %>%  
+    select(file, name, type, step, group, oid, size, modified, path)
+  
+  # add to database if requested
+  if( db )
+  {
+    # initialize storage in package memory as needed
+    if( ! 'output' %in% ls(.rswat$stor) ) .rswat$stor$output = list()
+    if( ! 'fname' %in% ls(.rswat$stor$output) ) .rswat$stor$output$fname = fdf
+
+    # update with new values
+    .rswat$stor$output$fname = .rswat$stor$output$fname %>% 
+      filter( ! file %in% fdf$file ) %>% 
+      rbind(fdf)
+  }
+  
+  return(fdf)
 }
 
 #' scans a SWAT+ output file to discover variable names and units (if available) 
-rswat_oparse = function(fname=NULL, textio=NULL)
+rswat_oparse = function(fname=NULL, textio=NULL, db=TRUE)
 {
   #
   # ARGUMENTS:
   #
-  # 'fname': character vector, a file to parse in `textio`
-  # 'textio': character, path to the directory containing SWAT+ output files
+  # `fname`: character, a file to parse in `textio`
+  # `textio`: character, path to the directory containing SWAT+ output files
+  # `db`: boolean, whether to save the result to package memory
   #
   # RETURN:
   #
   # dataframe of information about the columns of a SWAT+ output file, with one row per
   # detected field. Boolean attribute 'index' indicates that the column is an indexing
-  # variable of time or space, or an identifier.
+  # variable of time or space.
   #
   # DETAILS:
-  
-  # add .txt extension to `fname` (if it has none)
-  fname = ifelse(grepl('.txt', fname), fname, paste0(fname, '.txt'))
+  #
+  # `db=TRUE` will cause the function to join its result with the variable names database
+  # .rswat$stor$output$vname (initializing it, if necessary).
   
   # set default path for 'textio' when `rswat_cio` has been called
   if( is.null(textio) )
@@ -2280,26 +2302,28 @@ rswat_oparse = function(fname=NULL, textio=NULL)
     } else stop('`textio` not found. Either call `rswat_cio` or provide `textio`')
   }
   
-  # handle scan-all requests
+  # handle requests to parse all files
   if( length(fname) == 0 )
   {
     # grab a list of all scannable files
-    oscan = rswat_oscan(textio) %>% filter(type %in% c('prt', 'ohg'))
+    oscan = rswat_oscan() %>% filter(type %in% c('prt', 'ohg'))
     
-    # recursive calls to generate list of dataframes with filename field appended
-    dat.out = lapply(oscan$file, function(f) rswat_oparse(f, textio) %>% mutate( file = f ) )
+    # recursive calls to generate list of dataframes
+    vdf.list = lapply(oscan$file, function(f) rswat_oparse(f, textio, db) )
     
     # join into single dataframe and finish
-    return( do.call(rbind, dat.out) )
+    return( do.call(rbind, vdf.list) )
   }
   
+  # load info about this filename from memory, if available
+  fname.ref = .rswat$stor$output$fname
+  if( !is.null(fname.ref) ) fname.ref = .rswat$stor$output$fname %>% filter(file==fname)
   
-  # make sure requested file can be found
-  fpath = file.path(textio, fname)
-  if( !file.exists(fpath) ) stop(paste(fname, 'not found in', textio))
+  # otherwise parse the filename and add info to database
+  if( nrow(fname.ref) == 0 ) fname.ref = rswat_oscan(fname)
   
   # read the first few lines into memory and parse them using helper functions
-  rswat_rlines(fpath, omit=NULL, nmax=3)
+  rswat_rlines(fname.ref$path, omit=NULL, nmax=3)
   rswat_rtext(fname)
   linedf = .rswat$stor$temp[[fname]]$linedf
   
@@ -2307,11 +2331,8 @@ rswat_oparse = function(fname=NULL, textio=NULL)
   .rswat$stor$temp[[fname]] = list()
   .rswat$stor$txt[[fname]] = list()
   
-  # detect header, unit lines (if present) as all character type ...
-  ln.ischar = sapply( split(linedf$class, linedf$line_num), function(x) all(x == 'character') )
-  
   # ... prt files have comments, headers, units; whereas OHG files just have headers
-  is.prt = all( ln.ischar[2:3] )
+  is.prt = fname.ref$type == 'prt'
   ln.head = ifelse(is.prt, 2, 1)
   ln.tab = ifelse(is.prt, 4, 2)
   ln.unit = ifelse(is.prt, 3, NA)
@@ -2321,57 +2342,150 @@ rswat_oparse = function(fname=NULL, textio=NULL)
   head.mid = rowMeans(linedf[linedf$line_num == ln.head, c('start_pos', 'end_pos')])
   n.head = length(head.nm)
   
-  # reshape as dataframe
-  dat.out = linedf %>% filter( line_num == ln.head ) %>%
+  # reshape as dataframe, adding some file info
+  vdf = linedf %>% filter( line_num == ln.head ) %>%
     mutate( name = string ) %>% 
     mutate( units = NA ) %>% 
-    select( -c(string, class) ) 
+    select( -c(string, class) ) %>%
+    mutate( file = fname ) %>%
+    mutate( type = fname.ref$type ) %>%
+    mutate( step = fname.ref$step ) 
   
   # identify names of non-numeric indexing columns and add flag for them
   nm.integer = c('jday', 'mon', 'day', 'yr', 'gis_id', 'unit', 'typ_no')
   nm.character = c('name', 'type', 'objtyp', 'hyd_typ')
-  dat.out$index = dat.out$name %in% c(nm.character, nm.integer)
+  vdf$index = vdf$name %in% c(nm.character, nm.integer)
   
-  ## assign expected class of each output column
-  dat.out$class = 'numeric'    
-  dat.out$class[ dat.out$name %in% nm.integer ] = 'integer'
-  dat.out$class[ dat.out$name %in% nm.character ] = 'character'
+  # assign expected class of each output column
+  vdf$class = 'numeric'    
+  vdf$class[ vdf$name %in% nm.integer ] = 'integer'
+  vdf$class[ vdf$name %in% nm.character ] = 'character'
+
+  # add units to prt files
+  if( is.prt ) 
+  {
+    # extract unit strings 
+    unit.nm = linedf$string[linedf$line_num == ln.unit]
+    unit.mid = rowMeans(linedf[linedf$line_num == ln.unit, c('start_pos', 'end_pos')])
+    
+    # build a dictionary of unusual unit strings and their R-readable equivalents
+    # note: I'm assuming 'mton' means 'metric tonne', and not 'milliton' (which is
+    # apparently an arcane synonym of 'kilogram')
+    unit.lu = do.call(rbind, list(c('ha-m', 'ha m'),
+                                  c('kgN', 'kg'),
+                                  c('kgP', 'kg'),
+                                  c('kg/ha_N', 'kg/ha'),
+                                  c('kg/ha_P', 'kg/ha'),
+                                  c('mg_pst', 'mg'),
+                                  c('tha', 't ha'),
+                                  c('kgha', 'kg ha'),
+                                  c('mj/m^2', 'mJ/m^2'),
+                                  c('mton', 'tonne'),
+                                  c('frac', NA),
+                                  c('----', NA),
+                                  c('---', NA),
+                                  c('___', NA)))
+    
+    # swap in the R-readable unit strings
+    idx.translate = unit.nm %in% unit.lu[,1]
+    unit.nm[idx.translate] = unit.lu[match(unit.nm[idx.translate], unit.lu[,1]), 2]
+    
+    # snap units to headers (at midpoints) to handle misalignment issues 
+    idx.head = sapply(unit.mid, function(n) which.min(abs(n - head.mid)))
+    vdf$units[ idx.head ] = unit.nm
+  }
   
-  # ohg files don't have units, so we're done
-  if( !is.prt ) return(dat.out)
+  # add result to the vname database in memory, if requested
+  if( db )
+  {
+    # initialize storage in package memory as needed
+    if( ! 'vname' %in% ls(.rswat$stor$output) ) .rswat$stor$output$vname = vdf
+    
+    # update with new values
+    .rswat$stor$output$vname = .rswat$stor$output$vname %>% 
+      filter( file != fname ) %>% 
+      rbind(vdf)
+  }
   
-  # extract unit strings 
-  unit.nm = linedf$string[linedf$line_num == ln.unit]
-  unit.mid = rowMeans(linedf[linedf$line_num == ln.unit, c('start_pos', 'end_pos')])
-  
-  # build a dictionary of unusual unit strings and their R-readable equivalents
-  # note: I'm assuming 'mton' means 'metric tonne', and not 'milliton' (which is
-  # apparently an arcane synonym of 'kilogram')
-  unit.lu = do.call(rbind, list(c('ha-m', 'ha m'),
-                                c('kgN', 'kg'),
-                                c('kgP', 'kg'),
-                                c('kg/ha_N', 'kg/ha'),
-                                c('kg/ha_P', 'kg/ha'),
-                                c('mg_pst', 'mg'),
-                                c('tha', 't ha'),
-                                c('kgha', 'kg ha'),
-                                c('mj/m^2', 'mJ/m^2'),
-                                c('mton', 'tonne'),
-                                c('frac', NA),
-                                c('----', NA),
-                                c('---', NA),
-                                c('___', NA)))
-  
-  # swap in the R-readable unit strings
-  idx.translate = unit.nm %in% unit.lu[,1]
-  unit.nm[idx.translate] = unit.lu[match(unit.nm[idx.translate], unit.lu[,1]), 2]
-  
-  # snap units to headers (at midpoints) to handle misalignment issues 
-  idx.head = sapply(unit.mid, function(n) which.min(abs(n - head.mid)))
-  dat.out$units[ idx.head ] = unit.nm
-  
-  return(dat.out)
+  return(vdf)
 } 
+
+#' build a vector of Date objects to match rows of a SWAT+ output file 
+rswat_makedates = function(dat)
+{
+  # ARGUMENTS
+  #
+  # `dat`: dataframe, (subset of) the SWAT+ output file table (see DETAILS)
+  #
+  # RETURN
+  #
+  # vector of class `Date`, matching the rows of `dat`
+  #
+  # DETAILS
+  #
+  # 'dat' is expected to have columns 'yr', 'mon', 'day' (integers) and to be arranged in ascending
+  # order of date. Dates can be duplicated (eg. the table can have date-indexed data for multiple spatial
+  # objects) but the number of duplicates should be the same for each timestep
+  #
+  
+  # parse the start/end dates
+  n.obs = nrow(dat)
+  nm.ymd = c('yr', 'mon', 'day')
+  date.start = as.Date( paste(dat[1, nm.ymd], collapse='-') )
+  date.end = as.Date( paste(dat[n.obs, nm.ymd], collapse='-') )
+  
+  # attempt to detect the number of unique spatial id elements
+  
+  # 1-row case necessarily only has one spatial element
+  if( nrow(dat) == 1 ) { n.id = 1 } else {
+    
+    # create indicator matrix for change points of time indices
+    dmat = diff(as.matrix(dat[nm.ymd])) != 0
+    
+    # use the most frequently changing one to compute number of time steps
+    n.tstep = 1 + max( colSums( dmat ) )
+    
+    # in most cases, (number of spatial elements) * ( number of timesteps ) = number of rows
+    n.id = n.obs / n.tstep
+  }
+  
+  # handle cases where the number of rows is not a multiple of number of unique ids
+  if( n.id != round(n.id) )
+  {
+    # slower but more robust count 
+    n.id = dat %>% group_by(yr, mon, day) %>% 
+      summarize(n=n(), .groups='drop_last') %>% 
+      pull(n) %>% unique
+  }
+  
+  # disable date parsing over year 1900, to avoid Feb 29 bug (it's not a leap year) 
+  date.bug = ( date.start < as.Date('1900-03-01') ) & ( date.end > as.Date('1900-03-01') )
+  if( date.bug )
+  {
+    warning('date parsing disabled for time series including year 1900')
+    return( dat )
+  }
+  
+  # handle tables with variable numbers of within-timestep rows (IDs), and/or 1900 bug
+  if(length(n.id) > 1)
+  {
+    # very slow for large datasets - used only as last resort
+    all.dates.char = sapply(1:n.obs, function(ii) paste(dat[ii, nm.ymd], collapse='-'))
+    all.dates = as.Date(all.dates.char, format='%Y-%m-%d')
+    
+  } else {
+    
+    # this should be equivalent to `as.Date(paste(yr, mon, day, sep='-')`, but much faster
+    all.dates = rep(seq(date.start, date.end, tstep), each=n.id)
+    
+    # handle end dates that don't coincide with a timestep interval endpoint
+    if( length(all.dates) == n.obs - 1 ) all.dates = c(all.dates, date.end)
+  }
+  
+  # halt if there is a mismatch in length, otherwise return the vector
+  if( length(all.dates) != n.obs ) stop('failed to parse dates')
+  return( all.dates )
+}
 
 #' request a dummy simulation to generate example cases of available output files
 rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
@@ -2384,8 +2498,7 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   #
   # RETURN
   #
-  # dataframe containing the absolute paths to the example files along with their SWAT+
-  # names as reported in 'files_out.out'
+  # character, the full path to the dummy simulation outputs folder 
   #
   # DETAILS
   # 
@@ -2419,12 +2532,16 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
   
   # create a temporary directory for backups
-  tdir = file.path(textio, paste0('_rswat_', basename(tempfile())))
+  tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
   my_dir(tdir)
   
-  # define paths for the backup copies - only .txt and .out files are affected here
-  fname = list.files(textio, include.dirs=FALSE)
-  fname = fname[ endsWith(fname, '.txt') | endsWith(fname, '.out') ]
+  # define files to backup
+  fname.a = list.files(textio, include.dirs=FALSE)
+  idx.obak = endsWith(fname.a, '.txt') | endsWith(fname.a, '.out')  | endsWith(fname.a, '.ohg')
+  idx.cbak = fname.a %in% c('file.cio', 'time.sim', 'print.prt')
+  fname = fname.a[ idx.obak | idx.cbak ]
+  
+  # define paths for the original and backup copies
   restore.path = file.path(textio, fname)
   backup.path = file.path(tdir, fname)
   
@@ -2432,9 +2549,9 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   cat('backing up files...\n')
   for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
   
-  # load 'time.sim' and 'print.prt' into memory and create a backup
-  time.sim = time.sim.bak = rswat_open('time.sim', quiet=quiet)
-  print.prt = print.prt.bak = rswat_open('print.prt', quiet=quiet)
+  # load 'time.sim' and 'print.prt' into memory
+  time.sim = rswat_open('time.sim', quiet=quiet)
+  print.prt = rswat_open('print.prt', quiet=quiet)
   
   # define the start and end dates then convert to integers required by print.prt
   date.start = as.Date('1901-01-01')
@@ -2461,14 +2578,17 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   rswat_write(time.sim, preview=F, quiet=quiet)
   rswat_write(print.prt[[1]], preview=F, quiet=quiet)
   
+  # TODO: activate OHG files
+  
   # activate all outputs, write changes to disk
   print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'y'
   rswat_write(print.prt[[5]], preview=F, quiet=quiet)
   
   # execute the simulation and scan for new output files
   rswat_exec(quiet=quiet)
-  fname.new = list.files(textio, include.dirs=FALSE)
-  fname.new = fname.new[ endsWith(fname.new, '.txt') | endsWith(fname.new, '.out') ]
+  fname.a = list.files(textio, include.dirs=FALSE)
+  idx.new = endsWith(fname.a, '.txt') | endsWith(fname.a, '.out')  | endsWith(fname.a, '.ohg')
+  fname.new = fname.a[idx.new]
   
   # define absolute paths for the output files and their destinations
   dest.dir = file.path(textio, subdir)
@@ -2480,18 +2600,13 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   for(ii in seq_along(fpath.dest)) file.copy(fpath.new[ii], fpath.dest[ii])
   unlink(fpath.new)
   
-  # restore the backup parameter values
-  rswat_write(time.sim.bak, preview=F, quiet=quiet)
-  rswat_write(print.prt.bak[[1]], preview=F, quiet=quiet)
-  rswat_write(print.prt.bak[[5]], preview=F, quiet=quiet)
-  
   # delete the new output files and restore backups
   cat('restoring backup...\n')
   for(ii in seq_along(backup.path)) file.copy(backup.path[ii], restore.path[ii])
   unlink(tdir, recursive=TRUE)
   
   # return a dataframe describing the new files
-  return( rswat_oscan(dest.dir) )
+  return( dest.dir )
   
 }
 
@@ -2673,12 +2788,11 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   # construct a comment line to print to the txt file
   comment.text = paste('object.prt: written by rswat on', Sys.time())
   
-  # # construct the dataframe of file info to write (with character type columns)
-  # fdf = data.frame(numb='1', obtyp=otype, obtypno=as.character(oid), hydtyp=htype) %>%
-  #   mutate(filename = paste0(paste('ohg', obtyp, obtypno, hydtyp, sep='_'), '.txt'))
-  
+  # construct field 'NUMB'. Note: duplicated fields here can make the SWAT+ executable crash!
+  idtext = as.character( 1:max( sapply(list(otype, oid, htype), length) ) )
+
   # construct the dataframe of file info to write (with character type columns)
-  fdf = data.frame(NUMB='1', OBTYP=otype, OBTYPNO=as.character(oid), HYDTYP=htype) %>%
+  fdf = data.frame(NUMB=idtext, OBTYP=otype, OBTYPNO=as.character(oid), HYDTYP=htype) %>%
     mutate(FILENAME = paste0(paste('ohg', OBTYP, OBTYPNO, HYDTYP, sep='_'), '.txt'))
   
   # format this dataframe into a matrix of strings with correct padding
@@ -2689,39 +2803,6 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   
   # add a comment line
   out.lines = c(comment.text, fdf.text)
-  
-  
-  #  
-  #   
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # bundle the file data into a list
-  # headers = c('numb', 'obtyp', 'obtypno', 'hydtyp', 'filename')
-  # value = c(as.list(headers), list(1, otype, oid, htype, fname))
-  # nhead = length(headers)
-  # 
-  # # determine column start/end positions - repeated for header then data line
-  # cstart = rep( ( cwidth[1] + 1 ) * ( ( 1:nhead ) - 1 ), 2)
-  # cend = cstart + c(rep(cwidth[1], nhead - 1), cwidth[2])
-  # 
-  # # assign classes and other metadata about the table and its headers
-  # oclass = c('integer', 'character', 'integer', 'character', 'character')
-  # linedf.out = data.frame(class = c(rep('character', nhead), oclass),
-  #                         start_col = cstart,
-  #                         end_col = cend,
-  #                         rjust_col = rep(FALSE, 2*nhead))
-  # 
-  # # define padded strings to concatenate to form each line as list
-  # out.split = split( rswat_2char(value, linedf.out)$string_padded,  
-  #                    f = !( 1:(2*nhead) %in% 1:nhead ) )
-  # 
-  # # concatenate the list as character vector
-  # out.lines = c(comment.text, 
-  #               do.call(c, lapply(out.split, function(x) paste(x, collapse=' '))))
   
   # check if the file exists already
   prtpath = file.path(dirname(ciopath), ofile)
@@ -2754,8 +2835,9 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   .rswat$stor$txt = .rswat$stor$txt[names(.rswat$stor$txt) != 'file.cio']
   .rswat$stor$temp = .rswat$stor$temp[names(.rswat$stor$temp) != 'file.cio']
   
-  # refresh files list and load the new file
-  rswat_cio(ciopath)
+  # refresh files list (maintaining ignored files list) and load the new file
+  ignore = rswat_cio(trim=F) %>% filter(ignored) %>% pull(file)
+  rswat_cio(ciopath, ignore=ignore)
   rswat_open('object.prt', quiet=TRUE, reload=TRUE)
   rswat_open('object.prt')
 }
