@@ -1,8 +1,0 @@
-"","file","type","description"
-"img_taudem","graphics/my_upslope_areas.png","png graphic","image of contributing area upstream of each cell (ssa from TauDEM)"
-"img_my_catchments_full","graphics/my_catchments_full.png","png graphic","image of catchments based on all USGS gage locations (includes singletons)"
-"usgs_allcatchments","data/prepared/usgs_allcatchments.rds","R list object","list of demnet outputs and derived catchment polygons upstream of USGS records"
-"img_my_catchments","graphics/my_catchments.png","png graphic","image of catchments based on long-term USGS gage locations"
-"taudem","data/prepared/taudem_uyrw","directory","raster and shapefiles from TauDEM, at max complexity (by drop analysis)"
-"usgs_catchments","data/prepared/usgs_catchments.rds","R list object","list of demnet outputs and derived catchment polygons upstream of USGS gages"
-"metadata","data/get_subwatersheds_metadata.csv","CSV","list files of files written by get_subwatersheds.R"

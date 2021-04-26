@@ -96,7 +96,7 @@ files.towrite = list(
 #' A list object definition here (`files.towrite`) has been hidden from the markdown output for
 #' brevity. The list itemizes all files written by the script along with a short description.
 #' We use a helper function to write this information to disk:
-subwatersheds.meta = my_metadata('get_subwatersheds', files.towrite, overwrite=TRUE)
+subwatersheds.meta = my_metadata('make_subwatersheds', files.towrite, overwrite=TRUE)
 print(subwatersheds.meta[, c('file', 'type')])
 
 # load the DEM and basins info

@@ -39,7 +39,7 @@ library(data.table)
 #' ## config file I/O interface
 #' 
 #' NOTE: an environment `.rswat` is initialized here (overwriting anything with that
-#' name). It stores file data and lookup tables, and only the functions in this chunk
+#' name). It stores file data and lookup tables, and only the functions in the chunk below
 #' should be touching it. Eventually I will make this a package so it's properly hidden
 #'
 #' The I/O interface functions work by scanning the files listed in 'file.cio', tabulating
@@ -47,10 +47,10 @@ library(data.table)
 #' there is a consistent pattern of row-length and class (as detected by R's built-in
 #' `is.numeric` and some sensible rules for snapping and spacing. This will hopefully make
 #' it robust to version-specific changes in SWAT+ parameter names and file structures
-#' (and whatever changes come with future releases). 
+#' that might come in future releases. 
 
 #' (internal) environment to store the SWAT+ project file data
-.rswat = new.env(parent=emptyenv())
+.rswat = new.env( parent=emptyenv() )
 
 #' ## core functions for file I/O interface
 #' 
@@ -2783,7 +2783,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
   landuse.path = here(my_metadata('get_landuse')['swat_landuse_tif', 'file'])
   landuselu.path = here(my_metadata('get_landuse')['swat_landuse_lookup', 'file'])
   wdat.path = here(my_metadata('get_meteo')[wname, 'file'])
-  subwatersheds.meta = my_metadata('get_subwatersheds')
+  subwatersheds.meta = my_metadata('make_subwatersheds')
   taudem.meta = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
   
   # set default project directory
