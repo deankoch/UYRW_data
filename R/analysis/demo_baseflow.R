@@ -7,13 +7,17 @@
 #'
 #' **Mitacs UYRW project**
 #' 
-#' **demo_baseflow.R**: (in development) example of aquifer model fitting with SWAT+
+#' **demo_baseflow.R**: (in development) an example of aquifer model fitting with SWAT+
+#' 
+#' This script also demonstrates some of the core functionality of the `rswat` helper functions,
+#' including: building a SWAT+ model; accessing/changing its parameters; running simulations;
+#' loading outputs; and fitting parameters to observed data.
 #' 
 
 #'
 #' ## libraries
 #' [helper_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md),
-#' [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md),
+#' [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md), and
 #' [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md)
 #' load required libraries, global variables, and some helper functions.
 
@@ -27,8 +31,8 @@ source(here('R/rswat.R'))
 library('Evapotranspiration')
 
 #' The [`airGR`](https://cran.r-project.org/web/packages/airGR/index.html) is a collection of methods
-#' from INRAE-Antony (HYCAR Research Unit, France), including an implementation of the
-#' [Oudin et al. (2005)](https://doi.org/10.1016/j.jhydrol.2004.08.026) formula for PET
+#' from INRAE-Antony (HYCAR Research Unit, France), including the
+#' [Oudin et al. (2005)](https://doi.org/10.1016/j.jhydrol.2004.08.026) PET estimator
 library(airGR)
 # TODO: check out the CemaNeige model for snow accumulation and melt (also from this package)
 
@@ -41,16 +45,18 @@ library(baseflow)
 # numeric optimization for model fitting
 library(dfoptim)
 
-# low-level customizations for ggplot calls
+# low-level R graphics control
 library(grid)
 
 
 #'
 #' ## project data
-#+ echo=FALSE
 
-# USGS gage name specifies the catchment to use as demo 
+#' A USGS gage name specifies one of the catchments to use as demo (see
+#' [make_subwatersheds.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md))
 nm = 'big_c_nr_emigrant'
+
+#' Make a list of the files created by this script
 {
   files.towrite = list(
     
@@ -80,17 +86,20 @@ nm = 'big_c_nr_emigrant'
   )
 }
 
-#' A list object definition here (`files.towrite`) has been hidden from the markdown output for
-#' brevity. The list itemizes all files written by the script along with a short description.
-#' We use a helper function to write this information to disk:
+#' write this filename metadata to disk using a
+#' [helper function](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md])
 baseflow.meta = my_metadata('demo_baseflow', files.towrite, overwrite=TRUE, data.dir=sci.subdir)
-print(baseflow.meta[, c('file', 'type')])
 
-# metadata from previous R scripts in the workflow
+#' calls to `my_metadata` will now load the file info from disk (here and in other R sessions).
+#' eg. the following code accesses the file info from previous scripts 
+#' [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+#' [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md),
+#' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md), and
+#' [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 basins.meta = my_metadata('get_basins')
-subwatersheds.meta = my_metadata('get_subwatersheds')
 streamgages.meta = my_metadata('get_streamgages')
 meteo.meta = my_metadata('get_meteo')
+subwatersheds.meta = my_metadata('make_subwatersheds')
 
 # load PNWNAmet analysis to get weather inputs, USGS data for observed response
 meteo = readRDS(here(meteo.meta['pnwnamet_uyrw', 'file']))
@@ -100,38 +109,42 @@ usgs.all = readRDS(here(streamgages.meta['USGS_data', 'file']))
 uyrw = readRDS(here(basins.meta['boundary', 'file']))
 lakes = readRDS(here(basins.meta['waterbody', 'file']))
 
-# load the USGS data for an example subwatershed (see make_subwatersheds.R)
+# load the USGS data for the catchment 
 usgs.w = readRDS(here(subwatersheds.meta['usgs_catchments', 'file']))
 idx = usgs.w$boundary %>% filter(catchment_name == nm) %>% pull(catchment_id)
 
-# extract outlet locations, catchement boundary, channel network, 
+# extract outlet locations, catchement boundary, channel network
 pts = usgs.w$pts[usgs.w$pts$catchment_id==idx,] %>% na.omit
 boundary = usgs.w$boundary[usgs.w$boundary$catchment_id==idx,] %>% na.omit
 demnet = usgs.w$demnet[usgs.w$demnet$catchment_id==idx,] %>% na.omit
 
 
+#' 
 #' ## set up simulation times
 #' 
+
 # pull gage data from this site
 usgs = usgs.all$dat[[pts$site_no]]
 
-# this gage has two observation periods separated by a few years
+# identify contiguous subsets in the time series
 dates.src = my_split_series(usgs$dat[[1]]$date, meteo$dates)
 print(sapply(dates.src, length))
 
-# for the demo we'll look at the longer 1970s period
+#' The gage has two long uninterrupted periods, with a gap of 3 years. For the demo we'll look at the longer 1970s period
 dates = dates.src[[1]]
 gage = usgs$dat[[1]] %>% filter(date %in% dates)
 
 #' ## overview plot
 #' 
-#' This plot shows the channel network for the demo catchment and its location in the greater UYRW area,
-#' along with an inset containing a USGS hydrograph of streamflow records for the catchment.
+#' The chunk below makes a plot of the channel network for the catchment, its location in the greater
+#' upper Yellowstone river watershed (UYRW) region, and a hydrograph of the selected USGS discharge records
+#' 
 #' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_catchment.png)
+#' 
 catchment.png = here(baseflow.meta['img_catchment', 'file'])
 if( !file.exists(catchment.png) )
 {
-  # plot grob for the 1980s gage data
+  # plot grob for the 1970s gage data
   ggp.usgs = my_tsplot(setNames(gage, c('Date', 'USGS'))) +
     theme(legend.position = 'none', 
           text = element_text(size=26), 
@@ -182,16 +195,26 @@ if( !file.exists(catchment.png) )
 }
 
 
-#' ## Build SWAT+ model and load into R
+#' ## build a SWAT+ model and visualize it with R
 #' 
-#' The data required to build a SWAT+ model for the above catchment are already prepared in 
-#' the `out.subdir` directory. We will use a series of R helper functions (see
-#' [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md)) to send these
-#' data to QSWAT+, then on to SWAT+Editor, before loading the results back into R.
+#' This section builds a SWAT+ model for the selected catchment by calling
+#' [a python script](https://gitlab.com/rob-yerc/swat)
+#' that runs [QSWAT+](https://swatplus.gitbook.io/docs/user/qswat+), then
+#' [SWAT+Editor](https://swatplus.gitbook.io/docs/user/editor). This creates a large project
+#' folder that includes QSWAT+ shapefiles (for viewing spatial aspects of the model with GIS
+#' software), and SWAT+ input files which configure
+#' [the executable](https://swatplus.gitbook.io/docs/installation) that runs simulations.
 #' 
-#' This will generate the plaintext SWAT+ model files required to execute a simulation, as well as
-#' the shapefiles normally displayed in QGIS for visualization of watershed features (eg. HRUs).
-#' 
+#' The inputs to QSWAT+ include data layers on topography, soils, plant communities, 
+#' meteorology, and general watershed layout parameters. In our case these have already been
+#' prepared for all catchments in the URYW by the scripts
+#' [get_dem](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_dem.md),
+#' [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md),
+#' [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md),
+#' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md),
+#' [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md),
+#'
+#'  The chunk below sets a couple of watershed layout parameters and builds the model:
 
 # run only if the QSWAT+ demo directory doesn't exist yet
 dir.qswat = baseflow.meta['dir_qswat', 'file']
@@ -202,31 +225,42 @@ if( !dir.exists(dir.qswat) )
                 drop_stream = 4e3, 
                 drop_channel = (4e3) - 1)
   
-  # write QSWAT+ input files using helper function
-  qswat = qswat_setup(idx, usgs.w, projdir=dir.qswat, config=config, wipe=T)
+  # write QSWAT+ input files using a helper function
+  qswat.meta = qswat_setup(idx, usgs.w, projdir=dir.qswat, config=config, wipe=T, quiet=TRUE)
   
   # pass these inputs to QSWAT+ for processing in PyQGIS, then SWAT+ Editor
-  qswat_run(qswat)
+  qswat_run(qswat.meta)
   
 } else {
   
   # load QSWAT+/SWAT+ project from disk when available
-  qswat = my_metadata(basename(dir.qswat), data.dir=dir.qswat)
+  qswat.meta = my_metadata(basename(dir.qswat), data.dir=dir.qswat)
   
 }
 
-#' Note that the warning about a deep aquifers shapefile can be ignored for now
-#' (see [here](https://groups.google.com/g/qswatplus/c/Z5AGrC_Wfq0/m/1TeG9bQFCgAJ))
+#' This markdown report omits a large amount of console output here (mostly redirected from QSWAT+)
+#' that shows a checklist of jobs completing, and any warnings that come up.  Warnings about the deep
+#' aquifers shapefile can be ignored (see
+#' [here](https://groups.google.com/g/qswatplus/c/Z5AGrC_Wfq0/m/1TeG9bQFCgAJ))
+#' as they seem to be a visualization problem that doesn't impact the SWAT+ input files.
 #' 
-#' The dataframe `qswat` summarizes the QSWAT+ input files and parameters used here:
-qswat %>% select(type, description) %>% print
+#' The entire process for this small 50-HRU example takes about 1-2 minutes. Expect it to take longer
+#' on examples with more HRUs (ie more database entries for QSWAT+/SWAT+Editor to process),
+#' or more high-resolution DEM pixels (larger or more detailed DEMs slow down TauDEM).
+#' 
+#' The dataframe `qswat.meta` summarizes the QSWAT+ input files and parameters used here:
+qswat.meta %>% select(type, description) %>% print
 
-#' A helper function, `qswat_read`, loads the QSWAT+ shapefiles into R
-wsh = qswat_read(qswat)
-
-#' Another helper function, `qswat_plot`, displays the spatial arrangement of HRUs. The next
-#' chunk calls this function and saves the results to a file
+#' Helper functions `qswat_read` and `qswat_plot` from
+#' [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) can be used to
+#' display the QSWAT+ shapefiles. The chunk below makes a plot of the spatial arrangement of HRUs
+#' and saves the results to a file
+#' 
 #' ![](https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_hrus.png)
+#' 
+
+# load the QSWAT+ shapefiles into R
+wsh = qswat_read(qswat.meta)
 
 # skip if the file exists already
 wsh.png = here(baseflow.meta['img_hrus', 'file'])
@@ -241,169 +275,172 @@ if( !file.exists(wsh.png) )
   
 }
 
-#' The SWAT+ Editor step completed above by `qswat_run` writes the SWAT+ I/O config text files.
-#' The SWAT+ executable defines the model based on their contents alone (ie independently of the
-#' QSWAT+ shapefiles loaded above).
 #' 
-#' These are the files that need to be modified during parameter fitting - we can read and
-#' manipulate them using the `rswat` helper functions. The first step is to define the project
-#' directory (usually "TxtInOut")
+#' ## managing SWAT+ configuration files in R
+#' 
+#' The SWAT+ executable runs simulations according to the settings written
+#' in a directory of text files (usually called 'TxtInOut'). This is a large and complicated
+#' set of files that define all parameters of model. The `rswat` helper functions include tools
+#' for managing and cataloging these files. 
+#' 
+#' If you are new to SWAT, check out the [I/O](https://swatplus.gitbook.io/docs/user/io)
+#' and [theory](https://swat.tamu.edu/media/99192/swat2009-theory.pdf) PDFs. Note that the second link
+#' is for a document from 2009 (the most recent, as far as I am aware), and although core aspects of the the
+#' model have not changed much since then, many variable and parameter names are different in SWAT+.
+#' 
+#' The first step is to define the project directory and see what we have:
 
 # assign the SWAT+ project directory in `rswat`
 cio = rswat_cio(dir.qswat)
 
-#' load all config files except decision tables, which are very large (and not needed for now)
+#' load all config files into memory except decision tables, which are very large (and not
+#' needed for now). This takes a moment to parse the files, which are then summarized in the
+#' returned dataframe
 cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
-
-#' This takes a few seconds to parse the files, which are summarized in the returned dataframe
 print(cio)
 
 #' Each row of `cio` is a file containing a group of model parameters. The 'nvar' column indicates
 #' how many distinct fields there are in the file (nrow * ncol, summed over all of the tables,
-#' including headers). There are a lot of them, so if you are new to SWAT, check out the
-#' [I/O](https://swatplus.gitbook.io/docs/user/io) and 
-#' [theory](https://swat.tamu.edu/media/99192/swat2009-theory.pdf) PDFs.
+#' including headers). 
 #' 
-#' Note that as of April 2021, I can  find no theory guides published for recent versions of SWAT
-#' (including SWAT+), so the link above is for a document from 2009. Many aspects of the the model
-#' have not changed since then, and the old theory guide remains a good reference. However, most
-#' variable and parameter names have changed in SWAT+.
-#' 
-#' Parameters can be examined by calling `rswat_open` with a filename. eg we will be interested in the
-#' aquifer model parameters in 'aquifer.aqu' - the code below prints the last few lines of the relevant
-#' table:
+#' We will be interested in the aquifer model parameters in 'aquifer.aqu' - the chunk below prints the
+#' last few lines of the relevant table:
 
 # find aquifer-related tables
 cio %>% filter( grepl('aqu', file) ) %>% print
 
-# this one contains the main process model parameters
-rswat_open('aquifer.aqu') %>% tail %>% print
+# this one contains the main process model parameters 
+rswat_open('aquifer.aqu') %>% str
 
 #' The helper function `rswat_find` can be useful for tracking down a SWAT+ parameter using keywords or
-#' SWAT2012 names. This uses fuzzy case-insensitive matching (see R's `?agrep` doc), which does well to catch
-#' the most common name changes in the SWAT2012 -> SWAT+ updates
+#' SWAT2012 names. This uses fuzzy case-insensitive matching (see R's `?agrep` doc), which catches many
+#' of the name changes in the SWAT2012 -> SWAT+ updates. eg. the following code finds the PET estimation
+#' method parameter 'pet', which was called 'IPET' in SWAT2012:
 
-# eg. find the PET estimation method 'pet', which was called 'IPET' in SWAT2012
+# fuzzy = 1 to allow inexact matches
 rswat_find('IPET', fuzzy=1) %>% filter(name != 'description') %>% print
 
-#' The 'string' column above shows the plaintext for this parameter in the SWAT+ config file, and 'file'
-#' the filename. We can see that 'pet' (in file 'codes.bsn') is set to 1. This codes for the Penman-Monteith
-#' model.
+#' The 'string' column above shows the plaintext representation of parameters in the SWAT+ config files
+#' listed in column 'file'. We can see that 'pet' (in file 'codes.bsn') set to 1. This codes for the
+#' Penman-Monteith model for potential evapotranspiration (PET). The other two matches, 'pet_file' and
+#' 'harg_pet', are an input file for observed PET, and a solar radiation coefficient used with the
+#' Hargreaves-Samani model (neither is currently used).  
 #' 
-#' The other two matches, 'pet_file' and 'harg_pet', are an input file for observed PET, and
-#' a solar radiation coefficient used with the Hargreaves-Samani model (neither is currently used).  
-
-#' 
-#' ## Adjusting a SWAT+ model
+#' ## adjusting a SWAT+ model
 #' 
 #' To change a parameter, open its container file with `rswat_open`, modify it in R, then write the change with
-#' `rswat_write`. eg. switching to the Hargreaves-Samani model for PET (coded as pet=2) can be done like this:
+#' `rswat_write`. eg. switching to the Hargreaves-Samani model for PET (coded as 'pet' = 2) can be done like this:
  
-# open the file and copy to an R dataframe called `codes`
+# open the file and put its contents into an R dataframe called `codes`
 codes = rswat_open('codes.bsn')
-print(codes)
+codes %>% str
 
-# By default, SWAT+ estimates PET with Penman-Monteith (pet = 0, see I/O docs)
+#' By default, SWAT+ estimates PET with Penman-Monteith ('pet' = 1), so we have to change the PET code:
 
-# Hargreaves-Samani is coded as pet = 2: make this change
+# change PET method to Hargreaves-Samani 
 codes$pet = 2
 
-# default behaviour of `rswat_write` is to preview the requested change. This looks fine...
-rswat_write(codes)
+#' The default behaviour of `rswat_write` is to preview the requested change:
 
-# ... so we overwrite the file on disk with argument `preview=FALSE`
+# preview changes
+rswat_write(codes) %>% str
+
+#' The new 'string' field looks fine so we go ahead and overwrite the file on disk with argument `preview=FALSE` 
+
+# write the changes
 rswat_write(codes, preview=FALSE, quiet=TRUE)
 
 #' The SWAT+ executable will now use the Hargreaves-Samani method for estimation.
-#' The Hargreaves-Samani coefficient that turned up earlier is no longer inactive, so we need to assign it
-#' a nonzero value. For now I just use the example value appearing in the I/O docs (we can tune it later).
+#' The Hargreaves-Samani coefficient, 'harg_pet', that turned up earlier in the search for 'IPET' is no longer
+#' inactive, so we need to assign it a sensible value. For now I just use the example value appearing in the
+#' I/O docs - we will tune it later.
 
-# open the container file for 'harg_pet'
+# open the container file for 'harg_pet' and print a summary
 hydro = rswat_open('hydrology.hyd')
+hydro %>% str
 
-# The parameters in this file are all length-50 vectors. Distinct values are allowed for each HRU
-print( nrow(hydro) )
-print( head(hydro) )
+#' The parameters in this file are all length-50 (column) vectors. This is because there are 50 HRUs in this
+#' model, and SWAT+ allows distinct values for each one in this case. The code below assigns the same default
+#' value for the coefficient to all of them
 
-# assign the same example value for 'harg_pet' in all HRUs, then write to disk
+# assign the default 'harg_pet' value in all HRUs, then write to disk
 hydro$harg_pet = 0.0023
 rswat_write(hydro, preview=FALSE, quiet=TRUE)
 
 #' Hargreaves-Samani may be the best choice for this project since we lack the detailed data on humidity,
-#' wind, and solar energy required with Penman-Monteith. SWAT+ can generate those missing data (this is
-#' its default behaviour) but since their values are generated from a stochastic process calibrated on
-#' long-term historical norms, they are very imprecise at the daily scale.
-
+#' wind, and solar energy required with Penman-Monteith. SWAT+ can generate those missing data using a
+#' stochastic process, but the result is imprecise at the daily scale.
 #' 
-#' ## Viewing/running simulations
+#' ## Viewing simulation data
 #' 
 #' the SWAT+ executable takes a few seconds to simulate the full seven-year time series in this example,
-#' producing output in the form of .txt tables containing simulated state variables.
+#' producing output in the form of .txt tables containing simulated state variables. There are many
+#' such output tables (100+) and the task of printing any of them to a file can slow down SWAT+ considerably.
+#' To speed things up it is best to request specific outputs and omit printing the others.
 #' 
-#' There are many (100+) such output tables and the task of printing any of them to a file can slow down SWAT+
-#' considerably. To speed things up it is better to request specific outputs and omit printing the others. This
-#' requires some knowledge of what output variables are available and where they are located.
+#' This requires learning what output variables are available and where they are located. `rswat_output`
+#' handles listing and parsing SWAT+ model outputs
 #' 
-#' The `rswat_output` function returns a dataframe with info on the available SWAT+ output files:
 
-# copy the dataframe to variable `odf`
+# get a dataframe with info on the available SWAT+ output files
 odf = rswat_output()
 
-# print some summary info
-head(odf)
+# print the total number of rows (files), and the first few lines
 print( nrow(odf) )
+head(odf)
 
-#' Output files are loaded as R dataframes by specifying `fname` (and, optionally, `vname` for subsets)
+#' Output files are loaded as R dataframes by specifying `fname`
 
-# load an example file. Dates and units are incorporated automatically
+# load an example file. 
 hydout.yr = rswat_output(fname='hydout_yr.txt')
-head( hydout.yr )
+hydout.yr %>% str
 
-# a subset of columns (output variables) can be specified with `vname`
-head( rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction')) )
+#' A subset of columns (output variables) can be specified with `vname`
 
-#' Some columns are loaded by default because they are important identifiers (eg spatial IDs).
-#' This functionality (along with date-parsing) can be switched off to get faster load times,
-#' or for debugging:
+# print the first few lines for two particular variables
+rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction')) %>% head
 
-head( rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction'), makedates=FALSE, showidx=FALSE) )
+#' Notice dates and units are incorporated automatically. Some additional columns are also loaded
+#' by default because they are important identifiers (eg spatial IDs). This functionality (along
+#' with date-parsing) can be switched off to get faster load times, or for debugging:
+
+rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction'), makedates=FALSE, showidx=FALSE) %>% head
 
 #' When an output file is scanned by this function, its headers and units are cached for faster
-#' loading in subsequent calls. Variable names in this database can also be searched by calling
+#' loading in subsequent calls. Variable names in this database can then be searched by calling
 #' `rswat_output` without the `fname` argument:
 #' 
 
 # search for output variables named "fraction". The one loaded above is identified:
-rswat_output(vname='fraction')
+rswat_output(vname='fraction') %>% str
 
 # search for 'flow_in'. Only a partial match is found: 
-rswat_output(vname='flo_in')
+rswat_output(vname='flo_in') %>% str
 
 #' Right now the database only includes the contents of 'hydout_yr.txt', and `rswat_output()` only
-#' reports the files currently in the SWAT+ project folder ("TxtInOut"). To include ALL SWAT+ output
-#' variables, we can run a (short) simulation where all output files are requested, then parse its
-#' outputs:
+#' reports the files currently in the SWAT+ project folder ("TxtInOut"). To get a more exhaustive list
+#' `rswat` can run a (1-day) simulation, requesting all outputs, then parse the output files before restoring
+#' the original state of the project folder
 
 # build database of SWAT+ outputs
 odf = rswat_output(loadall=TRUE)
-head( odf )
+odf %>% head
 
-#' This only takes a few seconds, and only temporarily alters the files in 'TxtInOut' (a backup is
-#' restored after it completes). Notice the filenames list now includes entries with NA size - these
-#' are files not currently found in 'TxtInOut', but which can be enabled in SWAT+ simulations. Their
-#' headers (and units) have now been cached, and are searchable:
+#' Notice the filenames list now includes entries with NA fields for 'size', 'modified', and 'path'.
+#' These are files not currently found in 'TxtInOut' but which can be enabled in SWAT+ simulations.
+#' Since the above function call cached their headers (and units), they are now searchable:
 
 # repeat the search for 'flo_in' and find many exact matches. 
-nrow( rswat_output(vname='flo_in') ) 
+rswat_output(vname='flo_in') %>% str
 
 # pipes are useful for narrowing the results of a search
-rswat_output(vname='flo_in') %>% filter( step == 'day' ) %>% filter( units == 'ha m' )
+rswat_output(vname='flo_in') %>% filter( step == 'day' ) %>% filter( units == 'ha m' ) %>% str
 
 #' Searches will return exact matches first, and if nothing is found, the function reverts to
 #' partial (sub-string) matching with increasing fuzziness until it finds something:
 
-# an example of fuzzy partial matching
-rswat_output(vname='recharge')
+# print the first few lines of search results showing this behaviour
+rswat_output(vname='recharge') %>% head
 
 #'
 

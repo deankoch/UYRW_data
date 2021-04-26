@@ -64,6 +64,8 @@ Check back in the coming weeks as we add to this section to demonstrate the mode
 
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
+* [demo_baseflow](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_baseflow.md)
+builds a SWAT+ model and demonstrates how it can be loaded and managed with `rswat`
 * [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md)
 utilities for creating and calibrating SWAT+ models in R
 
@@ -109,4 +111,5 @@ src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/swat_l
 src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.png" width="45%"> </img> <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/meteo_gridded.png" width="100%"></img>
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_catchments.png" width="100%"> </img>
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_upslope_areas.png" width="100%"> </img>
-
+<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_catchment.png" width="100%"> </img>
+<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_hrus.png" width="100%"> </img>
