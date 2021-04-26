@@ -65,7 +65,7 @@ Check back in the coming weeks as we add to this section to demonstrate the mode
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
 * [demo_baseflow](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_baseflow.md)
-builds a SWAT+ model and demonstrates how it can be loaded and managed with `rswat`
+builds a SWAT+ model and demonstrates how it can be managed with `rswat`
 * [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md)
 utilities for creating and calibrating SWAT+ models in R
 
