@@ -1,7 +1,7 @@
 make\_subwatersheds.R
 ================
 Dean Koch
-2021-04-01
+2021-04-26
 
 **Mitacs UYRW project**
 
@@ -68,23 +68,23 @@ script along with a short description. We use a helper function to write
 this information to disk:
 
 ``` r
-subwatersheds.meta = my_metadata('get_subwatersheds', files.towrite, overwrite=TRUE)
+subwatersheds.meta = my_metadata('make_subwatersheds', files.towrite, overwrite=TRUE)
 ```
 
-    ## [1] "> writing metadata to: data/get_subwatersheds_metadata.csv"
+    ## [1] "> writing metadata to: data/make_subwatersheds_metadata.csv"
 
 ``` r
 print(subwatersheds.meta[, c('file', 'type')])
 ```
 
     ##                                                        file          type
-    ## img_taudem                    graphics/my_upslope_areas.png   png graphic
-    ## img_my_catchments_full      graphics/my_catchments_full.png   png graphic
-    ## usgs_allcatchments     data/prepared/usgs_allcatchments.rds R list object
-    ## img_my_catchments                graphics/my_catchments.png   png graphic
     ## taudem                            data/prepared/taudem_uyrw     directory
     ## usgs_catchments           data/prepared/usgs_catchments.rds R list object
-    ## metadata                data/get_subwatersheds_metadata.csv           CSV
+    ## usgs_allcatchments     data/prepared/usgs_allcatchments.rds R list object
+    ## img_taudem                    graphics/my_upslope_areas.png   png graphic
+    ## img_my_catchments                graphics/my_catchments.png   png graphic
+    ## img_my_catchments_full      graphics/my_catchments_full.png   png graphic
+    ## metadata               data/make_subwatersheds_metadata.csv           CSV
 
 ``` r
 # load the DEM and basins info
