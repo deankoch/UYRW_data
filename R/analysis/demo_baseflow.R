@@ -212,7 +212,7 @@ if( !file.exists(catchment.png) )
 #' [get_soils](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_soils.md),
 #' [get_landuse](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_landuse.md),
 #' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md),
-#' [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md),
+#' [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 #'
 #'  The chunk below sets a couple of watershed layout parameters and builds the model:
 
@@ -371,7 +371,44 @@ rswat_write(hydro, preview=FALSE, quiet=TRUE)
 #' wind, and solar energy required with Penman-Monteith. SWAT+ can generate those missing data using a
 #' stochastic process, but the result is imprecise at the daily scale.
 #' 
-#' ## Viewing simulation data
+
+#' 
+#' ## running a SWAT+ simulation
+#' 
+#' Model design and fitting involves a lot of back and forth between these configuration files and the
+#' SWAT+ executable - we adjust a parameter, run a simulation, study the impacts on some state variables
+#' of interest, then repeat ad nauseum. `rswat` has utilities to streamline this process from R.
+#'
+
+
+rswat_fout()
+
+
+# set up start/end dates of the simulation
+rswat_tinit(c('1987-01-01', '1987-03-01'), quiet=FALSE)
+
+# run a SWAT+ simulation
+rswat_exec()
+
+rswat_output('files_out.out')
+
+rswat_fout()
+
+#' 
+
+
+#' 
+#' Once the config parameters are set up  are set up o run a SWAT+ simulation
+#' 
+#' the SWAT+ executable takes a few seconds to simulate the full seven-year time series in this example,
+#' 
+
+# set up a short 1-month run
+#rswat_tinit(c('1987-01-01', '1987-02-01'))
+
+
+#' 
+#' ## viewing simulation output data
 #' 
 #' the SWAT+ executable takes a few seconds to simulate the full seven-year time series in this example,
 #' producing output in the form of .txt tables containing simulated state variables. There are many
@@ -417,6 +454,9 @@ rswat_output(vname='fraction') %>% str
 # search for 'flow_in'. Only a partial match is found: 
 rswat_output(vname='flo_in') %>% str
 
+#' Searches will return exact matches first, and if nothing is found, the function reverts to
+#' partial (sub-string) matching with increasing fuzziness until it finds something:
+#' 
 #' Right now the database only includes the contents of 'hydout_yr.txt', and `rswat_output()` only
 #' reports the files currently in the SWAT+ project folder ("TxtInOut"). To get a more exhaustive list
 #' `rswat` can run a (1-day) simulation, requesting all outputs, then parse the output files before restoring
@@ -428,7 +468,7 @@ odf %>% head
 
 #' Notice the filenames list now includes entries with NA fields for 'size', 'modified', and 'path'.
 #' These are files not currently found in 'TxtInOut' but which can be enabled in SWAT+ simulations.
-#' Since the above function call cached their headers (and units), they are now searchable:
+#' Since the above function call cached their headers (and units) they are now searchable:
 
 # repeat the search for 'flo_in' and find many exact matches. 
 rswat_output(vname='flo_in') %>% str
@@ -436,11 +476,26 @@ rswat_output(vname='flo_in') %>% str
 # pipes are useful for narrowing the results of a search
 rswat_output(vname='flo_in') %>% filter( step == 'day' ) %>% filter( units == 'ha m' ) %>% str
 
-#' Searches will return exact matches first, and if nothing is found, the function reverts to
-#' partial (sub-string) matching with increasing fuzziness until it finds something:
 
-# print the first few lines of search results showing this behaviour
-rswat_output(vname='recharge') %>% head
+# 
+# 
+# 
+# 
+# # print the first few lines of search results showing this behaviour
+# rswat_output(vname='recharge') %>% head
+
+## DEVELOPMENT
+
+
+
+
+
+
+# TODO: 
+# - replace rswat_daily, rswat_obj, etc
+# - add a simulation call at the beginning of the section above
+# - swap in the fitted parameter values
+
 
 #'
 
