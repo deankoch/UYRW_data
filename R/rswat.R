@@ -52,7 +52,8 @@ library(data.table)
 #' (internal) environment to store the SWAT+ project file data
 .rswat = new.env( parent=emptyenv() )
 
-#' ## core functions for file I/O interface
+
+#' ## CORE: core functions for file I/O interface
 #' 
 
 #' open 'file.cio' and list its contents
@@ -706,7 +707,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
     
   } else stop('`textio` not found. Either call `rswat_cio` or provide `textio`')
   
-  # TODO:
+  # TODO: include OHG files in simulation
   # run dummy simulation to discover output filenames and headers, if requested
   if( loadall )
   {
@@ -785,9 +786,12 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   if( !(fname %in% fname.ref$file) ) stop( msg.unknown )
   
   # catch recognized but nonexistent files 
-  msg.nofile = 'Check that it is enabled in `print.prt`, and run the simulation again.'
+  msg.nofile = 'Check that it is enabled in `print.prt` and/or run the simulation again.'
   fpath = file.path(textio, fname)
   if( !file.exists(fpath) ) stop(paste(msg.unknown, msg.nofile, sep='. '))
+  
+  # handle files_out.out elsewhere
+  if( fname == 'files_out.out') return( rswat_fout(checkohg=TRUE) ) 
   
   # initialize variable names database (and entries for this file) if necessary
   vname.ref = .rswat$stor$output$vname
@@ -1097,7 +1101,8 @@ rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
 }
 
 
-#' ## internal functions for file I/O interface
+
+#' ## INTERNAL: internal functions for file I/O interface (mostly for config files)
 #' 
 
 #' line reader for SWAT+ text files
@@ -2078,7 +2083,8 @@ rswat_2char = function(value, linedf, quiet=FALSE)
 }
 
 
-#' ## functions for manipulating and cataloguing SWAT+ output files and variables
+
+#' ## OUTPUT: functions for manipulating and cataloguing SWAT+ output files/variables
 #' 
 
 #' parse a SWAT+ filename/folder for metadata about output files
@@ -2167,7 +2173,7 @@ rswat_oscan = function(fname=NULL, textio=NULL)
   fdf$type[ endsWith(fdf$file, '.out') ] = 'log'
   fdf$type[ endsWith(fdf$file, '.ohg') ] = 'ohg'
   
-  # parse the object, group, and gis_id names from the OHG filenames (if any)
+  # attempts parse the object, group, and gis_id names from the OHG filenames (if any)
   idx.ohg = fdf$type == 'ohg'
   if( any(idx.ohg) )
   {
@@ -2188,38 +2194,18 @@ rswat_oscan = function(fname=NULL, textio=NULL)
   # identify and process prt files as needed
   if( any( fdf$type == 'unknown' ) )
   {
-    # 'files_out.out' holds a list of output files created in last simulation
-    fread.prt = fread(file.path(textio, 'files_out.out'), skip=1, fill=T) %>% as.data.frame
-    
-    # BUGFIX: detect and fix spaces in first field causing table parser errors
-    if( ncol(fread.prt) > 2 )
-    {
-      # buggy rows have non-empty third field
-      idx.bug = nchar(fread.prt[, 3]) > 0
-      
-      # repair filenames (discard whatever follows the space in the first buggy field)
-      fread.prt[idx.bug, 2] = fread.prt[idx.bug, ncol(fread.prt)]
-      
-      # omit the redundant fread column 
-      fread.prt = fread.prt[, 1:2]
-    }
-    
-    # rename the fread columns for convenience and clean up names
-    fread.prt = fread.prt %>% setNames(c('group', 'file') ) %>%
-      mutate( group = gsub('_AA', '', group) ) %>%
-      mutate( group = tolower(group) ) %>%
-      mutate( group = gsub('-', '_', group) )
-    
+    # read 'files_out.out' to get list of output files created in last simulation
+    fout = rswat_fout(fpath=file.path(textio, 'files_out.out'), ohg=FALSE)
+
     # merge 'files_out.out' data with output dataframe and add prt flag
-    idx.update = fdf$file %in% fread.prt$file
-    idx.newval = match(fdf$file[idx.update], fread.prt$file)
-    fdf$group[ idx.update ] = fread.prt$group[idx.newval]
-    fdf$type[ idx.update ] = 'prt'
+    idx.update = fdf$file %in% fout$file
+    idx.newval = match(fdf$file[idx.update], fout$file)
+    fdf$group[ idx.update ] = fout$group[ idx.newval ]
+    fdf$type[ idx.update ] = fout$type[ idx.newval ]
     
-    # parse the object name from the filename for prt type files
+    # parse the object name from the filename of prt type files
     regexp.suffix = '(_aa\\.txt)|(_yr\\.txt)|(_mon\\.txt)|(_day\\.txt)'
-    name.prt = gsub(regexp.suffix, '',  fdf$file[ idx.update ] )
-    fdf$name[ idx.update ] = name.prt
+    fdf$name[ idx.update ] = gsub(regexp.suffix, '',  fdf$file[ idx.update ] )
   }
   
   # initialize storage in package memory as needed
@@ -2258,7 +2244,8 @@ rswat_oparse = function(fname=NULL, textio=NULL)
   #
   # dataframe of information about the columns of a SWAT+ output file, with one row per
   # detected field. Boolean attribute 'index' indicates that the column is an indexing
-  # variable of time or space.
+  # variable of time or space, and 'units' are character representations recognizable by 
+  # `set_units`. Other columns are documented in `rswat_oscan` 
   #
   # DETAILS:
   #
@@ -2389,6 +2376,90 @@ rswat_oparse = function(fname=NULL, textio=NULL)
 
   return(vdf)
 } 
+
+#' load the list of 'prt'-type files in 'files_out.out' as an R dataframe
+rswat_fout = function(fpath=NULL, ohg=TRUE)
+{
+  #
+  # ARGUMENTS:
+  #
+  # `fpath`: character, absolute path to the file to open
+  # `ohg`: boolean, indicating to append info on OHG files from 'object.prt'
+  #
+  # RETURN:
+  #
+  # dataframe with columns: 'group' (SWAT+ group for this file), 'type' (either 'prt' or 'ohg'),
+  # and 'file' (filename)
+  #
+  # DETAILS:
+  #
+  # After completing a simulation, SWAT+ writes information on all of the 'prt'-type files
+  # it generated in 'files_out.out'. This is useful for identifying the available 'prt'
+  # files, and for checking that a given output file belongs to the latest simulation.
+  #
+  # Information about OHG type files is optionally read from 'object.prt'
+  
+  # handle user-supplied path (not necessarily to a file named 'files_out.out')
+  fname = 'files_out.out'
+  if( !is.null(fpath) )
+  {
+    # project config file folder is assumed to be the parent directory of `fpath`
+    textio = dirname(fpath)
+    fname = basename(fpath)
+
+  } else {
+    
+    # prepare error messages when the paths aren't found
+    msg.info = 'Either supply fpath or run `rswat_cio` to set ciopath'
+    msg.err = paste('project folder not found.', msg.info)
+    
+    # check that rswat has been initialized
+    if( exists('.rswat') )
+    {
+      # copy the path from the package environment
+      ciopath = .rswat$ciopath
+      if( is.null(ciopath) ) stop(msg.err)
+      
+      # copy parent directory
+      textio = dirname(ciopath)
+      
+    } else stop(msg.err)
+  }
+  
+  # 'files_out.out' holds a list of output files created in last simulation
+  fread.prt = fread(file.path(textio, 'files_out.out'), skip=1, fill=TRUE) %>% as.data.frame
+  
+  # BUGFIX: detect and fix spaces in first field causing table parser errors
+  if( ncol(fread.prt) > 2 )
+  {
+    # buggy rows have non-empty third field
+    idx.bug = nchar(fread.prt[, 3]) > 0
+    
+    # repair filenames (discard whatever follows the space in the first buggy field)
+    fname.bug = fread.prt[idx.bug, ncol(fread.prt)]
+    
+    # repair the name, move the filename field, omit the redundant column(s)
+    fread.prt[idx.bug, 1] = paste(fread.prt[idx.bug, 1:( ncol(fread.prt) - 1 )], collapse='_')
+    fread.prt[idx.bug, 2] = fname.bug
+    fread.prt = fread.prt[, 1:2]
+  }
+  
+  # rename the fread columns, clean up names, add 'type' column
+  dat = fread.prt %>%  setNames(c('group', 'file') ) %>%
+    mutate( type = 'prt' ) %>% 
+    select( file, type, group )
+
+  # TODO: handle OHG requests
+  if( ohg ) 
+  {
+    warning('nothing to see here')
+    
+  }
+  
+  # finished
+  return(dat)
+  
+}
 
 #' build a vector of Date objects to match rows of a SWAT+ output file 
 rswat_makedates = function(dat, tstep)
@@ -2599,6 +2670,8 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   
 }
 
+
+
 #' create an object hydrograph output specification file, modifying file.cio appropriately
 rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
 {
@@ -2734,7 +2807,7 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
 
 
 
-#' ## functions for running QSWAT+ and opening its output files
+#' ## QSWAT: functions for running QSWAT+ and opening its output files
 #' 
 
 #' assembles required inputs for a QSWAT+ project
@@ -3376,7 +3449,8 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
 
 
 
-#' ## helper functions for running SWAT+ simulations
+
+#' ## EXECUTION: helper functions for running SWAT+ simulations
 #' 
 
 #' set up simulation times in SWAT+ config files 'print.prt' and 'time.sim' 
@@ -3460,6 +3534,9 @@ rswat_tinit = function(dates=NULL, nyskip=0, daily=TRUE, quiet=TRUE)
                       day_end = as.integer(format(date.end, '%j')), 
                       yrc_end = as.integer(format(date.end, '%Y')))
     
+    # progress message
+    if( !quiet ) cat('writing to time.sim and print.prt...')
+    
     # make these changes in 'time.sim' and overwrite on disk
     time.sim[ names(pars.tochange) ] = pars.tochange
     rswat_write(time.sim, preview=F, quiet=TRUE)
@@ -3467,6 +3544,7 @@ rswat_tinit = function(dates=NULL, nyskip=0, daily=TRUE, quiet=TRUE)
     # make these changes in 'print.prt' and overwrite on disk
     print.prt[[1]][ names(pars.tochange) ] = pars.tochange
     rswat_write(print.prt[[1]], preview=F, quiet=TRUE)
+    if( !quiet ) cat('done\n')
   }
   
   # return the current simulation date range 
@@ -3475,18 +3553,21 @@ rswat_tinit = function(dates=NULL, nyskip=0, daily=TRUE, quiet=TRUE)
 }
 
 #' run the SWAT+ executable
-rswat_exec = function(textio=NULL, exe=NULL, quiet=FALSE)
+rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
 {
   # ARGUMENTS
   # 
   # `textio`: character, path to the text I/O directory for the SWAT+ model 
   # `exe`: character, path to the SWAT+ executable 
+  # `fout`: logical, whether to return the list of output files generated in the simulation 
   # `quiet`: logical, suppresses console messages
   #
   # RETURN
   #
-  # Returns nothing but makes a system call to run the SWAT+ executable at `exe` in the
-  # project directory specified by `textio` (or assigned by a call to `rswat_cio`)
+  # if `fout==TRUE`, returns a vector of output filenames (otherwise returns nothing).
+  #
+  # The function makes a system call to run the SWAT+ executable at `exe` in the project
+  # directory specified by `textio` (or assigned by a call to `rswat_cio`)
   #
   # DETAILS
   #
@@ -3522,6 +3603,9 @@ rswat_exec = function(textio=NULL, exe=NULL, quiet=FALSE)
   syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
   invisible(shell(syscall.string, intern=quiet))
   if(!quiet) cat('\n>> finished\n')
+  
+  # return filenames if requested
+  if( fout ) return( rswat_fout(ohg=TRUE)$file ) 
 }
 
 #' run a daily SWAT+ simulation of a physical variable, for a given location and time period 
@@ -3660,7 +3744,8 @@ rswat_daily = function(dates=NULL, loc=1, ofile=NULL, vname=NULL, exec=TRUE, qui
 }
 
 
-#' ## miscellaneous and in-development functions
+
+#' ## MISC: miscellaneous and in-development functions
 
 #' returns an objective function whose argument is vector of parameter values, output is NSE
 my_objective = function(cal, gage, textio, quiet=TRUE)
@@ -4115,29 +4200,9 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 }
 
 
-#' The following two functions are meant for future code optimization, where it makes sense
-#' to disable the default SWAT+ printouts and enable a specific object hydrograph (OHG).
-#' These OHG files are specific to a particular 'gis_id', so by omitting a lot of redundant
-#' information they speed up execution quite a bit.
-#' 
-#' The plan is to initially execute a simulation once with ALL default printouts enabled, in
-#' order to get the available output names and their units (there are no units rows in the OHG
-#' files). eg this could be done as part of `qswat_run` or `rswat_cio`, and the mappings could
-#' be stored in the package environment (similar to .rswat$linedf for config files)
-#' 
-#' From there it would be straightforward to hide the intermediate output file operations from
-#' the user - the goal is have a function that can request simulations of a specific variable
-#' in a specific time/place, without having to figure out which file(s) are required to make
-#' that happen  
 
 
-
-
-
-
-
-
-#' ## Phasing out
+#' ## DEPRECATED: phasing these out
 
 #' TODO: phase out this function (replaced by rswat_daily)
 #' evaluate errors in prediction for a SWAT+ model
@@ -4493,6 +4558,7 @@ rswat_daily2 = function(dates=NULL, loc=NULL, vname='flo_out', quiet=FALSE, text
   rswat_exec(quiet=quiet)
   return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
 }
+
 
 
 
