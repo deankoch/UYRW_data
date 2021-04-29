@@ -726,7 +726,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   if( is.null(.rswat$stor$output$fname) | loadall )
   {
     # scan project directory for output files, parsing filenames
-    fname.ref = rswat_oscan() 
+    fname.ref = rswat_oscan(textio=textio) 
     
   } else {
     
@@ -745,7 +745,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
     {
       # scans project directory for output files, parsing filenames
       cat(paste('scanning', sum(!is.na(fname.ref$size)) , 'output files in SWAT+ folder...\n'))
-      vname.ref = rswat_oparse() 
+      vname.ref = rswat_oparse(textio=textio) 
       
     } else {
       
@@ -791,11 +791,12 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   if( !file.exists(fpath) ) stop(paste(msg.unknown, msg.nofile, sep='. '))
   
   # handle files_out.out elsewhere
-  if( fname == 'files_out.out') return( rswat_fout(checkohg=TRUE) ) 
+  fout.path = file.path(textio, 'files_out.out')
+  if( fname == basename(fout.path)) return( rswat_fout(fout.path, checkohg=TRUE) ) 
   
   # initialize variable names database (and entries for this file) if necessary
   vname.ref = .rswat$stor$output$vname
-  if( ! fname %in% vname.ref$file ) vname.ref = rswat_oparse(fname)
+  if( ! fname %in% vname.ref$file ) vname.ref = rswat_oparse(fname, textio=textio)
   
   # index in database of variable names for this file 
   idx.vname = fname == vname.ref$file
@@ -2269,10 +2270,11 @@ rswat_oparse = function(fname=NULL, textio=NULL)
   # handle requests to parse all files by recursive calls
   if( length(fname) == 0 )
   {
-    # grab a current list of scannable files
+    # grab a current list of scannable files, with OHG files last
     fname = rswat_oscan(textio=textio) %>% 
       filter( !is.na(size) ) %>% 
       filter( type %in% c('prt', 'ohg') ) %>%
+      arrange( desc(type) ) %>%
       pull(file)
     
     # recursive calls to generate list of dataframes
@@ -2302,6 +2304,7 @@ rswat_oparse = function(fname=NULL, textio=NULL)
     
     # ... prt files have comments, headers, units; whereas OHG files just have headers
     is.prt = fname.ref$type == 'prt'
+    is.ohg = fname.ref$type == 'ohg'
     ln.head = ifelse(is.prt, 2, 1)
     ln.tab = ifelse(is.prt, 4, 2)
     ln.unit = ifelse(is.prt, 3, NA)
@@ -2363,7 +2366,49 @@ rswat_oparse = function(fname=NULL, textio=NULL)
       idx.head = sapply(unit.mid, function(n) which.min(abs(n - head.mid)))
       vdf$units[ idx.head ] = unit.nm
     }
-  
+    
+    # add units to OHG files based prt files in database (if available)
+    if( is.ohg & ( 'vname' %in% ls(.rswat$stor$output) ) )
+    {
+      # NOTE: OHG outputs only seem to work for these groups/types right now:
+      idx.group = fname.ref$group %in% c('sdc', 'hru', 'ru')
+      idx.name = fname.ref$name %in% c('tot', 'sur', 'rhg', 'til', 'lat')
+      is.supported = idx.group & idx.name
+      
+      # skip adding units for unsupported types
+      if( is.supported )
+      {
+        # grab a copy of the relevant subset of the database 
+        vname.ref = .rswat$stor$output$vname %>% 
+          filter( step == 'day' ) %>% 
+          filter( type=='prt' ) %>%
+          select( name, units, file)
+        
+        # and split by file
+        vname.split = split(vname.ref$name, vname.ref$file)
+        
+        # build a search pattern - OHG file headers omit a suffix (doublecheck this!)
+        idx.hasunits = (!vdf$index) & (head.nm != 'null')
+        head.pattern = paste0(head.nm[ idx.hasunits ], '_out')
+        
+        # scan for prt files with all of these header names and proceed when there is a match
+        idx.match = sapply(vname.split, function(v) all(head.pattern %in% v))
+        if( any(idx.match) )
+        {
+          # use the first of the matching prt files as basis for setting units
+          vname.lu = vname.ref %>% 
+            filter( file %in% names( which(idx.match)[1] ) ) %>%
+            filter( name %in% head.pattern ) %>% 
+            select( name, units )
+          
+          # make the replacement
+          vdf$units[idx.hasunits] = vname.lu$units[ match(head.pattern, vname.lu$name) ]
+          
+          # BUGFIX: 'flo' in OHG files has per-day units (not per-second, like 'flo_out')
+          vdf$units[vdf$name == 'flo'] = 'm3/day'
+        }
+      }
+    }
   }
   
   # initialize storage in package memory as needed
@@ -2536,7 +2581,7 @@ rswat_makedates = function(dat, tstep)
   }
   
   # handle tables with variable numbers of within-timestep rows (IDs), and/or 1900 bug
-  if(length(n.id) > 1)
+  if( length(n.id) > 1 )
   {
     # very slow for large datasets - used only as last resort
     all.dates.char = sapply(1:n.obs, function(ii) paste(dat[ii, nm.ymd], collapse='-'))
@@ -2548,7 +2593,7 @@ rswat_makedates = function(dat, tstep)
     all.dates = rep(seq(date.start, date.end, tstep), each=n.id)
     
     # handle end dates that don't coincide with a timestep interval endpoint
-    if( length(all.dates) == n.obs - 1 ) all.dates = c(all.dates, date.end)
+    if( length(all.dates) == n.obs - n.id ) all.dates = c(all.dates, rep(date.end, n.id))
   }
   
   # halt if there is a mismatch in length, otherwise return the vector
