@@ -376,50 +376,35 @@ rswat_write(hydro, preview=FALSE, quiet=TRUE)
 #' ## running a SWAT+ simulation
 #' 
 #' Model design and fitting involves a lot of back and forth between these configuration files and the
-#' SWAT+ executable - we adjust a parameter, run a simulation, study the impacts on some state variables
-#' of interest, then repeat ad nauseum. `rswat` has utilities to streamline this process from R.
+#' SWAT+ executable - we adjust a parameter, run a simulation, look for changes in state variables
+#' of interest, then repeat. `rswat` has utilities to streamline this process from R.
 #'
+#'  `rswat_exec` runs a simulation by calling the SWAT+ executable, with parameters loaded from the config
+#'  files in the current project directory. This includes the time period to simulate over (specified in
+#'  the file 'time.sim'), and the time period to include in output files (in 'print.prt'). This can be
+#'  adjusted manually or using a helper function, as shown below:
+#'  
 
+# `rswat_tinit` without arguments prints the current settings in 'time.sim'
+rswat_tinit()
 
-rswat_fout()
+# write new ones (adjusting 'print.prt' to match)
+rswat_tinit(c('1987-01-01', '1988-01-02'), quiet=FALSE)
 
-
-# set up start/end dates of the simulation
-rswat_tinit(c('1987-01-01', '1987-03-01'), quiet=FALSE)
-
-# run a SWAT+ simulation
-rswat_exec()
-
-rswat_output('files_out.out')
-
-rswat_fout()
-
-#' 
-
-
-#' 
-#' Once the config parameters are set up  are set up o run a SWAT+ simulation
-#' 
-#' the SWAT+ executable takes a few seconds to simulate the full seven-year time series in this example,
-#' 
-
-# set up a short 1-month run
-#rswat_tinit(c('1987-01-01', '1987-02-01'))
-
+# run a simulation - the return value is a vector of output files generated
+fout = rswat_exec()
+print(fout)
 
 #' 
 #' ## viewing simulation output data
 #' 
-#' the SWAT+ executable takes a few seconds to simulate the full seven-year time series in this example,
-#' producing output in the form of .txt tables containing simulated state variables. There are many
-#' such output tables (100+) and the task of printing any of them to a file can slow down SWAT+ considerably.
-#' To speed things up it is best to request specific outputs and omit printing the others.
-#' 
-#' This requires learning what output variables are available and where they are located. `rswat_output`
-#' handles listing and parsing SWAT+ model outputs
+#' the SWAT+ executable only takes a few seconds to simulate the one-year time series in this example,
+#' producing output in the form of .txt tables containing simulated state variables. Since there are
+#' potentially many such output tables (100+) in a given simulation, some effort is required to catalog
+#' the available output variables and filenames:
 #' 
 
-# get a dataframe with info on the available SWAT+ output files
+# get a dataframe with info on the available SWAT+ output files in the project directory
 odf = rswat_output()
 
 # print the total number of rows (files), and the first few lines
@@ -476,24 +461,20 @@ rswat_output(vname='flo_in') %>% str
 # pipes are useful for narrowing the results of a search
 rswat_output(vname='flo_in') %>% filter( step == 'day' ) %>% filter( units == 'ha m' ) %>% str
 
+#' 
+#' ## Comparing the simulated and observed data
+#' 
+#' Printing simulation data to plaintext output files can slow down SWAT+ considerably. To speed
+#' things up it is better to request specific outputs and omit printing the others. These settings
+#' are found in 'print.prt' (for the normal outputs) and 'object.prt' (object hydrograph outputs).
+#' 
+#' TODO: continue this
 
-# 
-# 
-# 
-# 
-# # print the first few lines of search results showing this behaviour
-# rswat_output(vname='recharge') %>% head
-
-## DEVELOPMENT
-
-
-
-
+rswat_open('print.prt')
 
 
 # TODO: 
 # - replace rswat_daily, rswat_obj, etc
-# - add a simulation call at the beginning of the section above
 # - swap in the fitted parameter values
 
 

@@ -2400,12 +2400,12 @@ rswat_fout = function(fpath=NULL, ohg=TRUE)
   # Information about OHG type files is optionally read from 'object.prt'
   
   # handle user-supplied path (not necessarily to a file named 'files_out.out')
-  fname = 'files_out.out'
+  fname.out = 'files_out.out'
   if( !is.null(fpath) )
   {
     # project config file folder is assumed to be the parent directory of `fpath`
     textio = dirname(fpath)
-    fname = basename(fpath)
+    fname.out = basename(fpath)
 
   } else {
     
@@ -2452,8 +2452,19 @@ rswat_fout = function(fpath=NULL, ohg=TRUE)
   # TODO: handle OHG requests
   if( ohg ) 
   {
-    warning('nothing to see here')
-    
+    # proceed only if the OHG definitions config file exists
+    fname.prt = 'object.prt'
+    cio = rswat_cio()
+    if( fname.prt %in% cio$file )
+    {
+      # open the OHG files table, reshape to join with dat
+      dat = rswat_open(fname.prt) %>%
+        mutate( file = FILENAME ) %>%
+        mutate( group = NA ) %>%
+        mutate( type = 'ohg' ) %>% 
+        select( file, type, group ) %>%
+        rbind(dat)
+    }
   }
   
   # finished
@@ -2713,7 +2724,31 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   # lateral:                'lat'
   # tile:                   'til'
   # soil moisture by layer: 'sol'
+  #
+  # ----------------------------------------------------
+  # valid combinations (TODO: test these again)
+  #
+  # til: sdc 
+  # lat: sdc
+  # sur: ru, hru
+  # sol: hru
+  # rhg: ru, hru, sdc
+  # tot: ru, hru, sdc
+  #
+  # other combinations seem to produce only empty or NA tables. The following code
+  # sets up SWAT+ to produce all of the above combinations (TODO: catalogue these)
+  #
+  # nm.ru = c('tot', 'sur', 'rhg')
+  # nm.hru = c('tot', 'sur', 'rhg', 'sol')
+  # nm.sdc = c('tot', 'rhg', 'til', 'lat' )
+  # htypes.test = c(nm.ru, nm.hru, nm.sdc)
+  # otypes.test = c(rep('ru', length(nm.ru)), 
+  #                 rep('hru', length(nm.hru)),
+  #                 rep('sdc', length(nm.sdc)))
   # 
+  # rswat_ohg(overwrite=TRUE, otype=otypes.test, htype=htypes.test)
+  #
+  # -----------------------------------------------------------
   #
   # The defaults will prompt SWAT+ to produce an output file named 'simulation_hru_1_tot.txt',
   # containing simulations of channel flow (and related variables) on the channel with
@@ -2753,7 +2788,7 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
 
   # construct the dataframe of file info to write (with character type columns)
   fdf = data.frame(NUMB=idtext, OBTYP=otype, OBTYPNO=as.character(oid), HYDTYP=htype) %>%
-    mutate(FILENAME = paste0(paste('ohg', OBTYP, OBTYPNO, HYDTYP, sep='_'), '.txt'))
+    mutate(FILENAME = paste0(paste('ohg', OBTYP, OBTYPNO, HYDTYP, sep='_'), '.ohg'))
   
   # format this dataframe into a matrix of strings with correct padding
   fdf = rbind(names(fdf), fdf) 
@@ -3453,6 +3488,62 @@ qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=N
 #' ## EXECUTION: helper functions for running SWAT+ simulations
 #' 
 
+#' run the SWAT+ executable
+rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
+{
+  # ARGUMENTS
+  # 
+  # `textio`: character, path to the text I/O directory for the SWAT+ model 
+  # `exe`: character, path to the SWAT+ executable 
+  # `fout`: logical, whether to return the list of output files generated in the simulation 
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN
+  #
+  # if `fout==TRUE`, returns a vector of output filenames (otherwise returns nothing).
+  #
+  # The function makes a system call to run the SWAT+ executable at `exe` in the project
+  # directory specified by `textio` (or assigned by a call to `rswat_cio`)
+  #
+  # DETAILS
+  #
+  # Existing values in the config files (including time specifications in 'print.prt' and
+  # 'time.sim') are used for the simulation. Change them using higher-level functions
+  # like `rswat_daily`
+  
+  
+  # if not supplied, try a hardcoded executable path 
+  if( is.null(exe) )
+  {
+    # TODO: detect this in pyqgis module
+    speditor.path = 'C:/SWAT/SWATPlus/SWATPlusEditor'
+    exe =  file.path(speditor.path, 'resources/app.asar.unpacked/swat_exe/rev60.5.2_64rel.exe')
+  }
+
+  # set default `textio` directory if `rswat` has been initialized with a project directory
+  if( is.null(textio) )
+  {
+    # check if rswat has been initialized
+    err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
+    if( !exists('.rswat') ) stop(err.msg)
+    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+    
+    # pull the directory from rswat environment
+    textio = dirname(.rswat$ciopath)
+  }
+  
+  # shell command prefix to change to the directory (avoids changing R's working directory)
+  shell.prefix = paste0('pushd ', normalizePath(textio), ' &&')
+  
+  # build system call and run SWAT
+  syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
+  invisible(shell(syscall.string, intern=quiet))
+  if(!quiet) cat('\n>> finished\n')
+  
+  # return filenames if requested
+  if( fout ) return( rswat_fout(ohg=TRUE)$file ) 
+}
+
 #' set up simulation times in SWAT+ config files 'print.prt' and 'time.sim' 
 rswat_tinit = function(dates=NULL, nyskip=0, daily=TRUE, quiet=TRUE)
 {
@@ -3550,62 +3641,6 @@ rswat_tinit = function(dates=NULL, nyskip=0, daily=TRUE, quiet=TRUE)
   # return the current simulation date range 
   return( c(start=date.start, end=date.end) )
   
-}
-
-#' run the SWAT+ executable
-rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
-{
-  # ARGUMENTS
-  # 
-  # `textio`: character, path to the text I/O directory for the SWAT+ model 
-  # `exe`: character, path to the SWAT+ executable 
-  # `fout`: logical, whether to return the list of output files generated in the simulation 
-  # `quiet`: logical, suppresses console messages
-  #
-  # RETURN
-  #
-  # if `fout==TRUE`, returns a vector of output filenames (otherwise returns nothing).
-  #
-  # The function makes a system call to run the SWAT+ executable at `exe` in the project
-  # directory specified by `textio` (or assigned by a call to `rswat_cio`)
-  #
-  # DETAILS
-  #
-  # Existing values in the config files (including time specifications in 'print.prt' and
-  # 'time.sim') are used for the simulation. Change them using higher-level functions
-  # like `rswat_daily`
-  
-  
-  # if not supplied, try a hardcoded executable path 
-  if( is.null(exe) )
-  {
-    # TODO: detect this in pyqgis module
-    speditor.path = 'C:/SWAT/SWATPlus/SWATPlusEditor'
-    exe =  file.path(speditor.path, 'resources/app.asar.unpacked/swat_exe/rev60.5.2_64rel.exe')
-  }
-
-  # set default `textio` directory if `rswat` has been initialized with a project directory
-  if( is.null(textio) )
-  {
-    # check if rswat has been initialized
-    err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
-    if( !exists('.rswat') ) stop(err.msg)
-    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
-    
-    # pull the directory from rswat environment
-    textio = dirname(.rswat$ciopath)
-  }
-  
-  # shell command prefix to change to the directory (avoids changing R's working directory)
-  shell.prefix = paste0('pushd ', normalizePath(textio), ' &&')
-  
-  # build system call and run SWAT
-  syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
-  invisible(shell(syscall.string, intern=quiet))
-  if(!quiet) cat('\n>> finished\n')
-  
-  # return filenames if requested
-  if( fout ) return( rswat_fout(ohg=TRUE)$file ) 
 }
 
 #' run a daily SWAT+ simulation of a physical variable, for a given location and time period 
