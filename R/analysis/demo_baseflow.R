@@ -375,21 +375,26 @@ rswat_write(hydro, preview=FALSE, quiet=TRUE)
 #' 
 #' ## running a SWAT+ simulation
 #' 
-#' Model design and fitting involves a lot of back and forth between these configuration files and the
+#' In model design and fitting there is a lot of back and forth between these configuration files and the
 #' SWAT+ executable - we adjust a parameter, run a simulation, look for changes in state variables
 #' of interest, then repeat. `rswat` has utilities to streamline this process from R.
 #'
-#'  `rswat_exec` runs a simulation by calling the SWAT+ executable, with parameters loaded from the config
-#'  files in the current project directory. This includes the time period to simulate over (specified in
-#'  the file 'time.sim'), and the time period to include in output files (in 'print.prt'). This can be
-#'  adjusted manually or using a helper function, as shown below:
+#' `rswat_exec` runs a simulation by calling the SWAT+ executable, with parameters loaded from the config
+#' files in the current project directory. This includes the time period to simulate over (specified in
+#' the file 'time.sim'), and the time period to include in output files (in 'print.prt'). These can be
+#' adjusted manually, or using a helper function as shown here:
 #'  
 
 # `rswat_tinit` without arguments prints the current settings in 'time.sim'
 rswat_tinit()
 
-# write new ones (adjusting 'print.prt' to match)
-rswat_tinit(c('1987-01-01', '1988-01-02'), quiet=FALSE)
+#' If the model was created with `qswat_run` (as it was here), then these dates should currently specify
+#' a one-day simulation at the very beginning of the supplied weather time series. The code below changes
+#' them to match the time series in `gage` (adjusting 'print.prt' to match), then calls the SWAT+ executable
+#' to run a simulation with daily timesteps:
+
+# pass a range of dates to set up simulation start/end dates
+rswat_tinit(range(gage$date), daily=TRUE)
 
 # run a simulation - the return value is a vector of output files generated
 fout = rswat_exec()
@@ -398,10 +403,12 @@ print(fout)
 #' 
 #' ## viewing simulation output data
 #' 
-#' the SWAT+ executable only takes a few seconds to simulate the one-year time series in this example,
-#' producing output in the form of .txt tables containing simulated state variables. Since there are
-#' potentially many such output tables (100+) in a given simulation, some effort is required to catalog
-#' the available output variables and filenames:
+#' the SWAT+ executable takes about ten seconds to simulate the seven-year time series in this example,
+#' producing output in the form of .txt tables containing simulated state variables. There can be many such
+#' output tables (100+) in a given simulation, depending on the settings in 'print.prt' and 'object.prt'.
+#' 
+#' The helper function `rswat_output` will catalog available output variables and filenames, and import
+#' them into R as dataframes.
 #' 
 
 # get a dataframe with info on the available SWAT+ output files in the project directory
@@ -414,38 +421,37 @@ head(odf)
 #' Output files are loaded as R dataframes by specifying `fname`
 
 # load an example file. 
-hydout.yr = rswat_output(fname='hydout_yr.txt')
-hydout.yr %>% str
+fname.eg = 'aquifer_day.txt'
+aqu.day = rswat_output(fname=fname.eg)
+aqu.day %>% str
 
 #' A subset of columns (output variables) can be specified with `vname`
 
-# print the first few lines for two particular variables
-rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction')) %>% head
+# print the first few lines for two particular variables (recharge and lateral flow to/from aquifer)
+vname.eg = c('flo', 'rchrg')
+rswat_output(fname=fname.eg, vname=vname.eg) %>% head
 
 #' Notice dates and units are incorporated automatically. Some additional columns are also loaded
 #' by default because they are important identifiers (eg spatial IDs). This functionality (along
 #' with date-parsing) can be switched off to get faster load times, or for debugging:
-
-rswat_output(fname='hydout_yr.txt', vname=c('flo', 'fraction'), makedates=FALSE, showidx=FALSE) %>% head
+rswat_output(fname=fname.eg, vname=vname.eg, makedates=FALSE, showidx=FALSE) %>% head
 
 #' When an output file is scanned by this function, its headers and units are cached for faster
 #' loading in subsequent calls. Variable names in this database can then be searched by calling
 #' `rswat_output` without the `fname` argument:
 #' 
 
-# search for output variables named "fraction". The one loaded above is identified:
-rswat_output(vname='fraction') %>% str
+# search for output variables named "water_temp". The one loaded above is identified:
+rswat_output(vname='rchrg') %>% str
 
-# search for 'flow_in'. Only a partial match is found: 
-rswat_output(vname='flo_in') %>% str
+# search for 'water_temp'. No matches among the cached headers... 
+rswat_output(vname='water_temp') %>% str
 
-#' Searches will return exact matches first, and if nothing is found, the function reverts to
-#' partial (sub-string) matching with increasing fuzziness until it finds something:
 #' 
-#' Right now the database only includes the contents of 'hydout_yr.txt', and `rswat_output()` only
-#' reports the files currently in the SWAT+ project folder ("TxtInOut"). To get a more exhaustive list
-#' `rswat` can run a (1-day) simulation, requesting all outputs, then parse the output files before restoring
-#' the original state of the project folder
+#' Right now the database only includes the contents of `fname.eg` ('aquifer_day.txt'), and
+#' `rswat_output()` only reports the files currently in the SWAT+ project folder ("TxtInOut").
+#' To get a more exhaustive list `rswat` can run a (1-day) simulation, requesting all outputs,
+#' then parse the output files before restoring the original state of the project folder
 
 # build database of SWAT+ outputs
 odf = rswat_output(loadall=TRUE)
@@ -455,23 +461,43 @@ odf %>% head
 #' These are files not currently found in 'TxtInOut' but which can be enabled in SWAT+ simulations.
 #' Since the above function call cached their headers (and units) they are now searchable:
 
-# repeat the search for 'flo_in' and find many exact matches. 
-rswat_output(vname='flo_in') %>% str
-
-# pipes are useful for narrowing the results of a search
-rswat_output(vname='flo_in') %>% filter( step == 'day' ) %>% filter( units == 'ha m' ) %>% str
+# repeat the search for 'water_temp' and find several exact matches now:
+rswat_output(vname='water_temp') %>% pull(file)
 
 #' 
 #' ## Comparing the simulated and observed data
 #' 
-#' Printing simulation data to plaintext output files can slow down SWAT+ considerably. To speed
-#' things up it is better to request specific outputs and omit printing the others. These settings
-#' are found in 'print.prt' (for the normal outputs) and 'object.prt' (object hydrograph outputs).
+#' Printing simulation data to plaintext output files can slow down SWAT+. To speed things up it is
+#' better to request specific outputs and omit printing the others. These settings are found in
+#' 'print.prt' (for the normal outputs) and 'object.prt' (object hydrograph outputs).
 #' 
+#' Outputs that are currently toggled on are indicated by the 'activated' field in the dataframe
+#' returned by `rswat_output`
+#' 
+# display the output files that are currently activated in SWAT+
+odf %>% filter(activated) %>% pull(file)
+
+#' If we turn them all off the SWAT+ simulation will still run, and it completes much faster
+#' 
+#' 
+
+# call the SWAT+ executable
+print( Sys.time() )
+rswat_exec()
+print( Sys.time() )
+
+# open 'print.prt' and disable all output files, then write the changes
+print.prt = rswat_open('print.prt')
+print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
+
+# call the SWAT+ executable
+print( Sys.time() )
+rswat_exec()
+print( Sys.time() )
+
+
 #' TODO: continue this
-
-rswat_open('print.prt')
-
 
 # TODO: 
 # - replace rswat_daily, rswat_obj, etc
@@ -485,6 +511,53 @@ rswat_open('print.prt')
 if(0)
 {
 
+  
+  
+  # ohg = rswat_output() %>% filter(type=='ohg')
+  # 
+  # for(idx in 1:nrow(ohg))
+  # {
+  #   cat('--------')
+  #   cat(ohg$file[idx])
+  #   cat(' : ')
+  #   cat(names(rswat_output(ohg$file[idx])))
+  #   cat('\n')
+  #   
+  # }
+  # 
+  # 
+  # 
+  # 
+  # rswat_ohg(overwrite=TRUE, otype='out', htype='tot')
+  # rswat_exec()
+  # 
+  # 
+  # wsh
+  # 
+  # 
+  # head()
+  # head(rswat_output('ohg_hru_1_tot.ohg'))
+  # n.sec = 60 * 60 * 24
+  # 
+  # flow.chan = rswat_output('channel_sd_day.txt') %>% filter(gis_id == 1) %>% select(date, flo_in, flo_out)
+  # flow.ohg = rswat_output('ohg_sdc_1_tot.ohg') %>% select(flo)
+  # 
+  # #flow.ohg = rswat_output('ohg_hru_1_tot.ohg') 
+  # flow = cbind(flow.chan, flow.ohg)
+  # my_tsplot(flow)
+  # 
+  # (flow[['flo']] / n.sec)  drop_units(flow[['flo_out']])
+  # 
+  # rswat_fout()
+  # 
+  # rswat_open('print.prt')
+  # 
+  # 
+  # dean = c(1275, 241, 98)
+  # tess = c(227, 37, 46, 133)
+  # 
+  # ( sum(dean) + sum(tess) ) / 2
+  
   
   
   ## DEVELOPMENT: OHG file handling
