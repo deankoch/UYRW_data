@@ -433,7 +433,7 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   # handle fuzzy matching
   if(fuzzy > 0)
   {
-    # `agrep` with default max.distance to fuzzy match
+    # `agrep` with `max.distance=fuzzy`
     name.match = agrepl(tolower(pattern), tolower(name.all), max.distance=fuzzy)
     if(intext) string.match = agrepl(tolower(pattern), tolower(string.all), max.distance=fuzzy)
   }
@@ -644,8 +644,7 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
 }
 
 #' read a SWAT+ output file as dataframe, or return a list of files or output variables
-rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE,
-                        fuzzy=-1)
+rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE)
 {
   # ARGUMENTS:
   #
@@ -654,7 +653,6 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   # `makedates`: boolean, whether to add Date class column, replacing 'day', 'jday', etc
   # `showidx`: boolean, whether to include indexing variables
   # `loadall`: boolean, whether to run a dummy simulation to discover all possible outputs
-  # `fuzzy`: integer, fuzziness level of searches in list mode (see DETAILS)
   #
   # RETURN VALUE:
   #
@@ -669,14 +667,12 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   # If `fname` and `vname` are both NULL (the default), the function returns a dataframe of
   # info about output files detected in the textio directory. If `vname` is non-NULL the
   # function does a text search for `vname` among all known output variable names, and returns
-  # a dataframe of info on exact matches. If argument 'fuzzy' is nonnegative, approximate
-  # matches are returned instead by passing `fuzzy to `agrep` (as 'max.distance').
+  # a dataframe of info on exact matches. 
   #
   #
   # DETAILS
   #
-  # Arguments 'makedates' and 'showidx' are ignored in list mode, and 'fuzzy' is ignored
-  # in read mode. The default 'fuzzy'
+  # Arguments 'makedates' and 'showidx' are ignored in list mode
   #
   # Get a list of valid arguments for `fname` by running `rswat_output()` or `rswat_init()`.
   #
@@ -711,7 +707,6 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
     
   } else stop('`textio` not found. Either call `rswat_cio` or provide `textio`')
   
-  # TODO: include OHG files in simulation
   # run dummy simulation to discover output filenames and headers, if requested
   if( loadall )
   {
@@ -724,63 +719,26 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
 
     # remove the dummy simulation files
     unlink(textio.dummy, recursive=TRUE)
-  }
-  
-  # make list of output files in current SWAT+ directory if necessary
-  if( is.null(.rswat$stor$output$fname) | loadall )
-  {
-    # scan project directory for output files, parsing filenames
+    
+    # force re-scan of project directory for existing output files
     fname.ref = rswat_oscan(textio=textio, fast=FALSE)
-    
-  } else {
-    
-    # pull the dataframe from memory
-    fname.ref = .rswat$stor$output$fname
   }
   
+  # get a copy of output variable and file names
+  vname.ref = rswat_ofind(trim=FALSE)
+  fname.ref = rswat_oscan(fast=FALSE)
+
   # LIST MODE:
   if( length(fname) == 0 )
   {
     # when no variable name is supplied, return output filenames list
     if( length(vname) == 0 ) return(fname.ref)
     
-    # when a variable name is supplied, parse header information from output files (if necessary)
-    if( is.null(.rswat$stor$output$vname) )
-    {
-      # scans project directory for output files, parsing filenames
-      cat(paste('scanning', sum(!is.na(fname.ref$size)) , 'output files in SWAT+ folder...\n'))
-      vname.ref = rswat_oparse(textio=textio) 
-      
-    } else {
-      
-      # or, if available, pull the dataframe from memory
-      vname.ref = .rswat$stor$output$vname
-    }
- 
-    # search for variable names
-    if(fuzzy < 0)
-    {
-      # index all exact matches among the headers data
-      idx.match = vname == vname.ref$name
-      
-      # special query to return the whole database
-      if(vname == '') idx.match = rep(TRUE, nrow(vname.ref))
-      
-    } else {
-      
-      # fuzzy matching
-      idx.match = agrepl(vname, vname.ref$name, max.distance=fuzzy)
-    }
-    
-    # message if we failed to match anything
-    msg.info = '. Try rswat_open(loadall=TRUE) to scan in all available SWAT+ outputs'
-    if( !any(idx.match) ) cat(paste0('no results for "', vname, '"', msg.info, '\n'))
-
-    # return the relevant subset of the dataframe
-    return( vname.ref[idx.match,] )
+    # otherwise return search results for this variable name (exact matching)
+    return( rswat_ofind(vname, fuzzy=0, trim=TRUE) )
   }
   
-  # if `fname` not found in database, scan SWAT+ folder once more
+  # if `fname` not found in database, re-scan SWAT+ folder 
   if( !(fname %in% fname.ref$file) ) fname.ref = rswat_oscan()
   
   # catch unrecognized filenames 
@@ -792,15 +750,11 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   fpath = file.path(textio, fname)
   if( !file.exists(fpath) ) stop(paste(msg.unknown, msg.nofile, sep='. '))
   
-  # handle files_out.out elsewhere
+  # parse 'files_out.out' with a different helper function
   fout.path = file.path(textio, 'files_out.out')
-  if( fname == basename(fout.path)) return( rswat_fout(fout.path, checkohg=TRUE) ) 
+  if( fname == basename(fout.path)) return( rswat_fout(fout.path, checkohg=FALSE) ) 
   
-  # initialize variable names database (and entries for this file) if necessary
-  vname.ref = .rswat$stor$output$vname
-  if( ! fname %in% vname.ref$file ) vname.ref = rswat_oparse(fname, textio=textio)
-  
-  # index in database of variable names for this file 
+  # index the subset of variable names for this file 
   idx.vname = fname == vname.ref$file
   
   # potentially messy plaintext parsing routines start here
@@ -912,6 +866,72 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
 
   # finish
   return(dat)
+}
+
+#' search tool for SWAT+ output variable names
+rswat_ofind = function(pattern=NULL, fuzzy=-1, trim=TRUE)
+{
+  # ARGUMENTS:
+  #
+  # `pattern`: (optional) character vector, regular expressions or literal string to match 
+  # `fuzzy`:  numeric, specifying match mode (see details)
+  # `trim`: logical, whether to omit detailed metadata about character positions
+  #
+  # RETURN VALUE:
+  #
+  # A dataframe of information about SWAT+ variable names matching the search pattern.
+  #
+  # DETAILS
+  # 
+  # The function looks for matches among the header names in the rswat database, so only
+  # those output files already parsed by this package via functions `rswat_output` or
+  # `rswat_oparse` (in the current R session) are searched. To do a search of ALL
+  # available SWAT+ output files, run `rswat_odummy` first.
+  #
+  # If no pattern is supplied, the function returns information on all known variables.
+  #
+  # `fuzzy < 0` (the default) is for Perl-style regular expressions (see `base::grepl`),
+  # `fuzzy = 0` is for exact matches only, and `fuzzy > 0` includes approximate matches
+  # up to the specified (Levenshtein) distance (see `base::agrep`). The case (upper or
+  # lower) is ignored in approximate matching.
+  # 
+  
+  # make list of output files in current SWAT+ directory if necessary
+  fname.ref = .rswat$stor$output$fname
+  if( is.null(fname.ref) ) fname.ref = rswat_oscan(fast=FALSE)
+
+  # parse header information from output files if necessary
+  vname.ref = .rswat$stor$output$vname
+  if( is.null(vname.ref) ) vname.ref = rswat_oparse()
+  
+  # list of all known output variable names
+  name.all = vname.ref$name
+  
+  # perform search with pattern, if supplied (otherwise return all output names)
+  name.match = rep(TRUE, length(name.all))
+  if( !is.null(pattern) )
+  {
+    # handle fuzzy matching by `agrep` with `max.distance=fuzzy`
+    if(fuzzy > 0) name.match = agrepl(tolower(pattern), tolower(name.all), max.distance=fuzzy)
+    
+    # handle regexp using `grepl` to find matches
+    if(fuzzy < 0) name.match = grepl(pattern, name.all, perl=TRUE)
+    
+    # handle exact searches
+    if(fuzzy == 0) name.match = name.all %in% pattern
+  }
+  
+  # the full output dataframe
+  vname.out = vname.ref %>% filter( name.match )
+  
+  # trim for human readability
+  if(trim) vname.out = vname.out %>% arrange(type, file) %>% select(name, units, type, file, step)
+  
+  # message if we failed to match anything
+  msg.info = '. Try running rswat_open(loadall=TRUE) to scan in all available SWAT+ outputs'
+  if( nrow(vname.out) == 0 ) cat(paste0('no results for "', pattern, '"', msg.info, '\n'))
+  
+  return(vname.out)
 }
 
 #' load or write a backup of all SWAT+ text config files (or a subset of them)
@@ -2324,7 +2344,7 @@ rswat_oparse = function(fname=NULL, textio=NULL)
   {
     # grab a current list of scannable files, sorting the OHG files last
     fname = rswat_oscan(textio=textio, fast=TRUE) %>% 
-      filter( !is.na(size) ) %>% 
+      filter( !is.na(path) ) %>% 
       filter( type %in% c('prt', 'ohg') ) %>%
       arrange( desc(type) ) %>%
       pull(file)
@@ -2793,7 +2813,7 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   # (eg a single HRU or outlet). They can be enabled by adding a row to 'object.prt'
   #
   # ----------------------------------------------------
-  # valid arguments for `otype` (grouped by object type)
+  # recognized arguments for `otype` (grouped by object type)
   #
   # HRUs:                   'hru', 'hlt', 'ru'
   # reservoirs:             'res'
@@ -2803,7 +2823,7 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   # outlets:                'out'
   #
   # ----------------------------------------------------
-  # valid arguments for `htype`
+  # recognized arguments for `htype`
   #
   # total:                  'tot'
   # recharge:               'rhg'
@@ -2813,14 +2833,14 @@ rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
   # soil moisture by layer: 'sol'
   #
   # ----------------------------------------------------
-  # valid combinations (TODO: test these again)
+  # valid combinations (based on my own limited testing)
   #
-  # til: sdc 
-  # lat: sdc
-  # sur: ru, hru
-  # sol: hru
-  # rhg: ru, hru, sdc
-  # tot: ru, hru, sdc
+  # 'til' AND 'sdc' 
+  # 'lat' AND 'sdc'
+  # 'sur' AND 'ru' OR 'hru'
+  # 'sol' AND 'hru'
+  # 'rhg' AND 'ru' OR 'hru' OR 'sdc'
+  # 'tot' AND 'ru' OR 'hru' OR 'sdc'
   #
   # other combinations seem to produce only empty or NA tables. The following code
   # sets up SWAT+ to produce all of the above combinations (TODO: catalogue these)
