@@ -414,9 +414,9 @@ print(fout)
 # get a dataframe with info on the available SWAT+ output files in the project directory
 odf = rswat_output()
 
-# print the total number of rows (files), and the first few lines
-print( nrow(odf) )
-head(odf)
+# print the first few lines of the dataframe, omitting paths for tidyness
+odf %>% select(-path) %>% head
+
 
 #' Output files are loaded as R dataframes by specifying `fname`
 
@@ -441,11 +441,9 @@ rswat_output(fname=fname.eg, vname=vname.eg, makedates=FALSE, showidx=FALSE) %>%
 #' `rswat_output` without the `fname` argument:
 #' 
 
-# search for output variables named "water_temp". The one loaded above is identified:
-rswat_output(vname='rchrg') %>% str
+# search for output variables named "rchrg". The one loaded above is identified, and a few others
+rswat_output(vname='rchrg') %>% head
 
-# search for 'water_temp'. No matches among the cached headers... 
-rswat_output(vname='water_temp') %>% str
 
 #' 
 #' Right now the database only includes the contents of `fname.eg` ('aquifer_day.txt'), and
@@ -455,14 +453,15 @@ rswat_output(vname='water_temp') %>% str
 
 # build database of SWAT+ outputs
 odf = rswat_output(loadall=TRUE)
-odf %>% head
+odf %>% select(-path) %>% head
 
 #' Notice the filenames list now includes entries with NA fields for 'size', 'modified', and 'path'.
 #' These are files not currently found in 'TxtInOut' but which can be enabled in SWAT+ simulations.
 #' Since the above function call cached their headers (and units) they are now searchable:
 
-# repeat the search for 'water_temp' and find several exact matches now:
-rswat_output(vname='water_temp') %>% pull(file)
+# repeat the search for "rchrg" and find a new match:
+rswat_output(vname='rchrg') %>% head
+
 
 #' 
 #' ## Comparing the simulated and observed data
@@ -475,16 +474,18 @@ rswat_output(vname='water_temp') %>% pull(file)
 #' returned by `rswat_output`
 #' 
 # display the output files that are currently activated in SWAT+
-odf %>% filter(activated) %>% pull(file)
+rswat_output() %>% filter(activated) %>% pull(file)
 
-#' If we turn them all off the SWAT+ simulation will still run, and it completes much faster
-#' 
-#' 
-
-# call the SWAT+ executable
-print( Sys.time() )
+#' All the daily output files are active (this setting was applied by a call to `rswat_tinit` above).
+#' There are quite a few of them, so execution is relatively slow:
+# call the SWAT+ executable and show the execution time
+timer.start = Sys.time()
 rswat_exec()
-print( Sys.time() )
+timer.end = Sys.time()
+print( timer.end - timer.start )
+
+#' If we turn off all off the standard output files, the SWAT+ simulation will still run,
+#' and it completes much faster.
 
 # open 'print.prt' and disable all output files, then write the changes
 print.prt = rswat_open('print.prt')
@@ -492,17 +493,46 @@ print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
 rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
 
 # call the SWAT+ executable
-print( Sys.time() )
+timer.start = Sys.time()
 rswat_exec()
-print( Sys.time() )
+timer.end = Sys.time()
+print( timer.end - timer.start )
 
+#' Note that two files related to crop yields are generated. I'm not sure how to inactivate them,
+#' but they are small, yearly tables, so we can ignore them for now. On my machine the process
+#' completes in less than half the time that it took when generating all daily outputs - around 8
+#' seconds versus 20 seconds. This time cost reduction may not matter much when running one-off
+#' simulations (like here), but later on, when fitting parameters, it becomes very significant
+#' because we will need to run many thousands of simulations.
+#' 
+#' In parameter fitting we still need to generate daily outputs of discharge at our gaged channel(s)
+#' (to evaluate error, ie the objective function), just not at every channel and for every variable.
+#' SWAT+ has a special type of output file for this purpose, the object hydrograph (OHG).
+#' 
 
-#' TODO: continue this
+# activate the object hydrograph for the outlet channel (id number 1)
+rswat_ohg(otype='hru', oid=1, htype='tot')
+
+# call the SWAT+ executable
+timer.start = Sys.time()
+fout = rswat_exec()
+timer.end = Sys.time()
+print( timer.end - timer.start )
+
+# open the output 
+fname.ohg = rswat_output() %>% filter(type=='ohg') %>% pull(file)
+#rswat_output() %>% filter(type=='ohg') %>% pull(file) %>% rswat_output
+
+#' TODO: continue developing OHG handlers
 
 # TODO: 
 # - replace rswat_daily, rswat_obj, etc
 # - swap in the fitted parameter values
 
+# 
+# 
+# rswat_exec()
+# rswat_output()
 
 #'
 
