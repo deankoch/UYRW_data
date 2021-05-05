@@ -732,8 +732,8 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   if( length(fname) == 0 )
   {
     # when no variable name is supplied, return output filenames list
-    if( length(vname) == 0 ) return(fname.ref)
-    
+    if( length(vname) == 0 ) return(fname.ref) 
+
     # otherwise return search results for this variable name (exact matching)
     return( rswat_ofind(vname, fuzzy=0, trim=TRUE) )
   }
@@ -754,7 +754,8 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   fout.path = file.path(textio, 'files_out.out')
   if( fname == basename(fout.path)) return( rswat_fout(fout.path, checkohg=FALSE) ) 
   
-  # index the subset of variable names for this file 
+  # parse variable names if they aren't already in the database
+  if( !(fname %in% vname.ref$file) ) vname.ref = rswat_oparse(fname=fname)
   idx.vname = fname == vname.ref$file
   
   # potentially messy plaintext parsing routines start here
@@ -2791,7 +2792,7 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
 }
 
 #' create an object hydrograph output specification file, modifying file.cio appropriately
-rswat_ohg = function(overwrite=FALSE, otype='hru', oid=1, htype='tot')
+rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
 {
   #
   # ARGUMENTS
@@ -3269,7 +3270,7 @@ qswat_run = function(qswat, quiet=FALSE)
   if(is.data.frame(jsonpath)) jsonpath = jsonpath['config', 'file']
   
   # path to the python launcher
-  exepath = 'H:/UYRW_data/python/run_qswatplus.cmd'
+  exepath = 'D:/UYRW_data/python/run_qswatplus.cmd'
   
   # call the launcher with this JSON file (runs a python script)
   system2(exepath, normalizePath(jsonpath), stdout=ifelse(quiet, FALSE, ''))
@@ -3642,10 +3643,15 @@ rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
   # shell command prefix to change to the directory (avoids changing R's working directory)
   shell.prefix = paste0('pushd ', normalizePath(textio), ' &&')
   
-  # build system call and run SWAT
+  # build system call, start timer, and run SWAT
   syscall.string = paste(shell.prefix, tools::file_path_sans_ext(normalizePath(exe)))
+  timer.start = Sys.time()
   invisible(shell(syscall.string, intern=quiet))
-  if(!quiet) cat('\n>> finished\n')
+  
+  # stop timer, prepare execution time message
+  timer.end = Sys.time()
+  timer.msg = paste(round(as.numeric(timer.end - timer.start), 2), 'seconds')
+  if( !quiet ) cat(paste0('\n>> finished (', timer.msg, ' runtime) \n'))
   
   # return filenames if requested
   if( fout ) return( rswat_fout(ohg=TRUE)$file ) 
