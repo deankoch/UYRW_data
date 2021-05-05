@@ -451,7 +451,7 @@ however, requires the usersoil table, which is why we save a copy here.
 ``` r
 # Save a copy of the usersoil table from the mdb database
 usersoil.path = here(out.subdir, 'usersoil.csv')
-swatmdb.path = 'H:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb' 
+swatmdb.path = 'D:/UYRW_installers/SWAT_US_SSURGO_Soils.mdb' 
 if(0)
 {
   # open the database to extract the (very large) usersoil table

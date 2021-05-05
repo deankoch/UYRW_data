@@ -2727,7 +2727,7 @@ qswat_run = function(qswat, quiet=FALSE)
   if(is.data.frame(jsonpath)) jsonpath = jsonpath['config', 'file']
   
   # path to the python launcher
-  exepath = 'H:/UYRW_data/python/run_qswatplus.cmd'
+  exepath = 'D:/UYRW_data/python/run_qswatplus.cmd'
   
   # call the launcher with this JSON file (runs a python script)
   system2(exepath, normalizePath(jsonpath), stdout=ifelse(quiet, FALSE, ''))
