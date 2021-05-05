@@ -1,7 +1,7 @@
 demo\_baseflow.R
 ================
 Dean Koch
-2021-05-04
+2021-05-05
 
 **Mitacs UYRW project**
 
@@ -389,105 +389,111 @@ as far as I am aware), and although core aspects of the the model have
 not changed much since then, many variable and parameter names are
 different in SWAT+.
 
-The first step is to define the project directory and see what we have:
+The first step is to define the project directory:
 
 ``` r
 # assign the SWAT+ project directory in `rswat`
 cio = rswat_cio(dir.qswat)
 ```
 
-    ## setting `ciopath` to H:/UYRW_data/data/analysis/baseflow_big_c_nr_emigrant/Scenarios/Default/TxtInOut/file.cio 
-    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-04 12:49"
+    ## setting `ciopath` to D:/UYRW_data/data/analysis/baseflow_big_c_nr_emigrant/Scenarios/Default/TxtInOut/file.cio 
+    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-05 17:33"
 
-load all config files into memory except decision tables, which are very
-large (and not needed for now). This takes a moment to parse the files,
-which are then summarized in the returned dataframe
+Subsequent calls to rswat\_cio() will list all config files in the
+project directory. After one of these files has been loaded into R, its
+listing will also contain some information about the contents, and the
+file becomes searchable (and faster to open) in subsequent calls. The
+`loadall` flag pre-loads all files config files into memory for
+convenience.
 
 ``` r
 cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
 ```
 
-    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-04 12:49"
+    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-05 17:33"
 
 ``` r
 print(cio)
 ```
 
     ##                 file          group                size            modified nline nskip ntab  nvar
-    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-04 12:49:56     1     0    1    10
-    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-04 12:49:56    46     0    5   223
-    ## 3         object.cnt     simulation   0.589 [kilobytes] 2021-05-04 12:49:56     1     0    1    42
-    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-04 12:49:56     1     0    1    48
-    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-04 12:49:56     1     0    1    88
-    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-04 12:49:56    16     0    1   153
-    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-04 12:49:56   223    16   16  2992
-    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-04 12:49:45    16     0    1    17
-    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-04 12:49:50    16     0    1    17
-    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-04 12:49:41    16     0    1    17
-    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-04 12:49:55    16     0    1    17
-    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-04 12:49:56    50     0    1   663
-    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-04 12:49:56    50     0    1  1479
-    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-04 12:49:56    51     0    1  1092
-    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-04 12:49:56    25     0    1   442
-    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-04 12:49:56    25     0    1   442
-    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-04 12:49:56     1     0    1    14
-    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-04 12:49:56     1     0    1    80
-    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-04 12:49:56    25     0    1   156
-    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-04 12:49:56    25     0    1   624
-    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-04 12:49:56    50     0    1   204
-    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-04 12:49:56    50     0    1   306
-    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-04 12:49:56    50     0    1   306
-    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-04 12:49:56    50     0    1   510
-    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-04 12:49:56    25     0    1   156
-    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-04 12:49:56    25     0    1   494
-    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-04 12:49:56    25     0    1   104
-    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-04 12:49:56     1     0    1    14
-    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-04 12:49:56    51     0    1   936
-    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-04 12:49:56    50     0    1   765
-    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-04 12:49:56   100     0    1   606
-    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-04 12:49:56    50     0    1   204
-    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-04 12:49:56     1     0    1    18
-    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-04 12:49:56     2     0    1    84
-    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-04 12:49:56     2     0    1    18
-    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-04 12:49:56     3     0    1    36
-    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-04 12:49:56     1     0    1    18
-    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-04 12:49:56   256     0    1 13878
-    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-04 12:49:56    59     0    1   480
-    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-04 12:49:56    78     0    1   553
-    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-04 12:49:57   233     0    1  3510
-    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-04 12:49:57     9     0    1   130
-    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-04 12:49:57    26     0    1   324
-    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-04 12:49:57     1     0    1    18
-    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-04 12:49:57    14     0    1    90
-    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-04 12:49:57    12     0    1    91
-    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-04 12:49:57     4     0    1    45
-    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-04 12:49:57    12     0    1   130
-    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-04 12:49:57     3     0    1    16
-    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-04 12:49:57     1     0    1     8
-    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-04 12:49:57     5     0    1    84
-    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-04 12:49:57    52     0    1   424
-    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-04 12:49:57    38     0    1   156
-    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-04 12:49:57    20     0    1   105
-    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-04 12:49:57   184     1    1   921
-    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-04 12:49:57    10     9    1   106
-    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-04 12:49:57     1     0    1    14
-    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-04 12:49:57     1     0    1    40
-    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-04 12:49:57   150     0    1  3171
-    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-04 12:49:57     1     0    1    26
-    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-04 12:49:57    NA    NA   NA    NA
-    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-04 12:49:58    NA    NA   NA    NA
-    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-04 12:49:58    NA    NA   NA    NA
-    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-04 12:49:58    NA    NA   NA    NA
-    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-04 12:49:58    50     0    1   357
-    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-04 12:49:58    51     1    1   256
-    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-04 12:49:58    51     0    1   364
+    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-05 17:33:33     1     0    1    10
+    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-05 17:33:33    46     0    5   223
+    ## 3         object.cnt     simulation   0.589 [kilobytes] 2021-05-05 17:33:33     1     0    1    42
+    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-05 17:33:34     1     0    1    48
+    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-05 17:33:34     1     0    1    88
+    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-05 17:33:33    16     0    1   153
+    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-05 17:33:33   223    16   16  2992
+    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-05 17:33:24    16     0    1    17
+    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-05 17:33:29    16     0    1    17
+    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-05 17:33:21    16     0    1    17
+    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-05 17:33:33    16     0    1    17
+    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-05 17:33:33    50     0    1   663
+    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-05 17:33:33    50     0    1  1479
+    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-05 17:33:34    51     0    1  1092
+    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-05 17:33:34    25     0    1   442
+    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-05 17:33:34    25     0    1   442
+    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-05 17:33:34     1     0    1    14
+    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-05 17:33:34     1     0    1    80
+    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-05 17:33:34    25     0    1   156
+    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-05 17:33:34    25     0    1   624
+    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-05 17:33:34    50     0    1   204
+    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-05 17:33:34    50     0    1   306
+    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-05 17:33:34    50     0    1   306
+    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-05 17:33:34    50     0    1   510
+    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-05 17:33:34    25     0    1   156
+    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-05 17:33:34    25     0    1   494
+    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-05 17:33:34    25     0    1   104
+    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-05 17:33:34     1     0    1    14
+    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-05 17:33:34    51     0    1   936
+    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-05 17:33:34    50     0    1   765
+    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-05 17:33:34   100     0    1   606
+    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-05 17:33:34    50     0    1   204
+    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-05 17:33:34     1     0    1    18
+    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-05 17:33:34     2     0    1    84
+    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-05 17:33:34     2     0    1    18
+    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-05 17:33:34     3     0    1    36
+    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-05 17:33:34     1     0    1    18
+    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-05 17:33:34   256     0    1 13878
+    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-05 17:33:34    59     0    1   480
+    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-05 17:33:34    78     0    1   553
+    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-05 17:33:34   233     0    1  3510
+    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-05 17:33:34     9     0    1   130
+    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-05 17:33:34    26     0    1   324
+    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-05 17:33:34     1     0    1    18
+    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-05 17:33:34    14     0    1    90
+    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-05 17:33:34    12     0    1    91
+    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-05 17:33:34     4     0    1    45
+    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-05 17:33:34    12     0    1   130
+    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-05 17:33:34     3     0    1    16
+    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-05 17:33:34     1     0    1     8
+    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-05 17:33:34     5     0    1    84
+    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-05 17:33:34    52     0    1   424
+    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-05 17:33:34    38     0    1   156
+    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-05 17:33:34    20     0    1   105
+    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-05 17:33:34   184     1    1   921
+    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-05 17:33:34    10     9    1   106
+    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-05 17:33:34     1     0    1    14
+    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-05 17:33:34     1     0    1    40
+    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-05 17:33:34   150     0    1  3171
+    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-05 17:33:34     1     0    1    26
+    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-05 17:33:34    NA    NA   NA    NA
+    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-05 17:33:35    NA    NA   NA    NA
+    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-05 17:33:35    NA    NA   NA    NA
+    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-05 17:33:35    NA    NA   NA    NA
+    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-05 17:33:35    50     0    1   357
+    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-05 17:33:35    51     1    1   256
+    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-05 17:33:35    51     0    1   364
+
+This takes a moment to parse the files, which are then summarized in the
+returned dataframe `cio`. We have exclude decision tables, which are
+very large (slow to load) and not needed for now.
 
 Each row of `cio` is a file containing a group of model parameters. The
 ‘nvar’ column indicates how many distinct fields there are in the file
-(nrow \* ncol, summed over all of the tables, including headers).
-
-We will be interested in the aquifer model parameters in ‘aquifer.aqu’ -
-the chunk below prints the last few lines of the relevant table:
+(nrow \* ncol, summed over all of the tables, including headers). To
+load a config file, we use `rswat_open`: eg. the code below displays the
+first few rows from the SWAT+ aquifer parameters file, ‘aquifer.aqu’
 
 ``` r
 # find aquifer-related tables
@@ -495,10 +501,10 @@ cio %>% filter( grepl('aqu', file) ) %>% print
 ```
 
     ##              file   group               size            modified nline nskip ntab nvar
-    ## 1     aquifer.con connect 13.793 [kilobytes] 2021-05-04 12:49:56    51     0    1 1092
-    ## 2     initial.aqu aquifer  0.321 [kilobytes] 2021-05-04 12:49:56     1     0    1   14
-    ## 3     aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-04 12:49:56    51     0    1  936
-    ## 4 aqu_catunit.ele regions  5.165 [kilobytes] 2021-05-04 12:49:58    51     0    1  364
+    ## 1     aquifer.con connect 13.793 [kilobytes] 2021-05-05 17:33:34    51     0    1 1092
+    ## 2     initial.aqu aquifer  0.321 [kilobytes] 2021-05-05 17:33:34     1     0    1   14
+    ## 3     aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-05 17:33:34    51     0    1  936
+    ## 4 aqu_catunit.ele regions  5.165 [kilobytes] 2021-05-05 17:33:35    51     0    1  364
 
 ``` r
 # this one contains the main process model parameters 
@@ -525,7 +531,7 @@ rswat_open('aquifer.aqu') %>% str
     ##  $ flo_min  : num  3 3 3 3 3 3 3 3 3 3 ...
     ##  $ revap_min: num  5 5 5 5 5 5 5 5 5 5 ...
 
-The helper function `rswat_find` can be useful for tracking down a SWAT+
+The search function `rswat_find` can be useful for tracking down a SWAT+
 parameter using keywords or SWAT2012 names. This uses fuzzy
 case-insensitive matching (see R’s `?agrep` doc), which catches many of
 the name changes in the SWAT2012 -\> SWAT+ updates. eg. the following
@@ -533,7 +539,7 @@ code finds the PET estimation method parameter ‘pet’, which was called
 ‘IPET’ in SWAT2012:
 
 ``` r
-# fuzzy = 1 to allow inexact matches
+# fuzzy > 0 allows inexact matches
 rswat_find('IPET', fuzzy=1) %>% filter(name != 'description') %>% print
 ```
 
@@ -542,13 +548,15 @@ rswat_find('IPET', fuzzy=1) %>% filter(name != 'description') %>% print
     ## 2      pet      1   integer   1     codes.bsn     1  1  3
     ## 3 harg_pet   <NA>   numeric  50 hydrology.hyd     1 NA 14
 
-The ‘string’ column above shows the plaintext representation of
-parameters in the SWAT+ config files listed in column ‘file’. We can see
-that ‘pet’ (in file ‘codes.bsn’) set to 1. This codes for the
+We get three matches for ‘IPET’, located in two files. The ‘string’
+field (second column) shows the plaintext representation of a parameter
+in the SWAT+ config file (fifth column).
+
+We can see that ‘pet’ (in ‘codes.bsn’) is set to 1. This codes for the
 Penman-Monteith model for potential evapotranspiration (PET). The other
 two matches, ‘pet\_file’ and ‘harg\_pet’, are an input file for observed
 PET, and a solar radiation coefficient used with the Hargreaves-Samani
-model (neither is currently used).
+model; Neither is currently used so we don’t worry about them for now.
 
 ## adjusting a SWAT+ model
 
@@ -614,19 +622,23 @@ rswat_write(codes) %>% str
     ##  $ current_value: chr "1"
     ##  $ replacement  : chr "2"
 
-The new ‘string’ field looks fine so we go ahead and overwrite the file
-on disk with argument `preview=FALSE`
+The ‘current\_value’ and ‘replacement’ fields are as expected, so we go
+ahead and overwrite the file on disk with argument `preview=FALSE`. We
+can reverse this change by the same process, manually specifying the old
+value (pet = 1). Be aware that rswat doesn’t keep any kind of changelog,
+so it’s always a good idea to have a backup of your “TxtInOut” folder,
+or an easy way of regenerating it (eg with `qswat_run`), before
+experimenting with the config files.
 
 ``` r
 # write the changes
 rswat_write(codes, preview=FALSE, quiet=TRUE)
 ```
 
-The SWAT+ executable will now use the Hargreaves-Samani method for
-estimation. The Hargreaves-Samani coefficient, ‘harg\_pet’, that turned
-up earlier in the search for ‘IPET’ is no longer inactive, so we need to
-assign it a sensible value. For now I just use the example value
-appearing in the I/O docs - we will tune it later.
+“codes.bsn” is now configured such that SWAT+ simulations will now use
+Hargreaves-Samani for PET. This model has a parameter ‘harg\_pet’, that
+turned up earlier in the search for ‘IPET’. Since it’s no longer
+inactive, we need to assign it a sensible value.
 
 ``` r
 # open the container file for 'harg_pet' and print a summary
@@ -651,10 +663,12 @@ hydro %>% str
     ##  $ harg_pet   : num  0 0 0 0 0 0 0 0 0 0 ...
     ##  $ latq_co    : num  0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 ...
 
-The parameters in this file are all length-50 (column) vectors. This is
-because there are 50 HRUs in this model, and SWAT+ allows distinct
-values for each one in this case. The code below assigns the same
-default value for the coefficient to all of them
+The parameters in this file are all length-50 column vectors. This is
+because there are 50 HRUs in this model, and SWAT+ allows distinct PET
+parameters for each one. For now we just set all HRUs to the same
+example value appearing in the [I/O
+docs](https://swatplus.gitbook.io/docs/user/io) - we can tune them
+later.
 
 ``` r
 # assign the default 'harg_pet' value in all HRUs, then write to disk
@@ -669,18 +683,18 @@ stochastic process, but the result is imprecise at the daily scale.
 
 ## running a SWAT+ simulation
 
-In model design and fitting there is a lot of back and forth between
-these configuration files and the SWAT+ executable - we adjust a
-parameter, run a simulation, look for changes in state variables of
-interest, then repeat. `rswat` has utilities to streamline this process
+In computational model design and fitting there is a lot of back and
+forth between parameter settings and simulations. We adjust parameters,
+run a simulation, look for changes in state variables of interest, then
+repeat (many times). `rswat` has utilities to streamline this process
 from R.
 
-`rswat_exec` runs a simulation by calling the SWAT+ executable, with
-parameters loaded from the config files in the current project
+`rswat_exec` runs a simulation by calling the SWAT+ executable, which
+reads in parameters from the config files in the current project
 directory. This includes the time period to simulate over (specified in
 the file ‘time.sim’), and the time period to include in output files (in
 ‘print.prt’). These can be adjusted manually, or using a helper function
-as shown here:
+as shown below:
 
 ``` r
 # `rswat_tinit` without arguments prints the current settings in 'time.sim'
@@ -698,8 +712,8 @@ match), then calls the SWAT+ executable to run a simulation with daily
 timesteps:
 
 ``` r
-# pass a range of dates to set up simulation start/end dates
-rswat_tinit(range(gage$date), daily=TRUE)
+# pass a range of dates or dataframe with a 'date' field to set up simulation start/end dates
+rswat_tinit(gage, daily=TRUE)
 ```
 
     ##        start          end 
@@ -711,7 +725,7 @@ fout = rswat_exec()
 ```
 
     ## 
-    ## >> finished
+    ## >> finished (17.81 seconds runtime)
 
 ``` r
 print(fout)
@@ -728,11 +742,11 @@ print(fout)
 
 ## viewing simulation output data
 
-the SWAT+ executable takes about ten seconds to simulate the seven-year
-time series in this example, producing output in the form of .txt tables
-containing simulated state variables. There can be many such output
-tables (100+) in a given simulation, depending on the settings in
-‘print.prt’ and ‘object.prt’.
+the SWAT+ executable takes about 18-20 seconds on my machine to simulate
+the seven-year time series in this example, producing output in the form
+of .txt tables containing simulated state variables. There can be many
+such output tables (100+) in a given simulation, depending on the
+settings in ‘print.prt’ and ‘object.prt’.
 
 The helper function `rswat_output` will catalog available output
 variables and filenames, and import them into R as dataframes.
@@ -750,19 +764,19 @@ odf %>% select(-path) %>% head
 ```
 
     ##                file      name type step activated         group oid                  size            modified
-    ## 1   aquifer_day.txt   aquifer  prt  day      TRUE       AQUIFER  NA 36146.989 [kilobytes] 2021-05-04 12:50:31
-    ## 2  basin_ls_day.txt  basin_ls  prt  day      TRUE         BASIN  NA   378.442 [kilobytes] 2021-05-04 12:50:31
-    ## 3  basin_nb_day.txt  basin_nb  prt  day      TRUE         BASIN  NA   540.702 [kilobytes] 2021-05-04 12:50:31
-    ## 4  basin_pw_day.txt  basin_pw  prt  day      TRUE         BASIN  NA   675.708 [kilobytes] 2021-05-04 12:50:30
-    ## 5  basin_wb_day.txt  basin_wb  prt  day      TRUE         BASIN  NA   999.996 [kilobytes] 2021-05-04 12:50:31
-    ## 6 basin_aqu_day.txt basin_aqu  prt  day      TRUE BASIN_AQUIFER  NA   709.489 [kilobytes] 2021-05-04 12:50:30
+    ## 1   aquifer_day.txt   aquifer  prt  day      TRUE       AQUIFER  NA 36146.989 [kilobytes] 2021-05-05 17:34:03
+    ## 2  basin_ls_day.txt  basin_ls  prt  day      TRUE         BASIN  NA   378.442 [kilobytes] 2021-05-05 17:34:03
+    ## 3  basin_nb_day.txt  basin_nb  prt  day      TRUE         BASIN  NA   540.702 [kilobytes] 2021-05-05 17:34:03
+    ## 4  basin_pw_day.txt  basin_pw  prt  day      TRUE         BASIN  NA   675.708 [kilobytes] 2021-05-05 17:34:03
+    ## 5  basin_wb_day.txt  basin_wb  prt  day      TRUE         BASIN  NA   999.996 [kilobytes] 2021-05-05 17:34:03
+    ## 6 basin_aqu_day.txt basin_aqu  prt  day      TRUE BASIN_AQUIFER  NA   709.489 [kilobytes] 2021-05-05 17:34:03
 
-Output files are loaded as R dataframes by specifying `fname`
+Output files can be loaded as R dataframes by specifying their filename
 
 ``` r
-# load an example file. 
+# load an example file. Dates and units are added automatically 
 fname.eg = 'aquifer_day.txt'
-aqu.day = rswat_output(fname=fname.eg)
+aqu.day = rswat_output(fname.eg)
 aqu.day %>% str
 ```
 
@@ -789,30 +803,18 @@ aqu.day %>% str
     ##  $ flo_res: Units: [m^3] num  0 0 0 0 0 0 0 0 0 0 ...
     ##  $ flo_ls : Units: [m^3] num  0 0 0 0 0 0 0 0 0 0 ...
 
-A subset of columns (output variables) can be specified with `vname`
+In daily simulations over many years these output tables can get very
+large, so it can be useful to specify a subset of output variables with
+argument `vname`. Some columns, like ‘gis\_id’, are always loaded by
+default. They are indexing fields needed to identify a row with a
+specific spatial object in the model. However, this functionality -
+along with date-parsing - can be switched off to get faster load times,
+or for debugging purposes:
 
 ``` r
 # print the first few lines for two particular variables (recharge and lateral flow to/from aquifer)
 vname.eg = c('flo', 'rchrg')
-rswat_output(fname=fname.eg, vname=vname.eg) %>% head
-```
-
-    ##         date unit gis_id   name    flo  rchrg
-    ## 1 1973-09-01    1     11 aqu011 0 [mm] 0 [mm]
-    ## 2 1973-09-01    2     12 aqu012 0 [mm] 0 [mm]
-    ## 3 1973-09-01    3     21 aqu021 0 [mm] 0 [mm]
-    ## 4 1973-09-01    4     22 aqu022 0 [mm] 0 [mm]
-    ## 5 1973-09-01    5     31 aqu031 0 [mm] 0 [mm]
-    ## 6 1973-09-01    6     32 aqu032 0 [mm] 0 [mm]
-
-Notice dates and units are incorporated automatically. Some additional
-columns are also loaded by default because they are important
-identifiers (eg spatial IDs). This functionality (along with
-date-parsing) can be switched off to get faster load times, or for
-debugging:
-
-``` r
-rswat_output(fname=fname.eg, vname=vname.eg, makedates=FALSE, showidx=FALSE) %>% head
+rswat_output(fname.eg, vname=vname.eg, makedates=FALSE, showidx=FALSE) %>% head
 ```
 
     ##      flo  rchrg
@@ -823,14 +825,14 @@ rswat_output(fname=fname.eg, vname=vname.eg, makedates=FALSE, showidx=FALSE) %>%
     ## 5 0 [mm] 0 [mm]
     ## 6 0 [mm] 0 [mm]
 
-When an output file is scanned by this function, its headers and units
-are cached for faster loading in subsequent calls. Variable names in
-this database can then be searched by calling `rswat_output` without the
+When an output file is scanned in by this function its headers and units
+are added to a database of known SWAT+ outputs. Variable names in this
+database can then be searched by calling `rswat_output` without the
 `fname` argument:
 
 ``` r
 # search for output variables named "rchrg". The one loaded above is identified, and a few others
-rswat_output(vname='rchrg') %>% head
+rswat_output(vname='rchrg') %>% print
 ```
 
     ##    name units type              file step
@@ -843,13 +845,13 @@ rswat_output(vname='rchrg') %>% head
 
 Right now the database only includes the contents of `fname.eg`
 (‘aquifer\_day.txt’), and `rswat_output()` only reports the files
-currently in the SWAT+ project folder (“TxtInOut”). To get a more
-exhaustive list `rswat` can run a (1-day) simulation, requesting all
-outputs, then parse the output files before restoring the original state
-of the project folder
+currently in the SWAT+ project folder (“TxtInOut”). To get an exhaustive
+list of possible outputs, `rswat_output` will run a (1-day) simulation,
+requesting all outputs, then parse the output files before restoring the
+original state of the project folder
 
 ``` r
-# build database of SWAT+ outputs
+# build database of SWAT+ outputs using `loadall` flag
 odf = rswat_output(loadall=TRUE)
 ```
 
@@ -858,26 +860,27 @@ odf = rswat_output(loadall=TRUE)
     ## parsing 108 SWAT+ output files...
 
 ``` r
+#  print the first few lines (omit paths for tidyness)
 odf %>% select(-path) %>% head
 ```
 
     ##               file     name type  step activated   group oid                  size            modified
-    ## 1   aquifer_aa.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-04 12:51:19
-    ## 2  aquifer_day.txt  aquifer  prt   day      TRUE AQUIFER  NA 36146.989 [kilobytes] 2021-05-04 12:51:19
+    ## 1   aquifer_aa.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-05 17:34:14
+    ## 2  aquifer_day.txt  aquifer  prt   day      TRUE AQUIFER  NA 36146.989 [kilobytes] 2021-05-05 17:34:14
     ## 3  aquifer_mon.txt  aquifer  prt month     FALSE AQUIFER  NA        NA [kilobytes]                <NA>
-    ## 4   aquifer_yr.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-04 12:51:19
-    ## 5  basin_ls_aa.txt basin_ls  prt  year     FALSE   BASIN  NA     0.442 [kilobytes] 2021-05-04 12:51:19
-    ## 6 basin_ls_day.txt basin_ls  prt   day      TRUE   BASIN  NA   378.442 [kilobytes] 2021-05-04 12:51:19
+    ## 4   aquifer_yr.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-05 17:34:14
+    ## 5  basin_ls_aa.txt basin_ls  prt  year     FALSE   BASIN  NA     0.442 [kilobytes] 2021-05-05 17:34:14
+    ## 6 basin_ls_day.txt basin_ls  prt   day      TRUE   BASIN  NA   378.442 [kilobytes] 2021-05-05 17:34:14
 
 Notice the filenames list now includes entries with NA fields for
-‘size’, ‘modified’, and ‘path’. These are files not currently found
-in ‘TxtInOut’ but which can be enabled in SWAT+ simulations. Since the
-above function call cached their headers (and units) they are now
-searchable:
+‘size’, ‘modified’ (and ‘path’, though it is not shown here). These
+are files not currently found in ‘TxtInOut’ but which can be enabled in
+SWAT+ simulations. Since the above function call cached their headers
+they are now searchable:
 
 ``` r
-# repeat the search for "rchrg" and find a new match:
-rswat_output(vname='rchrg') %>% head
+# repeat the search for "rchrg" and find a new (monthly outputs) match:
+rswat_output(vname='rchrg') %>% print
 ```
 
     ##    name units type              file  step
@@ -887,16 +890,17 @@ rswat_output(vname='rchrg') %>% head
     ## 4 rchrg    mm  prt    aquifer_yr.txt  year
     ## 5 rchrg    mm  prt  basin_aqu_aa.txt  year
     ## 6 rchrg    mm  prt basin_aqu_day.txt   day
+    ## 7 rchrg    mm  prt basin_aqu_mon.txt month
+    ## 8 rchrg    mm  prt  basin_aqu_yr.txt  year
 
 ## Comparing the simulated and observed data
 
-Printing simulation data to plaintext output files can slow down SWAT+.
-To speed things up it is better to request specific outputs and omit
-printing the others. These settings are found in ‘print.prt’ (for the
-normal outputs) and ‘object.prt’ (object hydrograph outputs).
-
-Outputs that are currently toggled on are indicated by the ‘activated’
-field in the dataframe returned by `rswat_output`
+Printing simulation data to plaintext output files is a bottleneck for
+SWAT+. To speed things up it is better to request only the outputs you
+need, and omit printing the others. These settings are found in
+‘print.prt’ (for the normal outputs) and ‘object.prt’ (object
+hydrograph outputs). Outputs that are currently toggled on are indicated
+by the ‘activated’ field in the dataframe returned by `rswat_output`
 
 ``` r
 # display the output files that are currently activated in SWAT+
@@ -911,107 +915,144 @@ rswat_output() %>% filter(activated) %>% pull(file)
     ## [21] "lsunit_nb_day.txt"         "lsunit_pw_day.txt"         "lsunit_wb_day.txt"         "ru_day.txt"               
     ## [25] "channel_sd_day.txt"        "channel_sdmorph_day.txt"
 
-All the daily output files are active (this setting was applied by a
-call to `rswat_tinit` above). There are quite a few of them, so
-execution is relatively slow:
+All daily output files are active (this setting was applied by a call to
+`rswat_tinit` above). There are quite a few of them, so execution is
+relatively slow. If we turn off all off the standard output files, the
+SWAT+ simulation will still run, and it completes much faster.
 
 ``` r
-# call the SWAT+ executable and show the execution time
-timer.start = Sys.time()
-rswat_exec()
-```
-
-    ## 
-    ## >> finished
-
-    ##  [1] "hru_nb_day.txt"            "hru_ls_day.txt"            "hru_pw_day.txt"            "lsunit_wb_day.txt"        
-    ##  [5] "lsunit_nb_day.txt"         "lsunit_ls_day.txt"         "lsunit_pw_day.txt"         "basin_wb_day.txt"         
-    ##  [9] "basin_nb_day.txt"          "basin_ls_day.txt"          "basin_pw_day.txt"          "crop_yld_aa.txt"          
-    ## [13] "aquifer_day.txt"           "channel_sd_day.txt"        "channel_sdmorph_day.txt"   "basin_crop_yld_yr.txt"    
-    ## [17] "basin_crop_yld_aa.txt"     "hydout_day.txt"            "hydin_day.txt"             "deposition_day.txt"       
-    ## [21] "wetland_day.txt"           "basin_aqu_day.txt"         "basin_res_day.txt"         "recall_day.txt"           
-    ## [25] "basin_cha_day.txt"         "basin_sd_cha_day.txt"      "basin_sd_chamorph_day.txt" "basin_psc_day.txt"        
-    ## [29] "ru_day.txt"
-
-``` r
-timer.end = Sys.time()
-print( timer.end - timer.start )
-```
-
-    ## Time difference of 20.03417 secs
-
-If we turn off all off the standard output files, the SWAT+ simulation
-will still run, and it completes much faster.
-
-``` r
-# open 'print.prt' and disable all output files, then write the changes
-print.prt = rswat_open('print.prt')
-print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
-rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
+# open 'print.prt' (fifth table) and disable all output files, then write the changes
+print.prt = rswat_open('print.prt')[[5]]
+print.prt[, names(print.prt) != 'objects'] = 'n'
+rswat_write(print.prt, preview=F, quiet=TRUE)
 
 # call the SWAT+ executable
-timer.start = Sys.time()
 rswat_exec()
 ```
 
     ## 
-    ## >> finished
+    ## >> finished (8.81 seconds runtime)
 
     ## [1] "basin_crop_yld_yr.txt" "basin_crop_yld_aa.txt"
 
-``` r
-timer.end = Sys.time()
-print( timer.end - timer.start )
-```
-
-    ## Time difference of 8.73652 secs
-
-Note that two files related to crop yields are generated. I’m not sure
-how to inactivate them, but they are small, yearly tables, so we can
-ignore them for now. On my machine the process completes in less than
-half the time that it took when generating all daily outputs - around 8
-seconds versus 20 seconds. This time cost reduction may not matter much
-when running one-off simulations (like here), but later on, when fitting
-parameters, it becomes very significant because we will need to run many
+On my machine the process completes in less than half the time (8-9
+seconds versus 18-20). This time cost reduction may not matter when
+running one-off simulations like we do here, but later on when fitting
+parameters it becomes very significant, because we will need to run
 thousands of simulations.
 
-In parameter fitting we still need to generate daily outputs of
-discharge at our gaged channel(s) (to evaluate error, ie the objective
-function), just not at every channel and for every variable. SWAT+ has a
-special type of output file for this purpose, the object hydrograph
-(OHG).
+Note that two files related to crop yields were generated in spite of
+the settings in ‘print.prt’. It is not clear how to inactivate them. But
+since they are small, yearly tables, they likely don’t impact runtimes
+very much.
+
+In parameter fitting we need to generate daily outputs of discharge at
+our gaged channel(s) to evaluate errors, ie to evaluate the objective
+function. As we can see in the above example, requesting these outputs
+via ‘print.prt’ is not ideal because the returned files print the data
+for every channel, but we only need it for one. SWAT+ has a special type
+of output file for the purpose of channel-specific outputs, the object
+hydrograph (OHG).
 
 ``` r
 # activate the object hydrograph for the outlet channel (id number 1)
-rswat_ohg(otype='hru', oid=1, htype='tot')
+id.outlet = 1
+rswat_ohg(overwrite=TRUE, oid=id.outlet)
 ```
 
-    ## writing to H:/UYRW_data/data/analysis/baseflow_big_c_nr_emigrant/Scenarios/Default/TxtInOut/object.prt 
-    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-04 12:49"
+    ## writing to D:/UYRW_data/data/analysis/baseflow_big_c_nr_emigrant/Scenarios/Default/TxtInOut/object.prt 
+    ## [1] "file.cio: written by SWAT+ editor v2.0.0 on 2021-05-05 17:33"
 
     ##   NUMB OBTYP OBTYPNO HYDTYP      FILENAME
-    ## 1    1   hru       1    tot hru_1_tot.ohg
+    ## 1    1   sdc       1    tot sdc_1_tot.ohg
+
+this function modifies “file.cio” and “object.prt” so that SWAT+
+generates the plaintext output file “sdc\_1\_tot.ohg”. The `oid`
+argument specifies that we only want data on the channel with ID code 1
+(AKA ‘cha01’, the main outlet of the catchment).
 
 ``` r
 # call the SWAT+ executable
-timer.start = Sys.time()
 fout = rswat_exec()
 ```
 
     ## 
-    ## >> finished
+    ## >> finished (8.34 seconds runtime)
 
 ``` r
-timer.end = Sys.time()
-print( timer.end - timer.start )
+# check that the expected file has been generated
+rswat_output() %>% filter(type=='ohg') %>% select(-path)
 ```
 
-    ## Time difference of 8.54531 secs
+    ##            file name type step activated group oid                size            modified
+    ## 1 sdc_1_tot.ohg  tot  ohg  day      TRUE   sdc   1 776.591 [kilobytes] 2021-05-05 17:34:40
 
 ``` r
 # open the output 
-fname.ohg = rswat_output() %>% filter(type=='ohg') %>% pull(file)
-#rswat_output() %>% filter(type=='ohg') %>% pull(file) %>% rswat_output
+rswat_output('sdc_1_tot.ohg') %>% str
+```
+
+    ## 'data.frame':    2250 obs. of  21 variables:
+    ##  $ date: Date, format: "1973-09-01" "1973-09-02" "1973-09-03" "1973-09-04" ...
+    ##  $ name: chr  "chandeg" "chandeg" "chandeg" "chandeg" ...
+    ##  $ type: chr  "cha01" "cha01" "cha01" "cha01" ...
+    ##  $ flo : Units: [m3/d] num  651416 2481 0 0 0 ...
+    ##  $ sed : Units: [tons] num  1.28e+04 9.97e+01 3.04e-02 3.72e-02 2.98e-02 ...
+    ##  $ orgn: Units: [kg] num  7.08e+01 1.52e-01 1.37e-06 2.12e-07 1.78e-07 ...
+    ##  $ sedp: Units: [kg] num  4.31 9.27e-03 1.73e-07 6.13e-07 5.36e-07 ...
+    ##  $ no3 : Units: [kg] num  0.00 1.09e-05 7.87e-07 5.38e-07 4.84e-07 ...
+    ##  $ solp: Units: [kg] num  0.00 4.03e-05 1.35e-05 7.07e-06 5.04e-06 ...
+    ##  $ chla: Units: [kg] num  0.00 0.00 4.59e-07 7.83e-08 3.93e-08 ...
+    ##  $ nh3 : Units: [kg] num  2.11e-02 4.55e-04 5.99e-07 0.00 0.00 ...
+    ##  $ no2 : Units: [kg] num  0.00 1.34e-04 2.17e-06 0.00 0.00 ...
+    ##  $ cbod: Units: [kg] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ dox : Units: [kg] num  4.52e+02 1.02e+01 6.21e-03 1.19e-01 8.85e-02 ...
+    ##  $ san : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ sil : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ cla : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ sag : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ lag : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ grv : Units: [tons] num  0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ null: num  9.13 10.19 11.75 13.59 14.9 ...
+
+This is a a subset of the outflow variables that would normally appear
+in the “SWAT-DEG\_CHANNEL” group. Note that the variable names in OHG
+files omit the suffix "\_out". For example variable ‘flo’ in the OHG
+file corresponds to variable ‘flo\_out’ in ‘channel\_sd\_day.txt’.
+
+Note also that the units are not necessarily the same - in particular,
+the OHG discharge values are in per-day units whereas the normal output
+files use per-second units. Different units means we can expect some
+post-conversion differences due to numerical imprecision (see also items
+32 and 75
+[here](https://infiniteundo.com/post/25509354022/more-falsehoods-programmers-believe-about-time)),
+but they appear to be small enough here to ignore for the purposes of
+parameter fitting.
+
+``` r
+# load the OHG output file
+ohg.out = rswat_output('sdc_1_tot.ohg')
+
+# load the normal output file, trimming to only include values from the main outlet
+prt.out = rswat_output('channel_sd_day.txt') %>% filter(gis_id==id.outlet) 
+
+# join them and check the level of discrepancy
+both.out = left_join(prt.out, ohg.out, by=c('date'))
+both.out %>% mutate( absdiff = abs( (flo_out - flo) ) ) %>% pull(absdiff) %>% max
+```
+
+    ## 0.004930556 [m^3/s]
+
+``` r
+# TODO: rswat_flo
+#
+# - activates sdc OHG files as needed (argument gis_id)
+# - temporarily changes time and print settings (optional argument dates) 
+# - calls executable (with all prt file options switched off)
+# - loads results into R, coverts units to m^3/sec, returns the vector OR
+# - returns the objective function value (optional argument gage) 
+#
+#
 ```
 
 TODO: continue developing OHG handlers
