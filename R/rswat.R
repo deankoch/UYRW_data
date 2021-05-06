@@ -169,7 +169,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     
     # read the text (writes to `.rswat$stor$txt` and `.rswat$stor$temp`) and print comment
     rswat_rlines(ciopath)
-    print(.rswat$stor$txt[[basename(ciopath)]][[1]])
+    if( !quiet ) cat(paste(.rswat$stor$txt[[basename(ciopath)]][[1]], '\n'))
     
     # read in group names from first column 
     out.nm = .rswat$stor$temp[[basename(ciopath)]]$linedf %>% 
@@ -2724,40 +2724,15 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   cat('backing up files... ')
   for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
   
-  # load 'time.sim' and 'print.prt' into memory
-  time.sim = rswat_open('time.sim', quiet=quiet)
-  print.prt = rswat_open('print.prt', quiet=quiet)
+  # adjust the simulation period
+  rswat_time(nday)
   
-  # define the start and end dates then convert to integers required by print.prt
-  date.start = as.Date('1901-01-01')
-  date.end = date.start + nday
-  test.dates = c(day_start = as.integer(format(date.start, '%j')), 
-                 yrc_start = as.integer(format(date.start, '%Y')), 
-                 day_end = as.integer(format(date.end, '%j')), 
-                 yrc_end = as.integer(format(date.end, '%Y')))
-  
-  # load 'time.sim' and set 'step' = 0 for daily timestep operation
-  time.sim = rswat_open('time.sim', quiet=TRUE)
-  time.sim$step = 0
-  
-  # make any start/end date changes to 'time.sim' and overwrite on disk
-  time.sim[names(test.dates)] = test.dates
-  print.prt[[1]][names(test.dates)] = test.dates
-  
-  # ensure that we don't skip years and set the timestep to daily
-  time.sim$step = 0
-  print.prt[[1]]$nyskip = 0
-  print.prt[[1]]$interval = 1
-  
-  # write the changes to the files on disk
-  rswat_write(time.sim, preview=F, quiet=quiet)
-  rswat_write(print.prt[[1]], preview=F, quiet=quiet)
+  # open fifth table of 'print.prt', activate all output files and write the changes
+  print.prt = rswat_open('print.prt')[[5]]
+  print.prt[, names(print.prt) != 'objects'] = 'y'
+  rswat_write(print.prt, preview=F, quiet=TRUE)
   
   # TODO: activate OHG files
-  
-  # activate all outputs, write changes to disk
-  print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'y'
-  rswat_write(print.prt[[5]], preview=F, quiet=quiet)
   
   # execute the simulation and scan for new output files
   cat('running SWAT+... ')
@@ -2792,7 +2767,7 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
 }
 
 #' create an object hydrograph output specification file, modifying file.cio appropriately
-rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
+rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FALSE, quiet=TRUE)
 {
   #
   # ARGUMENTS
@@ -2801,6 +2776,8 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
   # 'otype': character, three character object type code (see DETAILS)
   # 'oid': integer, the "object number", an ID code associated with the desired object
   # 'htype': character, one of 'tot', 'sur', 'lat', 'til', 'rhg', ... (object-dependent)
+  # 'delete': boolean, whether to delete "object.prt" from disk and remove it from "file.cio"
+  # 'quiet': boolean, indicating to suppress console messages
   #
   # RETURN:
   #
@@ -2809,6 +2786,9 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
   # 
   # DETAILS
   # 
+  # When 'delete=TRUE' the function deletes "object.prt" from disk and changes its entry in
+  # "file.cio" back to NULL (the default), so that no OHG files are produced.
+  #
   # 'object.prt' consists of a list of requested "output hydrograph" files. These are special
   # output files containing only the data for a single spatial object in the watershed model
   # (eg a single HRU or outlet). They can be enabled by adding a row to 'object.prt'
@@ -2907,22 +2887,24 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
   # add a comment line
   out.lines = c(comment.text, fdf.text)
   
-  # check if the file exists already
+  # check if the file exists already and print some feedback to user
+  msg.mode = ifelse(delete, 'deleting', 'overwriting')
   prtpath = file.path(dirname(ciopath), ofile)
-  if( file.exists(prtpath) )
+  prt.exists = file.exists(prtpath)
+  if( prt.exists )
   {
     msg.warn = paste('file', prtpath, 'already exists. Set overwrite=TRUE to modify it')
-    if( !overwrite )
-    {
-      warning(msg.warn)
-      return()
-      
-    } else cat(paste('overwriting', prtpath, '\n'))
+    if( !overwrite ) { stop(msg.warn) } else { if( !quiet ) cat(paste(msg.mode, prtpath, '\n')) }
     
-  } else cat(paste('writing to', prtpath, '\n'))
+  } else {
+    
+    if(delete) warning('object.prt not found')
+    if( !quiet ) cat(paste('writing to', prtpath, '\n'))
+  }
   
-  # print to output file
-  writeLines(out.lines, prtpath)
+  # print to output file or delete the file
+  if( delete & prt.exists ) unlink(prtpath)
+  if( !delete ) writeLines(out.lines, prtpath)
   
   # open file.cio and identify the line number and character position to modify
   rswat_rlines(ciopath) 
@@ -2931,18 +2913,22 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot')
   cposmod = linedf.cio %>% filter(line_num==lnmod, field_num==4) %>% pull(start_pos)
   
   # modify the line and write the changes to file.cio
-  substr(.rswat$stor$txt[['file.cio']][lnmod], cposmod, cposmod + nchar(ofile)) = ofile
+  newval = ifelse(delete, 'null', ofile)
+  substr(.rswat$stor$txt[['file.cio']][lnmod], cposmod, cposmod + nchar(newval)) = newval
   writeLines(.rswat$stor$txt[['file.cio']], ciopath)
   
   # remove the 'file.cio' data from package environment 
   .rswat$stor$txt = .rswat$stor$txt[names(.rswat$stor$txt) != 'file.cio']
   .rswat$stor$temp = .rswat$stor$temp[names(.rswat$stor$temp) != 'file.cio']
   
-  # refresh files list (maintaining ignored files list) and load the new file
+  # refresh files list (maintaining ignored files list)
   ignore = rswat_cio(trim=F) %>% filter(ignored) %>% pull(file)
-  rswat_cio(ciopath, ignore=ignore)
+  rswat_cio(ciopath, ignore=ignore, quiet=quiet)
+  
+  # load new file, or, in delete mode, return nothing 
+  if(delete) return(NULL)
   rswat_open('object.prt', quiet=TRUE, reload=TRUE)
-  rswat_open('object.prt')
+  rswat_open('object.prt', quiet=TRUE)
 }
 
 
@@ -3658,7 +3644,7 @@ rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
 }
 
 #' set up simulation times in SWAT+ config files 'print.prt' and 'time.sim' 
-rswat_tinit = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
+rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
 {
   # ARGUMENTS:
   # 
@@ -3764,140 +3750,143 @@ rswat_tinit = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
   
 }
 
-#' run a daily SWAT+ simulation of a physical variable, for a given location and time period 
-rswat_daily = function(dates=NULL, loc=1, ofile=NULL, vname=NULL, exec=TRUE, quiet=FALSE)
+#' runs simulation to generate/load OHG output, optionally using it as input to an error function
+rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, quiet=FALSE)
 {
+  #
   # ARGUMENTS:
-  # 
-  # 'dates': vector or dataframe containing the dates to simulate (see DETAILS)
-  # 'loc': integer, character, or sf geometry; specifying the location (see DETAILS) 
-  # 'ofile': character vector or list, the desired output file(s) (see DETAILS)
-  # 'vname': character vector, the SWAT+ name of the physical variable(s) to return
-  # 'exec': boolean, if FALSE the function loads existing results without running a new simulation
+  #
+  # 'vname', character, the output variable name to load
+  # 'dates': integer, vector, or dataframe indicating the dates to simulate (see rswat_time)
+  # 'oid': integer, the "object number", an ID code associated with the desired object
+  # 'restore': boolean, indicates to restore a backup of config files modified by the function
+  # 'errfn', anonymous function of one or two (equal-length) numeric vector(s) (see DETAILS)
   # 'quiet': boolean, indicating to suppress console messages
   #
-  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
-  #
   # RETURN:
-  # 
-  # A dataframe containing the simulated data for the requested time period.
+  #
+  # Either a dataframe of output values with dates, or the return value of `errfn`
   #
   # DETAILS:
-  # 
-  # Runs a simulation by calling the SWAT+ executable (this can be slow!), then loads
-  # the output into R. `rswat_cio` must be run first to set 'ciopath'. 
-  # 
-  # Argument 'dates' can be a dataframe containing a 'date' column (eg. pass a streamgage
-  # observation dataset to get back matching simulated data), or a vector of dates. The 
-  # function will run a simulation that covers the entire period (filling any gaps), so
-  # the desired time series can also be specified by `dates=c(start_date, end_date)`.
-  # When 'dates' is supplied, the function writes the corresponding values to the files
-  # 'print.prt', and 'time.sim'. Otherwise the simulation runs over whatever period is
-  # currently set in those files.
   #
-  # TODO: handle different types of physical variables through loc and vname. For now the
-  # function just requests the channel flow data for the main outlet
-
-  # check if `rswat` has been initialized with a project directory
-  err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
+  # With default settings, this is a helper function for quickly getting discharge values for
+  # the current SWAT+ config settings. Argument `errfn` allows these discharge values to be
+  # passed directly to an error function (eg Nash Sutcliffe Efficiency) to make it easier to
+  # construct anonymous objective functions for your SWAT+ model. `restore=TRUE` prompts the
+  # creation of a backup of all modified config files (except the simulation outputs), which
+  # is restored after the simulation has run.
+  #
+  # Default values for `dates` can be found by running `rswat_time()`
+  #
+  # There are three modes:
+  #
+  # (1) `errfn` not supplied -> returns the dataframe of OHG data including column 'vname'
+  # (2) `errfn(x)` is supplied -> it is evaluated with `x` set to the output OHG values of 'vname'
+  # (3) `errfn(x,y)` is supplied -> it is evaluated with `x` as above and `y=dates$flo`
+  #
+  # Observed data can thus either be: (1) dealt with elsewhere, (2) baked into the supplied
+  # `errfn`, or (3) passed as a column of `dates`. In case (3) `dates` must be a dataframe,
+  # and the name of the observations column must start with 'flo' (assumed to be in units of
+  # 'm^3/s', unless assigned otherwise). In case (2), any such column is ignored.
+  
+  # initialize observed flow vector
+  fobs = NULL
+  
+  # check that rswat has been initialized
+  err.msg = 'Run `rswat_cio` first to load a project'
   if( !exists('.rswat') ) stop(err.msg)
   if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
   
-  # pull the directory from rswat environment
-  textio = dirname(.rswat$ciopath)
-  
-  # find the object id value associated with the supplied location if necessary
-  if( !is.numeric(loc) )
+  # make a backup of the config stuff modified below
+  if(restore)
   {
-    # # attempt to find the watershed shapefile
-    # shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
-    # shp.fn = list.files(shp.dir)
-    # shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
-    # 
-    # # warn of multiple matches
-    # if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
-    # 
-    # # handle no-match case
-    # if( length(shp.path) > 0 ) 
-    # {
-    #   # set default `oid` when the shapefile can't be found 
-    #   oid = 1
-    #   
-    # } else {
-    #   
-    #   # load the first of the results and snap gage record site 
-    #   riv = read_sf(shp.path)
-    #   idx.riv = which.min(st_distance(oid, riv))
-    #   oid = riv$Channel[idx.riv]
-    # }
+    # pull the directory from rswat environment
+    textio = dirname(.rswat$ciopath)
     
-    stop('non-integer `loc` not implemented yet!')
-    # TODO: write methods for finding gis_id based on location
-  }
-  
-  # determine the requested output file
-  #rswat_output()
-  
-  
-  # message before writing any required changes to print.prt and time.sim
-  if( !quiet ) cat('> setting up time.sim and print.prt...\n')
-  
-  # write time period info to print.prt and time.sim
-  if( !is.null(dates) )
-  {
-    # handle dataframe input
-    if( is.data.frame(dates) ) dates = dates$date
-
-    # check for valid input 
-    dates = as.Date( dates[!is.na(dates)] )
-    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
+    # create a temporary directory for backups
+    tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
+    my_dir(tdir)
     
-    # set the start and end dates
-    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
-    dstart = as.integer(format(min(dates), '%j'))
-    ystart = as.integer(format(min(dates), '%Y'))
-    dend = as.integer(format(max(dates), '%j'))
-    yend = as.integer(format(max(dates), '%Y'))
+    # define files to back up
+    fname = c('file.cio', 'time.sim', 'print.prt', 'object.prt')
+    fname.exists = file.exists( file.path(textio, fname) )
+    fname = fname[fname.exists]
     
-    # load 'time.sim' and set 'step' = 0 for daily timestep operation
-    time.sim = rswat_open('time.sim', quiet=TRUE)
-    time.sim$step = 0
+    # define paths for the original and backup copies
+    restore.path = file.path(textio, fname)
+    backup.path = file.path(tdir, fname)
     
-    # make any start/end date changes to 'time.sim' and overwrite on disk
-    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
-    rswat_write(time.sim, preview=F, quiet=TRUE)
+    # copy the files in a loop
+    if( !quiet ) cat('backing up files... ')
+    for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
     
-    # load 'print.prt' and set 'nyskip' = 0 to ensure we can see all of the output
-    print.prt = rswat_open('print.prt', quiet=TRUE)
-    print.prt[[1]]$nyskip = 0
-    
-    # make any changes to start/end dates and overwrite 'print.prt' on disk
-    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
-    rswat_write(print.prt[[1]], preview=F, quiet=TRUE)
-  }
-  
-  # handle specification of output filenames ("objects") in 'print.prt'
-  object = NULL
-  if( !is.null(object) )
-  {
-    # only load 'print.prt' as needed
-    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=TRUE)
-    
-    # grab the full list of valid object names
-    object.all = print.prt[[5]]$objects
-    
-    # reset all values to no-print, then toggle requested files
-    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
-    print.prt[[5]]$daily[ object.all %in% object ] = 'y'
-
-    # write the changes to print.prt
-    rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
   }
 
-  # run the simulation and return output data as R dataframe
-  rswat_exec(quiet=quiet)
-  return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
+  # copy observed flow (if supplied) from dataframe input
+  if( is.data.frame(dates) ) fobs = dates$flo
+  
+  # write new time period to config files (if necessary), overwrite `dates` in normalized form 
+  dates = rswat_time(dates, quiet=TRUE)
+  
+  # open fifth table of 'print.prt', disable all output files and write the changes
+  print.prt = rswat_open('print.prt')[[5]]
+  print.prt[, names(print.prt) != 'objects'] = 'n'
+  rswat_write(print.prt, preview=F, quiet=TRUE)
+  
+  # activate OHG output
+  fout = rswat_ohg(overwrite=TRUE, oid=oid)
+  
+  # run the executable
+  if( !quiet ) cat('running SWAT+... ')
+  rswat_exec(quiet=quiet, fout=FALSE)
+  
+  # this should restore any config files modified in the above 
+  if(restore)
+  {
+    # delete 'object.prt' and restore backups
+    if( !quiet ) cat('restoring backup... ')
+    unlink( file.path(textio, 'object.prt') )
+    for(ii in seq_along(backup.path)) file.copy(backup.path[ii], restore.path[ii], overwrite=TRUE)
+    if( !quiet ) cat('done\n')
+    unlink(tdir, recursive=TRUE)
+    
+    # refresh cached value of the files that were modified above 
+    rswat_open('time.sim', quiet=quiet, reload=TRUE)
+    rswat_open('print.prt', quiet=quiet, reload=TRUE)
+  }
+  
+  # load the output file and finish if no error function supplied
+  fout = rswat_output(fout$FILENAME, vname=vname, showidx=FALSE)
+  if( is.null(errfn) ) return(fout)
+  
+  # handle invalid `errfn` argument
+  if( !is.function(errfn) ) { stop('errfn must be a function') } else {
+    
+    # count the number of arguments
+    errfn.n = formals(errfn)$L
+    
+    # handle error functions of one variable
+    if( errfn.n == 1 )
+    {
+      # handle missing second argument 
+      if( is.null(fobs) ) stop('dates$flo not found!')
+      return( errfn( fout[[vname]] ) )
+              
+    }
+    
+    # handle error functions of two variables 
+    if( errfn.n == 2 )
+    {
+      # handle missing second argument 
+      if( is.null(fobs) ) stop('dates$flo not found!')
+      return( errfn( fout[[vname]], fobs ) )
+      
+    }
+  }
 }
+
+
+
 
 
 
@@ -4715,6 +4704,140 @@ rswat_daily2 = function(dates=NULL, loc=NULL, vname='flo_out', quiet=FALSE, text
   return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
 }
 
+#' run a daily SWAT+ simulation of a physical variable, for a given location and time period 
+rswat_daily = function(dates=NULL, loc=1, ofile=NULL, vname=NULL, exec=TRUE, quiet=FALSE)
+{
+  # ARGUMENTS:
+  # 
+  # 'dates': vector or dataframe containing the dates to simulate (see DETAILS)
+  # 'loc': integer, character, or sf geometry; specifying the location (see DETAILS) 
+  # 'ofile': character vector or list, the desired output file(s) (see DETAILS)
+  # 'vname': character vector, the SWAT+ name of the physical variable(s) to return
+  # 'exec': boolean, if FALSE the function loads existing results without running a new simulation
+  # 'quiet': boolean, indicating to suppress console messages
+  #
+  # `object`: character vector, with entries from 'daily', 'monthly', 'yearly', 'avann'
+  #
+  # RETURN:
+  # 
+  # A dataframe containing the simulated data for the requested time period.
+  #
+  # DETAILS:
+  # 
+  # Runs a simulation by calling the SWAT+ executable (this can be slow!), then loads
+  # the output into R. `rswat_cio` must be run first to set 'ciopath'. 
+  # 
+  # Argument 'dates' can be a dataframe containing a 'date' column (eg. pass a streamgage
+  # observation dataset to get back matching simulated data), or a vector of dates. The 
+  # function will run a simulation that covers the entire period (filling any gaps), so
+  # the desired time series can also be specified by `dates=c(start_date, end_date)`.
+  # When 'dates' is supplied, the function writes the corresponding values to the files
+  # 'print.prt', and 'time.sim'. Otherwise the simulation runs over whatever period is
+  # currently set in those files.
+  #
+  # TODO: handle different types of physical variables through loc and vname. For now the
+  # function just requests the channel flow data for the main outlet
+  
+  # check if `rswat` has been initialized with a project directory
+  err.msg = 'Either supply `textio` or run `rswat_cio` to set default'
+  if( !exists('.rswat') ) stop(err.msg)
+  if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+  
+  # pull the directory from rswat environment
+  textio = dirname(.rswat$ciopath)
+  
+  # find the object id value associated with the supplied location if necessary
+  if( !is.numeric(loc) )
+  {
+    # # attempt to find the watershed shapefile
+    # shp.dir = gsub('Scenarios.+', 'Watershed/Shapes', textio)
+    # shp.fn = list.files(shp.dir)
+    # shp.path = file.path(shp.dir, shp.fn[ grepl('riv.+\\.shp', shp.fn) ])
+    # 
+    # # warn of multiple matches
+    # if( length(shp.path) > 1 ) warning(paste('more than one channels shapefile found in', shp.dir))
+    # 
+    # # handle no-match case
+    # if( length(shp.path) > 0 ) 
+    # {
+    #   # set default `oid` when the shapefile can't be found 
+    #   oid = 1
+    #   
+    # } else {
+    #   
+    #   # load the first of the results and snap gage record site 
+    #   riv = read_sf(shp.path)
+    #   idx.riv = which.min(st_distance(oid, riv))
+    #   oid = riv$Channel[idx.riv]
+    # }
+    
+    stop('non-integer `loc` not implemented yet!')
+    # TODO: write methods for finding gis_id based on location
+  }
+  
+  # determine the requested output file
+  #rswat_output()
+  
+  
+  # message before writing any required changes to print.prt and time.sim
+  if( !quiet ) cat('> setting up time.sim and print.prt...\n')
+  
+  # write time period info to print.prt and time.sim
+  if( !is.null(dates) )
+  {
+    # handle dataframe input
+    if( is.data.frame(dates) ) dates = dates$date
+    
+    # check for valid input 
+    dates = as.Date( dates[!is.na(dates)] )
+    if( length(dates) == 0 ) stop('no non-NA entries in `dates`')
+    
+    # set the start and end dates
+    pars.tochange = c('day_start', 'yrc_start', 'day_end', 'yrc_end')
+    dstart = as.integer(format(min(dates), '%j'))
+    ystart = as.integer(format(min(dates), '%Y'))
+    dend = as.integer(format(max(dates), '%j'))
+    yend = as.integer(format(max(dates), '%Y'))
+    
+    # load 'time.sim' and set 'step' = 0 for daily timestep operation
+    time.sim = rswat_open('time.sim', quiet=TRUE)
+    time.sim$step = 0
+    
+    # make any start/end date changes to 'time.sim' and overwrite on disk
+    time.sim[pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(time.sim, preview=F, quiet=TRUE)
+    
+    # load 'print.prt' and set 'nyskip' = 0 to ensure we can see all of the output
+    print.prt = rswat_open('print.prt', quiet=TRUE)
+    print.prt[[1]]$nyskip = 0
+    
+    # make any changes to start/end dates and overwrite 'print.prt' on disk
+    print.prt[[1]][pars.tochange] = c(dstart, ystart, dend, yend)
+    rswat_write(print.prt[[1]], preview=F, quiet=TRUE)
+  }
+  
+  # handle specification of output filenames ("objects") in 'print.prt'
+  object = NULL
+  if( !is.null(object) )
+  {
+    # only load 'print.prt' as needed
+    if( is.null(dates) ) print.prt = rswat_open('print.prt', quiet=TRUE)
+    
+    # grab the full list of valid object names
+    object.all = print.prt[[5]]$objects
+    
+    # reset all values to no-print, then toggle requested files
+    print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+    print.prt[[5]]$daily[ object.all %in% object ] = 'y'
+    
+    # write the changes to print.prt
+    rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
+  }
+  
+  # run the simulation and return output data as R dataframe
+  rswat_exec(quiet=quiet)
+  return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
+}
 
 
 

@@ -394,8 +394,8 @@ rswat_write(hydro, preview=FALSE, quiet=TRUE)
 #' adjusted manually, or using a helper function as shown below:
 #'  
 
-# `rswat_tinit` without arguments prints the current settings in 'time.sim'
-rswat_tinit()
+# `rswat_time` without arguments prints the current settings in 'time.sim'
+rswat_time()
 
 #' If the model was created with `qswat_run` (as it was here), then these dates should currently specify
 #' a one-day simulation at the very beginning of the supplied weather time series. The code below changes
@@ -403,7 +403,7 @@ rswat_tinit()
 #' to run a simulation with daily timesteps:
 
 # pass a range of dates or dataframe with a 'date' field to set up simulation start/end dates
-rswat_tinit(gage, daily=TRUE)
+rswat_time(gage, daily=TRUE)
 
 # run a simulation - the return value is a vector of output files generated
 fout = rswat_exec()
@@ -484,11 +484,11 @@ rswat_output(vname='rchrg') %>% print
 # display the output files that are currently activated in SWAT+
 rswat_output() %>% filter(activated) %>% pull(file)
 
-#' All daily output files are active (this setting was applied by a call to `rswat_tinit` above).
+#' All daily output files are active (this setting was applied by a call to `rswat_time` above).
 #' There are quite a few of them, so execution is relatively slow. If we turn off all off the standard
 #' output files, the SWAT+ simulation will still run, and it completes much faster.
 
-# open 'print.prt' (fifth table) and disable all output files, then write the changes
+# open fifth table of 'print.prt', disable all output files and write the changes
 print.prt = rswat_open('print.prt')[[5]]
 print.prt[, names(print.prt) != 'objects'] = 'n'
 rswat_write(print.prt, preview=F, quiet=TRUE)
@@ -545,8 +545,23 @@ ohg.out = rswat_output('sdc_1_tot.ohg')
 prt.out = rswat_output('channel_sd_day.txt') %>% filter(gis_id==id.outlet) 
 
 # join them and check the level of discrepancy
-both.out = left_join(prt.out, ohg.out, by=c('date'))
-both.out %>% mutate( absdiff = abs( (flo_out - flo) ) ) %>% pull(absdiff) %>% max
+left_join(prt.out, ohg.out, by=c('date')) %>% 
+  mutate( absdiff = abs( (flo_out - flo) ) ) %>% 
+  pull(absdiff) %>% max
+
+
+
+# OHG outputs can be switched off for now
+rswat_ohg(overwrite=TRUE, delete=TRUE)
+
+# `rswat_flo` handles the all the required settings changes laid out above
+xx = rswat_flo(dates=gage, errfn=my_nse)
+
+
+
+xx
+
+
 
 
 
@@ -635,8 +650,8 @@ if(0)
   ## DEVELOPMENT: OHG file handling
   
   # set up a short 25-day run
-  rswat_tinit('1995-01-05')
-  rswat_tinit(25)
+  rswat_time('1995-01-05')
+  rswat_time(25)
   
   # test some combinations
   rswat_ohg(otype=c('hru'), htype=c('sur'), overwrite=T)
