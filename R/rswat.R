@@ -712,7 +712,8 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   {
     # run a simulation to generate dummy output files to populate databases
     cat('running SWAT+ to generate all output files...\n')
-    textio.dummy = rswat_odummy(quiet=TRUE)
+    fpath.dummy = rswat_odummy(quiet=TRUE)
+    textio.dummy = dirname(fpath.dummy[1])
     
     # parse the dummy files (creates/modifies .rswat$stor$output)
     rswat_oparse(textio=textio.dummy)
@@ -935,198 +936,147 @@ rswat_ofind = function(pattern=NULL, fuzzy=-1, trim=TRUE)
   return(vname.out)
 }
 
-#' load or write a backup of all SWAT+ text config files (or a subset of them)
-rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
+#' tool for copying SWAT+ config files and making backups
+rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FALSE)
 {
-  # In development. 
-  #
   # ARGUMENTS:
   #
-  # `bpath`: (optional) character, the path to the directory to write the backup
-  # `fname`: (optional) character vector, name of config files to copy
-  # `bmode`: character, one of 'backup', 'reload', or 'restore' (see DETAILS)
-  # `overwrite`: logical, whether to overwrite any existing files in `bpath`
+  # `from`: character, path to the source directory
+  # `to`: character, path to the destination directory
+  # `fname`: character vector, name of files in `from` to copy
+  # `overwrite`: logical, whether to overwrite any existing files in path `to`
+  # `quiet`: logical, suppresses console messages
   #
   # RETURN VALUE:
   #
-  # Returns nothing, with behaviour depending on argument `bmode`:
+  # a vector of paths to the files copied in their new location
   #
-  # if 'backup', copies the requested files to `bpath` folder
-  # if 'reload', loads the requested files from `bpath` into memory
-  # if 'restore', overwrites currently loaded project with requested backup in `bpath`
-  # 
   # DETAILS:
   #
-  # This function serves both for creating backups (the default), and for opening
-  # SWAT+ files from text I/O directories external to the currently loaded one (ie.
-  # `ciopath`, as defined in the last call to `rswat_cio`). Note however that a backup
-  # can only be loaded when the current text I/O directory contains a like-named file
-  # (when this is not the case you can simply copy the file manually).
+  # When not supplied, `from` is set to the currently loaded SWAT+ project directory (usually
+  # ".../TxtInOut") and when `fname` is not supplied it is assigned all config files listed by
+  # `rswat_cio()`. The special argument `fname='.'` also copies any non-config files found in
+  # `from` (such as weather input files), but excludes directories. 
   #
-  # In 'reload' mode, backup parameters can be accessed via `rswat_open(fname)`. To reset
-  # the parameters for a file to their current on-disk values (ie in the files in the
-  # directory set by `rswat_cio`), simply reload them using `rswat_open(fname, reload=TRUE)`.
-  # In 'restore' mode, backup parameters overwrite (on disk) the current ones.
+  # When neither `to` nor `from `is supplied, `from` is set as above, and `to` is set to
+  # `from`/rswat_backup_<foo>, where <foo> is a random string that is very unlikely to collide
+  # with any previous backups. This makes it easy to create a backup; just call `rswat_copy()`
+  # without arguments.
   #
-  # By default (`fname=NULL`) the function loads or copies all available config files.
-  # The special argument `fname='.'` in backup mode also copies any non-config files found
-  # in the text I/O directory (such as weather input files), but not subdirectories.
-  #
-  # If `bpath` is not supplied, the function assigns the default `ciopath/rswat_backup`.
-  # If the `bpath` folder does not exist, it is created, unless we are in read-mode
-  # (ie `reload=TRUE`). `bpath` can be either an absolute path, or a string (containing
-  # no '/' or '\' characters, naming a subdirectory of the current text I/O directory)
+  # When `from` but not `to` is supplied, `to` is set to the currently loaded SWAT+ project
+  # directory. This allows a backup to be restored by calling `rswat_copy(from=...)`. Files
+  # modified by `rswat_copy` are reloaded only if they have been loaded already in the R
+  # session.
   #
 
-  # pull the current text I/O directory
+  # grab project directory from package environment
+  if( exists('.rswat') )
+  {
+    # copy the path from the package environment
+    ciopath = .rswat$ciopath
+    
+    # handle missing ciopath then assign (SWAT+ project) config files directory
+    if( is.null(ciopath) ) stop('ciopath not found. Try setting it with `rswat_cio`')
+    textio = dirname(ciopath)
+    
+  } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
+  
+  # grab current config files list
   cio = rswat_cio(trim=F)
-  textio = cio %>% pull(path) %>% dirname %>% unique
   
-  # set default backup path as needed
-  if( is.null(bpath) ) bpath = file.path(textio, 'rswat_backup')
+  # set default source and destination paths as needed
+  to.default = file.path(textio, paste0('_rswat_backup_', basename(tempfile()) ) )
+  if( is.null(from) ) from = textio 
+  if( is.null(to) )
+  {
+    # default destination is either textio or a subdirectory, depending on `from`
+    if( from == textio ) to = to.default 
+    if( from != textio ) to = textio
+  }
   
-  # if `bpath` has slashes, treat as a path, otherwise treat as a subdirectory name
-  if( !grepl('\\\\|\\/', bpath) ) bpath = file.path(textio, bpath)
- 
-  # default files list includes everything listed in 'file.cio'
+  # default files list includes everything listed in 'file.cio' (and the file itself)
   if( is.null(fname) ) fname = c('file.cio', cio$file)
   
-  # special argument '.' copies all files (eg. including weather data)
+  # special argument '.' copies all files
   if( all(fname=='.') ) fname = list.files(textio, include.dirs=FALSE)
   
-  # define proposed backup file paths
-  bfile.path = file.path(bpath, fname)
-  bfile.exists = file.exists(bfile.path)
+  # define source and destination file paths and check for existing ones
+  dest.path = file.path(to, fname)
+  dest.exists = file.exists(dest.path)
+  src.path = file.path(from, fname)
+  src.exists = file.exists(src.path)
   
-  # define file paths of currently loaded environment
-  main.path = file.path(textio, fname)
-  main.exists = file.exists(main.path)
-  
-  # write-mode
-  if( bmode == 'backup' )
+  # check for and fix missing files listed in `fname`
+  if( !all(src.exists) )
   {
-    # check for and fix bad fname input
-    if( !all(main.exists) )
-    {
-      # warn of missing source files
-      msg1 = 'the following files were not found in current text I/O directory'
-      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
-      warning(paste(msg1, textio, ':\n', paste(fname[!main.exists], collapse=', '), msg2))
-      
-      # update the source and destination file lists
-      fname = fname[main.exists]
-      main.path = main.path[main.exists]
-      main.exists = main.exists[main.exists]
-      bfile.path = bfile.path[main.exists]
-      bfile.exists = bfile.exists[main.exists]
-    }
-    
-    # handle overwrites 
-    if( !overwrite & any(bfile.exists) )
-    {
-      # warn of existing backups
-      fname.existing = fname[bfile.exists]
-      msg1 = 'the following files already exist in backup directory'
-      msg2 = '(change `bpath` or set `overwrite=FALSE` to overwrite the old copies):\n'
-      warning(paste(msg1, bpath, msg2, paste(fname.existing, collapse=', ')))
-      
-      # update the source and destination file lists
-      fname = fname[!bfile.exists]
-      main.path = main.path[!bfile.exists]
-      main.exists = main.exists[!bfile.exists]
-      bfile.path = bfile.path[!bfile.exists]
-      bfile.exists = bfile.exists[!bfile.exists]
-    }
-    
-    # count number of files to be written
-    n.tocopy = length(fname)
-    
-    # error if we are left with nothing to write
-    if( n.tocopy == 0 ) stop('Nothing to write')
-    
-    # create the directory as needed
-    my_dir(bpath)
-    
-    # copy the files in a loop
-    pb = txtProgressBar(max=n.tocopy, style=3)
-    for(idx.file in 1:n.tocopy)
-    {
-      file.copy(main.path[idx.file], bfile.path[idx.file])
-      setTxtProgressBar(pb, idx.file)
-    }
-    close(pb)
-    return(invisible())
+    # update the source and destination file lists to remove missing items
+    fname = fname[src.exists]
+    src.path = src.path[src.exists]
+    src.exists =  src.exists[src.exists]
+    dest.path = dest.path[src.exists]
+    dest.exists = dest.exists[src.exists]
   }
   
-  # read-mode or loading files to prep for restore
-  if( bmode %in% c('reload', 'restore') )
+  # make list of existing destination files (possibly empty)
+  fname.overwrite = fname[dest.exists]
+  
+  # handle existing files when overwrite not enabled 
+  if( ( !overwrite ) & ( length(fname.overwrite) > 0 ) )
   {
-    # check for and fix bad fname input
-    if( !all(bfile.exists) )
-    {
-      # warn of missing backup files
-      msg1 = 'the following files were not found in backup directory'
-      warning(paste(msg1, bpath, ':\n', paste(fname[!main.exists], collapse=', ')))
-      
-      # update the source file lists
-      fname = fname[bfile.exists]
-      bfile.path = bfile.path[bfile.exists]
-      bfile.exists = bfile.exists[bfile.exists]
-    }
-    n.toload = length(bfile.path)
+    # warn of overwrites requested
+    msg1 = 'the following files already exist in directory'
+    msg2 = '(change `to` or set `overwrite=TRUE` to overwrite):\n'
+    warning(paste(msg1, to, msg2, paste(fname.overwrite, collapse=', ')))
     
-    # check the requested backups all match a currently loaded file
-    main.loaded = fname %in% cio$file
-    if( any( !main.loaded ) )
-    {
-      # warn of backups for files not found in current text I/O directory 
-      fname.notloaded = fname[!main.loaded]
-      msg1 = 'the following backup(s) matched no file in the current text I/O directory'
-      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
-      warning(paste(msg1, textio, ':\n', paste(fname.notloaded, collapse=', '), msg2))
-      
-      # update the source and destination file lists
-      fname = fname[main.loaded]
-      main.path = main.path[main.loaded]
-      main.exists = main.exists[main.loaded]
-      bfile.path = bfile.path[main.loaded]
-      bfile.exists = bfile.exists[main.loaded]
-    }
-    
-    # error if we are left with nothing to load
-    if( n.toload == 0 ) stop('Nothing to load')
-    
-    # temporarily modify master text I/O files list to point to the backup(s)
-    fpath.original = .rswat$cio$path
-    .rswat$cio$path[ match(fname, cio$file) ] = bfile.path
-    
-    # TODO: dimensional sanity check 
-    # load the files
-    rswat_open(fname, reload=TRUE)
-    
-    # restore the current text I/O paths in master list
-    .rswat$cio$path = fpath.original
+    # update the source and destination file lists to remove conflicts
+    idx.overwrite = fname %in% fname.overwrite
+    fname = fname[!idx.overwrite]
+    src.path = src.path[!idx.overwrite]
+    src.exists =  src.exists[!idx.overwrite]
+    dest.path = dest.path[!idx.overwrite]
+    dest.exists = dest.exists[!idx.overwrite]
+    fname.overwrite = character(0)
   }
   
-  # overwrite existing files with backup data
-  if( bmode == 'restore' )
+  # count number of files to be written
+  n.tocopy = length(fname)
+  
+  # error if we are left with nothing to write, then create directory as needed
+  if( n.tocopy == 0 ) stop('Nothing to write')
+  my_dir(to)
+  
+  # copy the files in a loop
+  if( !quiet ) cat( paste('copying', n.tocopy, 'file(s) to', basename(to), '...\n') )
+  if( !quiet ) pb = txtProgressBar(max=n.tocopy, style=3)
+  for(idx.file in 1:n.tocopy)
   {
-    # loop over requested files
-    for(idx in 1:length(fname))
+    file.copy(src.path[idx.file], dest.path[idx.file], overwrite=overwrite)
+    if( !quiet ) setTxtProgressBar(pb, idx.file)
+  }
+  if( !quiet ) close(pb)
+  
+  # reload any config files that were replaced in current SWAT+ project directory
+  if( overwrite & ( length(fname.overwrite) > 0 ) & (to == textio) )
+  {
+    # handle 'file.cio' replacements by refreshing files list
+    if('file.cio' %in% fname.overwrite) cio = rswat_cio(ciopath, trim=FALSE, quiet=TRUE)
+
+    # check for overwrites that coincide with currently loaded files and reload them (if any)
+    fname.loaded = cio %>% filter( !is.na(ntab) ) %>% filter( !ignored )
+    idx.coinc = fname.overwrite %in% fname.loaded
+    if( any(idx.coinc) ) 
     {
-      # load the backup data into temporary variable
-      fdat = rswat_open(fname[idx])
-      
-      # reload the (old) file, overwrite with data from memory
-      rswat_open(fname[idx], reload=TRUE, quiet=TRUE)
-      rswat_write(fdat, preview=FALSE)
+      if( !quiet ) cat( paste('reloading', sum(idx.coinc), 'file(s)...') )
+      rswat_open(fname.overwrite[idx.coinc], reload=TRUE, quiet=TRUE)
     }
   }
   
-  return(invisible())
-  
+  # end the console messages and return the paths to the files written
+  if( !quiet ) cat('done\n')
+  return(dest.path)
 }
 
+# TODO: update rswat_odummy and rswat_flo to use this function
 
 
 #' ## INTERNAL: internal functions for file I/O interface (mostly for config files)
@@ -2706,23 +2656,28 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
     
   } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
   
-  # create a temporary directory for backups
-  tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
-  my_dir(tdir)
+  # # create a temporary directory for backups
+  # tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
+  # my_dir(tdir)
   
-  # define files to backup
-  fname.a = list.files(textio, include.dirs=FALSE)
-  idx.obak = endsWith(fname.a, '.txt') | endsWith(fname.a, '.out')  | endsWith(fname.a, '.ohg')
-  idx.cbak = fname.a %in% c('file.cio', 'time.sim', 'print.prt')
-  fname = fname.a[ idx.obak | idx.cbak ]
+  # define files to back up
+  fname.b = list.files(textio, include.dirs=FALSE)
+  idx.obak = endsWith(fname.b, '.txt') | endsWith(fname.b, '.out')  | endsWith(fname.b, '.ohg')
+  idx.cbak = fname.b %in% c('file.cio', 'time.sim', 'print.prt', 'object.prt')
+  fname = fname.b[ idx.obak | idx.cbak ]
   
-  # define paths for the original and backup copies
-  restore.path = file.path(textio, fname)
-  backup.path = file.path(tdir, fname)
+  # copy the files in a loop, saving to subfolder of `textio`
+  if( !quiet ) cat('backing up files... ')
+  bpath = rswat_copy(fname=fname, overwrite=TRUE, quiet=quiet)
+  bdir = dirname(bpath)[1]
   
-  # copy the files in a loop
-  cat('backing up files... ')
-  for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
+  # # define paths for the original and backup copies
+  # restore.path = file.path(textio, fname)
+  # backup.path = file.path(tdir, fname)
+  # 
+  # # copy the files in a loop
+  # cat('backing up files... ')
+  # for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
   
   # adjust the simulation period
   rswat_time(nday)
@@ -2734,35 +2689,38 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   
   # TODO: activate OHG files
   
-  # execute the simulation and scan for new output files
-  cat('running SWAT+... ')
-  rswat_exec(quiet=quiet)
-  fname.a = list.files(textio, include.dirs=FALSE)
-  idx.new = endsWith(fname.a, '.txt') | endsWith(fname.a, '.out')  | endsWith(fname.a, '.ohg')
-  fname.new = fname.a[idx.new]
+  # execute the simulation 
+  if( !quiet ) cat('running SWAT+... ')
+  fout = rswat_exec(quiet=quiet)
   
-  # define absolute paths for the output files and their destinations
-  dest.dir = file.path(textio, subdir)
-  fpath.new = file.path(textio, fname.new)
-  fpath.dest = file.path(dest.dir, fname.new)
-  my_dir(dest.dir)
+  # fout is not a complete list of outputs! scan for output files (old and new)
+  fname.s = list.files(textio, include.dirs=FALSE)
+  idx.new = endsWith(fname.s, '.txt') | endsWith(fname.s, '.out')  | endsWith(fname.s, '.ohg')
+  fname.new = fname.s[idx.new]
   
   # copy the new files to subdirectory and delete the originals
-  for(ii in seq_along(fpath.dest)) file.copy(fpath.new[ii], fpath.dest[ii], overwrite=TRUE)
-  unlink(fpath.new)
+  odir = file.path(textio, subdir)
+  opath = rswat_copy(to=odir, fname=fname.new, overwrite=TRUE, quiet=quiet)
+  unlink( file.path(textio, fname.new) )
   
-  # delete the new output files and restore backups
-  cat('restoring backup... ')
-  for(ii in seq_along(backup.path)) file.copy(backup.path[ii], restore.path[ii], overwrite=TRUE)
-  cat('done\n')
-  unlink(tdir, recursive=TRUE)
+  # # define absolute paths for the output files and their destinations
+  # dest.dir = file.path(textio, subdir)
+  # fpath.new = file.path(textio, fname.new)
+  # fpath.dest = file.path(dest.dir, fname.new)
+  # my_dir(dest.dir)
   
-  # refresh cached value of the files that were modified above 
-  rswat_open('time.sim', quiet=quiet, reload=TRUE)
-  rswat_open('print.prt', quiet=quiet, reload=TRUE)
+  # # copy the new files to subdirectory and delete the originals
+  # for(ii in seq_along(fpath.dest)) file.copy(fpath.new[ii], fpath.dest[ii], overwrite=TRUE)
+  # unlink(fpath.new)
   
-  # return a dataframe describing the new files
-  return( dest.dir )
+  # restore backup files and delete backup directory
+  if( !quiet ) cat('restoring backup... ')
+  rpath = rswat_copy(from=bdir, fname=basename(bpath), overwrite=TRUE, quiet=quiet)
+  unlink(bdir, recursive=TRUE)
+  if( !quiet ) cat('done\n')
+
+  # return the vector of output file paths
+  return( opath )
   
 }
 
@@ -2911,9 +2869,14 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FA
   linedf.cio = .rswat$stor$temp[['file.cio']]$linedf
   lnmod = linedf.cio %>% filter(string=='simulation') %>% pull(line_num)
   cposmod = linedf.cio %>% filter(line_num==lnmod, field_num==4) %>% pull(start_pos)
+  cendmod = linedf.cio %>% filter(line_num==lnmod, field_num==4) %>% pull(end_pos)
+  clen = cendmod - cposmod
   
   # modify the line and write the changes to file.cio
   newval = ifelse(delete, 'null', ofile)
+  newval.n = nchar(newval)
+  pad.n = clen - nchar(newval.n)
+  if( pad.n > 0 ) newval = paste0(newval, paste(rep(' ', pad.n), collapse=''))
   substr(.rswat$stor$txt[['file.cio']][lnmod], cposmod, cposmod + nchar(newval)) = newval
   writeLines(.rswat$stor$txt[['file.cio']], ciopath)
   
@@ -3757,7 +3720,7 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
   # ARGUMENTS:
   #
   # 'vname', character, the output variable name to load
-  # 'dates': integer, vector, or dataframe indicating the dates to simulate (see rswat_time)
+  # 'dates': integer, vector, or dataframe containing the dates to simulate (see rswat_time)
   # 'oid': integer, the "object number", an ID code associated with the desired object
   # 'restore': boolean, indicates to restore a backup of config files modified by the function
   # 'errfn', anonymous function of one or two (equal-length) numeric vector(s) (see DETAILS)
@@ -3776,21 +3739,25 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
   # creation of a backup of all modified config files (except the simulation outputs), which
   # is restored after the simulation has run.
   #
-  # Default values for `dates` can be found by running `rswat_time()`
+  # If `dates` is not supplied, the function uses the return value of `rswat_time()`
   #
   # There are three modes:
   #
   # (1) `errfn` not supplied -> returns the dataframe of OHG data including column 'vname'
-  # (2) `errfn(x)` is supplied -> it is evaluated with `x` set to the output OHG values of 'vname'
-  # (3) `errfn(x,y)` is supplied -> it is evaluated with `x` as above and `y=dates$flo`
+  # (2) `errfn(x)` is supplied -> passes output OHG values of 'vname' to errfun and returns result
+  # (3) `errfn(x,y)` is supplied -> errfn evaluated as above with `y=dates$obs` or `y=dates$flo`
+  #
+  # In case (3), if `dates$obs==NULL` the function uses `dates$flo`. ie any column starting
+  # with 'flo' ('flow', 'flo_out', etc) will be selected as the second choice.
   #
   # Observed data can thus either be: (1) dealt with elsewhere, (2) baked into the supplied
   # `errfn`, or (3) passed as a column of `dates`. In case (3) `dates` must be a dataframe,
-  # and the name of the observations column must start with 'flo' (assumed to be in units of
-  # 'm^3/s', unless assigned otherwise). In case (2), any such column is ignored.
+  # and the name of the observations column must start with 'obs' or 'flo' (with 'obs'
+  # preferred). This column should be of `numeric` or `units` type. In case (2), any such
+  # column is ignored.
   
-  # initialize observed flow vector
-  fobs = NULL
+  # initialize observed data vector
+  obs = NULL
   
   # check that rswat has been initialized
   err.msg = 'Run `rswat_cio` first to load a project'
@@ -3822,8 +3789,15 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
     
   }
 
-  # copy observed flow (if supplied) from dataframe input
-  if( is.data.frame(dates) ) fobs = dates$flo
+  # copy observed data (if supplied) from dataframe input
+  if( is.data.frame(dates) )
+  {
+    # look first for anything starting with 'obs'
+    obs = dates$obs
+    
+    # look for 'flo' only if nothing is found 
+    if( is.null(obs) ) obs = dates$flo
+  }
   
   # write new time period to config files (if necessary), overwrite `dates` in normalized form 
   dates = rswat_time(dates, quiet=TRUE)
@@ -3851,36 +3825,60 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
     unlink(tdir, recursive=TRUE)
     
     # refresh cached value of the files that were modified above 
-    rswat_open('time.sim', quiet=quiet, reload=TRUE)
-    rswat_open('print.prt', quiet=quiet, reload=TRUE)
+    rswat_open('time.sim', quiet=TRUE, reload=TRUE)
+    rswat_open('print.prt', quiet=TRUE, reload=TRUE)
   }
   
   # load the output file and finish if no error function supplied
-  fout = rswat_output(fout$FILENAME, vname=vname, showidx=FALSE)
-  if( is.null(errfn) ) return(fout)
+  if( is.null(errfn) ) return( rswat_output(fout$FILENAME, vname=vname, showidx=FALSE) )
+  
+  # otherwise extract the variable of interest and determine its units (if any)
+  sim = rswat_output(fout$FILENAME, vname=vname, showidx=FALSE)[[vname]]
+  sim.hasunits = inherits(sim, 'units')
+  sim.units = ifelse(sim.hasunits,  as.character( units(sim) ), NA) 
   
   # handle invalid `errfn` argument
   if( !is.function(errfn) ) { stop('errfn must be a function') } else {
     
     # count the number of arguments
-    errfn.n = formals(errfn)$L
+    errfn.n = length( formalArgs(errfn) )
     
     # handle error functions of one variable
-    if( errfn.n == 1 )
-    {
-      # handle missing second argument 
-      if( is.null(fobs) ) stop('dates$flo not found!')
-      return( errfn( fout[[vname]] ) )
-              
-    }
-    
+    if( errfn.n == 1 ) return( errfn(sim) )
+      
     # handle error functions of two variables 
     if( errfn.n == 2 )
     {
       # handle missing second argument 
-      if( is.null(fobs) ) stop('dates$flo not found!')
-      return( errfn( fout[[vname]], fobs ) )
+      if( is.null(obs) ) stop('dates$obs not found!')
       
+      # check for units in observed data
+      obs.hasunits = inherits(sim, 'units')
+      
+      # if both vectors are missing units, skip ahead
+      if( obs.hasunits | sim.hasunits ) 
+      {
+        # handle units conversion or...
+        if( obs.hasunits & sim.hasunits ) sim = set_units(sim, sim.units, mode='standard')
+        
+        # assign missing units to observed data or...
+        if( (!obs.hasunits) & sim.hasunits )
+        {
+          warning(paste('assuming dates$obs has units of', sim.units))
+          obs = set_units(obs, sim.units, mode='standard') 
+        }
+        
+        # assign missing units to simulated data
+        if( obs.hasunits & (!sim.hasunits) )
+        {
+          obs.units = as.character( units(obs) )
+          warning(paste('assuming SWAT+ variable', vname, 'has units of', obs.units))
+          sim = set_units(sim, obs.units, mode='standard') 
+        }
+      }
+      
+      # data and simulation should now be in common unnits - call the error function
+      return( errfn(sim, obs) ) 
     }
   }
 }
@@ -4838,6 +4836,199 @@ rswat_daily = function(dates=NULL, loc=1, ofile=NULL, vname=NULL, exec=TRUE, qui
   rswat_exec(quiet=quiet)
   return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
 }
+
+#' load or write a backup of all SWAT+ text config files (or a subset of them)
+rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
+{
+  # In development. 
+  #
+  # ARGUMENTS:
+  #
+  # `bpath`: (optional) character, the path to the directory to write the backup
+  # `fname`: (optional) character vector, name of config files to copy
+  # `bmode`: character, one of 'backup', 'reload', or 'restore' (see DETAILS)
+  # `overwrite`: logical, whether to overwrite any existing files in `bpath`
+  #
+  # RETURN VALUE:
+  #
+  # Returns nothing, with behaviour depending on argument `bmode`:
+  #
+  # if 'backup', copies the requested files to `bpath` folder
+  # if 'reload', loads the requested files from `bpath` into memory
+  # if 'restore', overwrites currently loaded project with requested backup in `bpath`
+  # 
+  # DETAILS:
+  #
+  # This function serves both for creating backups (the default), and for opening
+  # SWAT+ files from text I/O directories external to the currently loaded one (ie.
+  # `ciopath`, as defined in the last call to `rswat_cio`). Note however that a backup
+  # can only be loaded when the current text I/O directory contains a like-named file
+  # (when this is not the case you can simply copy the file manually).
+  #
+  # In 'reload' mode, backup parameters can be accessed via `rswat_open(fname)`. To reset
+  # the parameters for a file to their current on-disk values (ie in the files in the
+  # directory set by `rswat_cio`), simply reload them using `rswat_open(fname, reload=TRUE)`.
+  # In 'restore' mode, backup parameters overwrite (on disk) the current ones.
+  #
+  # By default (`fname=NULL`) the function loads or copies all available config files.
+  # The special argument `fname='.'` in backup mode also copies any non-config files found
+  # in the text I/O directory (such as weather input files), but not subdirectories.
+  #
+  # If `bpath` is not supplied, the function assigns the default `ciopath/rswat_backup`.
+  # If the `bpath` folder does not exist, it is created, unless we are in read-mode
+  # (ie `reload=TRUE`). `bpath` can be either an absolute path, or a string (containing
+  # no '/' or '\' characters, naming a subdirectory of the current text I/O directory)
+  #
+  
+  # pull the current text I/O directory
+  cio = rswat_cio(trim=F)
+  textio = cio %>% pull(path) %>% dirname %>% unique
+  
+  # set default backup path as needed
+  if( is.null(bpath) ) bpath = file.path(textio, 'rswat_backup')
+  
+  # if `bpath` has slashes, treat as a path, otherwise treat as a subdirectory name
+  if( !grepl('\\\\|\\/', bpath) ) bpath = file.path(textio, bpath)
+  
+  # default files list includes everything listed in 'file.cio'
+  if( is.null(fname) ) fname = c('file.cio', cio$file)
+  
+  # special argument '.' copies all files (eg. including weather data)
+  if( all(fname=='.') ) fname = list.files(textio, include.dirs=FALSE)
+  
+  # define proposed backup file paths
+  bfile.path = file.path(bpath, fname)
+  bfile.exists = file.exists(bfile.path)
+  
+  # define file paths of currently loaded environment
+  main.path = file.path(textio, fname)
+  main.exists = file.exists(main.path)
+  
+  # write-mode
+  if( bmode == 'backup' )
+  {
+    # check for and fix bad fname input
+    if( !all(main.exists) )
+    {
+      # warn of missing source files
+      msg1 = 'the following files were not found in current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname[!main.exists], collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.exists]
+      main.path = main.path[main.exists]
+      main.exists = main.exists[main.exists]
+      bfile.path = bfile.path[main.exists]
+      bfile.exists = bfile.exists[main.exists]
+    }
+    
+    # handle overwrites 
+    if( !overwrite & any(bfile.exists) )
+    {
+      # warn of existing backups
+      fname.existing = fname[bfile.exists]
+      msg1 = 'the following files already exist in backup directory'
+      msg2 = '(change `bpath` or set `overwrite=FALSE` to overwrite the old copies):\n'
+      warning(paste(msg1, bpath, msg2, paste(fname.existing, collapse=', ')))
+      
+      # update the source and destination file lists
+      fname = fname[!bfile.exists]
+      main.path = main.path[!bfile.exists]
+      main.exists = main.exists[!bfile.exists]
+      bfile.path = bfile.path[!bfile.exists]
+      bfile.exists = bfile.exists[!bfile.exists]
+    }
+    
+    # count number of files to be written
+    n.tocopy = length(fname)
+    
+    # error if we are left with nothing to write
+    if( n.tocopy == 0 ) stop('Nothing to write')
+    
+    # create the directory as needed
+    my_dir(bpath)
+    
+    # copy the files in a loop
+    pb = txtProgressBar(max=n.tocopy, style=3)
+    for(idx.file in 1:n.tocopy)
+    {
+      file.copy(main.path[idx.file], bfile.path[idx.file])
+      setTxtProgressBar(pb, idx.file)
+    }
+    close(pb)
+    return(invisible())
+  }
+  
+  # read-mode or loading files to prep for restore
+  if( bmode %in% c('reload', 'restore') )
+  {
+    # check for and fix bad fname input
+    if( !all(bfile.exists) )
+    {
+      # warn of missing backup files
+      msg1 = 'the following files were not found in backup directory'
+      warning(paste(msg1, bpath, ':\n', paste(fname[!main.exists], collapse=', ')))
+      
+      # update the source file lists
+      fname = fname[bfile.exists]
+      bfile.path = bfile.path[bfile.exists]
+      bfile.exists = bfile.exists[bfile.exists]
+    }
+    n.toload = length(bfile.path)
+    
+    # check the requested backups all match a currently loaded file
+    main.loaded = fname %in% cio$file
+    if( any( !main.loaded ) )
+    {
+      # warn of backups for files not found in current text I/O directory 
+      fname.notloaded = fname[!main.loaded]
+      msg1 = 'the following backup(s) matched no file in the current text I/O directory'
+      msg2 = '\n(change this directory via `rswat_cio` with argument `ciopath`):'
+      warning(paste(msg1, textio, ':\n', paste(fname.notloaded, collapse=', '), msg2))
+      
+      # update the source and destination file lists
+      fname = fname[main.loaded]
+      main.path = main.path[main.loaded]
+      main.exists = main.exists[main.loaded]
+      bfile.path = bfile.path[main.loaded]
+      bfile.exists = bfile.exists[main.loaded]
+    }
+    
+    # error if we are left with nothing to load
+    if( n.toload == 0 ) stop('Nothing to load')
+    
+    # temporarily modify master text I/O files list to point to the backup(s)
+    fpath.original = .rswat$cio$path
+    .rswat$cio$path[ match(fname, cio$file) ] = bfile.path
+    
+    # TODO: dimensional sanity check 
+    # load the files
+    rswat_open(fname, reload=TRUE)
+    
+    # restore the current text I/O paths in master list
+    .rswat$cio$path = fpath.original
+  }
+  
+  # overwrite existing files with backup data
+  if( bmode == 'restore' )
+  {
+    # loop over requested files
+    for(idx in 1:length(fname))
+    {
+      # load the backup data into temporary variable
+      fdat = rswat_open(fname[idx])
+      
+      # reload the (old) file, overwrite with data from memory
+      rswat_open(fname[idx], reload=TRUE, quiet=TRUE)
+      rswat_write(fdat, preview=FALSE)
+    }
+  }
+  
+  return(invisible())
+  
+}
+
 
 
 
