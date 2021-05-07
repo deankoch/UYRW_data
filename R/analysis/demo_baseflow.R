@@ -293,32 +293,61 @@ if( !file.exists(wsh.png) )
 # assign the SWAT+ project directory in `rswat`
 cio = rswat_cio(dir.qswat)
 
-#' Subsequent calls to rswat_cio() will list all config files in the project directory. After one of
-#' these files has been loaded into R, its listing will also contain some information about the contents,
-#' and the file becomes searchable (and faster to open) in subsequent calls. The `loadall` flag pre-loads
-#' all files config files into memory for convenience.
+#' Subsequent calls to rswat_cio() will list all config files in the project directory
 
-cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
-print(cio)
+# print the first few rows of the files dataframe
+cio %>% head
 
-#' This takes a moment to parse the files, which are then summarized in the returned dataframe `cio`.
-#' We have exclude decision tables, which are very large (slow to load) and not needed for now.
-#' 
-#' Each row of `cio` is a file containing a group of model parameters. The 'nvar' column indicates
-#' how many distinct fields there are in the file (nrow * ncol, summed over all of the tables,
-#' including headers). To load a config file, we use `rswat_open`: eg. the code below displays
-#' the first few rows from the SWAT+ aquifer parameters file, 'aquifer.aqu'
+#' Each row of `cio` is a file containing a group of model parameters. Before changing anything it's a good
+#' idea to make a backup. `rswat_copy` with argument `fname='.'` will copy the entire contents of the config
+#' files directory (excluding subdirectories) to a backup subdirectory
+
+# the return value is a vector of file paths to the backups
+path.backup = rswat_copy(fname='.', quiet=TRUE)
+dir.backup = dirname(path.backup[1])
+print(dir.backup)
+
+#' to start over later, restore this copy by passing the backup directory path back to `rswat_copy`
+
+# restore the backup we just made
+opath = rswat_copy(from=dir.backup, overwrite=TRUE, quiet=TRUE)
+
+# To load a config file, pass its filename to `rswat_open` eg. the code below displays the first few rows
+# from the SWAT+ aquifer parameters file, 'aquifer.aqu'
 
 # find aquifer-related tables
 cio %>% filter( grepl('aqu', file) ) %>% print
 
 # this one contains the main process model parameters 
-rswat_open('aquifer.aqu') %>% str
+rswat_open('aquifer.aqu', quiet=TRUE) %>% str
 
-#' The search function `rswat_find` can be useful for tracking down a SWAT+ parameter using keywords or
-#' SWAT2012 names. This uses fuzzy case-insensitive matching (see R's `?agrep` doc), which catches many
-#' of the name changes in the SWAT2012 -> SWAT+ updates. eg. the following code finds the PET estimation
-#' method parameter 'pet', which was called 'IPET' in SWAT2012:
+#' After rswat loads a SWAT+ config file into R, it caches the contents, and the file becomes searchable and
+#' faster to open/write in subsequent calls. `rswat_cio()` will also return some additional summary info:
+
+# print summary info about the file 'aquifer.aqu'
+rswat_cio() %>% filter( file=='aquifer.aqu' )
+
+#' The 'nline' column counts the total number of data rows in the file; 'nskip' indicates lines not understood
+#' by the parser (probably comments, but possibly bugs - best to check this manually); 'ntab' is the number of
+#' distinct tables in the file (either having different headers, or being separated by comments), and 'nvar'
+#' indicates how many distinct fields there are in the file (nrow * ncol, summed over all of the tables,
+#' including headers); 
+#' 
+#' To pre-load all files, use the `loadall` flag with `rswat_cio`. This will a few seconds to parse all the
+#' plaintext and detect headers, types, and spacing rules. The code below excludes decision table files, which
+#' contain many distinct tables (slow to load) and are not needed for now.
+
+# load most of the config files into memory for convenience.
+cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
+print(cio)
+
+#' The summary info is now available for most of the files (get even more detail by toggling `trim=FALSE`)
+#' and any variable names appearing among the table headers of these files now becomes searchable using
+#' `rswat_find`. This can be useful for tracking down a SWAT+ parameter using keywords or SWAT2012 names.
+#' This uses fuzzy case-insensitive matching (see R's `?agrep` doc), which catches many of the name changes
+#' in the SWAT2012 -> SWAT+ updates.
+#' 
+#' eg. the following code finds the PET estimation method parameter 'pet', which was called 'IPET' in SWAT2012:
 
 # fuzzy > 0 allows inexact matches
 rswat_find('IPET', fuzzy=1) %>% filter(name != 'description') %>% print
@@ -369,7 +398,7 @@ hydro %>% str
 
 #' The parameters in this file are all length-50 column vectors. This is because there are 50 HRUs in this
 #' model, and SWAT+ allows distinct PET parameters for each one.  For now we just set all HRUs to the same
-#' example value appearing in the [I/O docs](https://swatplus.gitbook.io/docs/user/io) - we can tune them later.
+#' default value appearing in the [I/O docs](https://swatplus.gitbook.io/docs/user/io) - we can tune them later.
 #' 
 
 # assign the default 'harg_pet' value in all HRUs, then write to disk
@@ -426,7 +455,6 @@ odf = rswat_output()
 # print the first few lines of the dataframe, omitting paths for tidyness
 odf %>% select(-path) %>% head
 
-
 #' Output files can be loaded as R dataframes by specifying their filename
 
 # load an example file. Dates and units are added automatically 
@@ -456,27 +484,28 @@ rswat_output(vname='rchrg') %>% print
 #' 
 #' Right now the database only includes the contents of `fname.eg` ('aquifer_day.txt'), and
 #' `rswat_output()` only reports the files currently in the SWAT+ project folder ("TxtInOut").
-#' To get an exhaustive list of possible outputs, `rswat_output` will run a (1-day) simulation, requesting
-#' all outputs, then parse the output files before restoring the original state of the project folder
+#' To get an exhaustive list of possible outputs, rswat can optionally run a short (1-day) simulation,
+#' requesting all outputs, in order to parse all output file headers (before restoring the original
+#' state of the project folder)
 
 # build database of SWAT+ outputs using `loadall` flag
 odf = rswat_output(loadall=TRUE)
 
-#  print the first few lines (omit paths for tidyness)
+#  print the first few lines (omit paths for tidiness)
 odf %>% select(-path) %>% head
 
 #' Notice the filenames list now includes entries with NA fields for 'size', 'modified' (and 'path',
 #' though it is not shown here). These are files not currently found in 'TxtInOut' but which can be enabled
 #' in SWAT+ simulations. Since the above function call cached their headers they are now searchable:
 
-# repeat the search for "rchrg" and find a new (monthly outputs) match:
+# repeat the search for "rchrg" and find a new (monthly outputs) matches
 rswat_output(vname='rchrg') %>% print
 
 
 #' 
 #' ## Comparing the simulated and observed data
 #' 
-#' Printing simulation data to plaintext output files is a bottleneck for SWAT+. To speed things up it is
+#' Printing simulation data to the .txt output files is a bottleneck for SWAT+. To speed things up it is
 #' better to request only the outputs you need, and omit printing the others. These settings are found in
 #' 'print.prt' (for the normal outputs) and 'object.prt' (object hydrograph outputs). Outputs that are
 #' currently toggled on are indicated by the 'activated' field in the dataframe returned by `rswat_output`
@@ -496,8 +525,7 @@ rswat_write(print.prt, preview=F, quiet=TRUE)
 # call the SWAT+ executable
 rswat_exec()
 
-
-#' On my machine the process completes in less than half the time (8-9 seconds versus 18-20). This time cost
+#' On my machine the process completes in less than half the time (7-9 seconds versus 17-20). This time cost
 #' reduction may not matter when running one-off simulations like we do here, but later on when fitting
 #' parameters it becomes very significant, because we will need to run thousands of simulations.
 #' 
@@ -508,19 +536,21 @@ rswat_exec()
 #' In parameter fitting we need to generate daily outputs of discharge at our gaged channel(s) to evaluate
 #' errors, ie to evaluate the objective function. As we can see in the above example, requesting these
 #' outputs via 'print.prt' is not ideal because the returned files print the data for every channel, but we
-#' only need it for one. SWAT+ has a special type of output file for the purpose of channel-specific outputs,
-#' the object hydrograph (OHG).
+#' only need it for a few (usually one). SWAT+ has a special type of output file for the purpose of
+#' channel-specific outputs, the object hydrograph (OHG).
 
 # activate the object hydrograph for the outlet channel (id number 1)
 id.outlet = 1
 rswat_ohg(overwrite=TRUE, oid=id.outlet)
 
 #' this function modifies "file.cio" and "object.prt" so that SWAT+ generates the plaintext output file
-#' "sdc_1_tot.ohg". The `oid` argument specifies that we only want data on the channel with ID code 1 (AKA
-#' 'cha01', the main outlet of the catchment).
+#' "sdc_1_tot.ohg" in addition to any others specified in "print.prt". The `oid` argument specifies that we
+#' only want data on the channel with ID code 1 (AKA 'cha01', usually the main outlet of the catchment). 
 
 # call the SWAT+ executable
 fout = rswat_exec()
+
+#' Note that this new file output seems not to affect runtimes
 
 # check that the expected file has been generated
 rswat_output() %>% filter(type=='ohg') %>% select(-path)
@@ -528,15 +558,14 @@ rswat_output() %>% filter(type=='ohg') %>% select(-path)
 # open the output 
 rswat_output('sdc_1_tot.ohg') %>% str
 
-#' This is a a subset of the outflow variables that would normally appear in the "SWAT-DEG_CHANNEL" group.
+#' This is a subset of the outflow variables that would normally appear in the "SWAT-DEG_CHANNEL" group.
 #' Note that the variable names in OHG files omit the suffix "_out". For example variable 'flo' in the OHG file
 #' corresponds to variable 'flo_out' in 'channel_sd_day.txt'. 
 #' 
-#' Note also that the units are not necessarily the same - in particular, the OHG discharge values are in per-day
+#' The units in these files are not necessarily the same - in particular, the OHG discharge values are in per-day
 #' units whereas the normal output files use per-second units. Different units means we can expect some
-#' post-conversion differences due to numerical imprecision (see also items 32 and 75
-#' [here](https://infiniteundo.com/post/25509354022/more-falsehoods-programmers-believe-about-time)),
-#' but they appear to be small enough here to ignore for the purposes of parameter fitting.
+#' post-conversion differences due to numerical imprecision (see also #32 and #75
+#' [here](https://infiniteundo.com/post/25509354022/more-falsehoods-programmers-believe-about-time)):
 
 # load the OHG output file
 ohg.out = rswat_output('sdc_1_tot.ohg')
@@ -549,41 +578,77 @@ left_join(prt.out, ohg.out, by=c('date')) %>%
   mutate( absdiff = abs( (flo_out - flo) ) ) %>% 
   pull(absdiff) %>% max
 
-
+#' The errors appear to be small enough here to ignore for the purposes of parameter fitting.
 
 # OHG outputs can be switched off for now
 rswat_ohg(overwrite=TRUE, delete=TRUE)
 
-# `rswat_flo` handles the all the required settings changes laid out above
-xx = rswat_flo(dates=gage, errfn=my_nse)
+#' The helper function `rswat_flo` is for quickly getting the OHG output for a simulation. It handles all
+#' of the required settings adjustments laid out above, and by default will restore all config files to their
+#' original state afterwards). Simply pass it a range of dates and get back the simulated discharge values:
+
+# `oid=1` is set by default and 'dates' can be range of dates or a dataframe containing a 'date' column
+ohg.out = rswat_flo(dates=gage, quiet=TRUE)
+ohg.out %>% str
+
+#' If 'dates' is a dataframe containing observations (columns names starting with 'flo' or 'obs'), `rswat_flo`
+#' can optionally be passed an (anonymous) error function `errfn(x,y)`. In that case instead of returning the
+#' discharge simulation values it passes them directly to `errfn` (as `x`) along with any observed data (as `y`)
+#' 
+#' eg. this code passes the function `my_nse`
+#' (defined in [helper_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md))
+#' which computes
+#' [Nash-Sutcliffe efficiency](https://en.wikipedia.org/wiki/Nash%E2%80%93Sutcliffe_model_efficiency_coefficient)
+
+# define `my_nse_2` to get a function of two variables only (`my_nse` has four)
+my_nse_2 = function(x, y) {my_nse(x, y, L=2, normalized=TRUE)}
+
+# run simulation and return NSE (normalized , with exponent 2)
+rswat_flo(dates=gage, errfn=my_nse_2, quiet=TRUE) %>% print
+
+#' This is useful for linking up with optimization algorithms offered in other R packages. For example if we
+#' want to maximize NSE for our simulated hydrograph with respect to the parameter 'harg_pet' (discussed earlier),
+#' we can construct an objective function like this:
+
+# define an anonymous function that modifies parameters then evaluates NSE of resulting simulation 
+obj.example = function(x)
+{
+  # open the container file for 'harg_pet', 
+  hydro = rswat_open('hydrology.hyd')
+
+  # assign value `x` to all HRUs then write to disk
+  hydro$harg_pet = x
+  rswat_write(hydro, preview=FALSE, quiet=TRUE)
+  
+  # run simulation then return the resulting NSE
+  return( rswat_flo(dates=gage, errfn=my_nse_2, quiet=TRUE) )
+}
+
+#' A grid search now becomes very simple to program:
+
+# run the objective function for a range of `harg_pet` values
+harg.test = seq(0, 0.01, length=10)
+harg.nse = sapply(harg.test, obj.example)
+
+# identify and print the best one
+idx.opt = which.max( harg.nse ) 
+nse.opt = harg.nse[idx.opt]
+harg.opt = harg.test[idx.opt]
+print( paste0( 'NSE is maximized (', round(nse.opt, 3),') at harg_pet=', round(harg.opt, 3)) )
+
+#' `obj.example` can be altered to include multiple parameters in `x` (a vector). In this way
+#' an objective function of any number of SWAT+ parameters can be constructed and passed to an
+#' optimizer. However, before we can run more sophisticated optimization routines we need to define
+#' bounds for the parameters.
+#' 
+#' TO BE CONTINUED
 
 
+#rswat_open('cal_parms.cal') %>% filter( agrepl('harg', name, max.distance=2))
 
-xx
-
-
-
-
-
-
-# TODO: rswat_flo
-#
-# - activates sdc OHG files as needed (argument gis_id)
-# - temporarily changes time and print settings (optional argument dates) 
-# - calls executable (with all prt file options switched off)
-# - loads results into R, coverts units to m^3/sec, returns the vector OR
-# - returns the objective function value (optional argument gage) 
-#
-#
-
-
-
-
-
-#' TODO: continue developing OHG handlers
 
 # TODO: 
-# - replace rswat_daily, rswat_obj, etc
+# - replace rswat_obj, etc
 # - swap in the fitted parameter values
 
 # 
