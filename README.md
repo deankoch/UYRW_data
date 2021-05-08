@@ -64,8 +64,6 @@ Check back in the coming weeks as we add to this section to demonstrate the mode
 
 * [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
 partitions the UYRW area into subwatersheds with USGS gages at their outlets
-* [demo_baseflow](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_baseflow.md)
-builds a SWAT+ model and demonstrates how it can be managed with `rswat`
 * [helper_analysis](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_analysis.md)
 utilities for creating and calibrating SWAT+ models in R
 
@@ -73,7 +71,7 @@ utilities for creating and calibrating SWAT+ models in R
 
 ### rswat
 
-The parametrization of a SWAT model is not trivial - a typical use case will involve dozens of config files
+The parametrization of a SWAT model is not trivial. A typical use case will involve dozens of config files
 containing many thousands of model parameters. Fortunately, SWAT is largely made up of process-based components
 whose physically-based parameters can (at least initially) be set using empirical data. 
 
@@ -83,10 +81,12 @@ HRUs and assign their plant/soil parameters to survey values. These steps are us
 [QSWAT](https://swat.tamu.edu/software/qswat/)/[QSWAT+](https://swatplus.gitbook.io/docs/installation)
 (GUI-based QGIS plugins). Our code runs them programmatically from within R:
 
-* [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) provides an easy-to-use R
-interface to the configuration files in a SWAT+ project directory, helping to manage the large number
-of parameters in this model. This includes R wrappers for running the QSWAT+ workflow
-[in PyQGIS](https://gitlab.com/rob-yerc/swat), calling SWATEditor.exe to build model config files,executing simulations. We are also developing helper functions for visualizing and analyzing the results. 
+[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) is a set of tools for building SWAT+ models and managing their many files. This includes R wrappers for running the QSWAT+ workflow
+[in PyQGIS](https://gitlab.com/rob-yerc/swat), calling SWATEditor.exe to build model config files; reading, cataloging and modifying these files, executing simulations, and reading the outputs. The following vignettes demonstrate these features on a simple example catchment
+
+* [demo_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md) builds the SWAT+ model
+* [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_txtinout.md) loads and modifies it
+* [demo_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md) tunes parameters
 
 We may polish some/all of this code and release it as an R package at some point. Those interested in script-based workflows for SWAT are encouraged to also check out the [SWAT+AW](https://github.com/celray/swatplus-automatic-workflow) and [SWATPlusR](https://github.com/chrisschuerz/SWATplusR) projects. 
 
