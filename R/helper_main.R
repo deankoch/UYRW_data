@@ -64,10 +64,11 @@ graphics.dir = 'graphics'
 markdown.dir = 'markdown'
 data.dir = 'data'
 
-# subdirectories of `data`: source files, pre-processed files, analysis results
+# subdirectories of `data`: source files, pre-processed files, analysis results, demos
 src.subdir = 'data/source'
 out.subdir = 'data/prepared'
 sci.subdir = 'data/analysis'
+demo.subdir = 'data/demo'
 
 # missing data field (NA) is coded as "-99.0"
 tif.na.val = -99
