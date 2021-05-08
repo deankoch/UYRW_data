@@ -7,11 +7,10 @@
 #'
 #' **Mitacs UYRW project**
 #' 
-#' **demo_objective.R**: managing SWAT+ config and output files with `rswat` 
+#' **demo_objective.R**: Parameter fitting for a SWAT+ model with `rswat` 
 #' 
-#' This script demonstrates some of the core functionality of the `rswat` helper functions:
-#' accessing/changing parameters and settings for the SWAT+ simulator, running simulations,
-#' and loading outputs.
+#' This script demonstrates the use of OHG files to quickly get simulated SWAT+ channel flow values,
+#' and methods for building objective functions to optimize in parameter-fitting.
 
 #'
 #' ## libraries
@@ -27,32 +26,45 @@ source(here('R/rswat.R'))
 #' ## project data
 
 
-#' load the QSWAT+ project info and gage data from the previous script
-#' ([demo_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md))
-
+#' load the SWAT+ project info and gage data fro previous scripts
+#' ([demo_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md), and
+#' [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md))
+#' 
 # load some info about the SWAT+ model
 qswat.meta = my_metadata('demo_qswat', data.dir=demo.subdir)
-dir.qswat = qswat.meta['dir_qswat', 'file']
+txtinout.meta = my_metadata('demo_txtinout', data.dir=demo.subdir)
 nm = qswat.meta['example_name', 'file']
 print(nm)
 
-# load the gage data for this catchment
+# load the gage data for this catchment 
 gage = readRDS(here(qswat.meta['gage', 'file']))
 head(gage)
 
-#' we 
+# copy the directory of the project folder and its backup
+demo.dir = here( txtinout.meta['txtinout', 'file'] )
+demobak.dir = here( txtinout.meta['txtinout_bak', 'file'] )
 
-#' set up the SWAT+ project config folder location to use in the demo
-zip.path = here( qswat.meta['txtinout', 'file'] )
-demo.dir = file.path( here(demo.subdir), gsub( '.zip', '', basename(zip.path) ) )
+#' ## load the SWAT+ project
+#' 
+#' Start by loading a SWAT+ project folder
+
+# point `rswat` to the demo "TxtInOut" directory used earlier 
+demo.dir = here( txtinout.meta['txtinout', 'file'] )
 print(demo.dir)
+rswat_cio(demo.dir)
 
-# unzip a fresh copy of "TxtInOut" to this folder
-unzip(zip.path, exdir=uz.dir, overwrite=TRUE)
+#' restore the backup that was created after running the previous demo script
 
+# restore model backup, which has Hargreaves-Samani PET method activated
+print(demobak.dir)
+fout = rswat_copy(from=demobak.dir, fname='.', overwrite=TRUE, quiet=TRUE)
 
+# pre-load all output and config files (except decision tables)
+cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
+odf = rswat_output(loadall=TRUE)
 
-
+#' The helper functions `rswat_copy`, `rswat_cio`, and `rswat_output` are described in the previous
+#' demo script [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md).
 #' 
 #' ## Comparing the simulated and observed data
 #' 
@@ -192,7 +204,7 @@ print( paste0( 'NSE is maximized (', round(nse.opt, 3),') at harg_pet=', round(h
 #' optimizer. However, before we can run more sophisticated optimization routines we need to define
 #' bounds for the parameters.
 #' 
-#' TO BE CONTINUED
+#' Code below is in development
 
 
 #rswat_open('cal_parms.cal') %>% filter( agrepl('harg', name, max.distance=2))
