@@ -998,7 +998,7 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   if( is.null(fname) ) fname = c('file.cio', cio$file)
   
   # special argument '.' copies all files
-  if( all(fname=='.') ) fname = list.files(textio, include.dirs=FALSE)
+  if( all(fname=='.') ) fname = list.files(from, include.dirs=FALSE)
   
   # define source and destination file paths and check for existing ones
   dest.path = file.path(to, fname)

@@ -1,7 +1,7 @@
 helper\_main.R
 ================
 Dean Koch
-2021-03-26
+2021-05-08
 
 **Mitacs UYRW project**
 
@@ -106,9 +106,11 @@ graphics.dir = 'graphics'
 markdown.dir = 'markdown'
 data.dir = 'data'
 
-# subdirectories of `data` contain source files and their processed output 
+# subdirectories of `data`: source files, pre-processed files, analysis results, demos
 src.subdir = 'data/source'
 out.subdir = 'data/prepared'
+sci.subdir = 'data/analysis'
+demo.subdir = 'data/demo'
 
 # missing data field (NA) is coded as "-99.0"
 tif.na.val = -99
@@ -156,8 +158,7 @@ handles the construction of the table. To call up the table for a
 specific script, simply use `my_metadata(script.name)`.
 
 ``` r
-my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, 
-                       data.dir='data', v=TRUE)
+my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data', v=TRUE)
 {
   # creates and/or adds to a data frame of metadata documenting a given script, and (optionally)
   # writes it to disk as a CSV file 
@@ -187,7 +188,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   # appear in `entries.list`.
   #
   # Existing CSV files are never modified unless `use.file` and `overwrite` are both TRUE. In this
-  # cse, if the CSV file does not already exist on disk it will be created. The default
+  # case if the CSV file does not already exist on disk it will be created. The default
   # `entries.list==NA`, combined with `overwrite=TRUE` and `use.file=TRUE` will overwrite the CSV
   # with a default placeholder - a table containing only a single row, which describes the CSV file
   # itself.
@@ -402,5 +403,95 @@ my_maps = function(db, outcrs=NULL)
     if(sum(idx.world) == 0) warning('no matches for supplied `db`')
     return( world.result[idx.world,] )
   }
+}
+```
+
+Wrapper for ggplot calls to make hydrographs and other time series plots
+
+``` r
+my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
+{
+  # ARGUMENTS:
+  #
+  # `dat`: dataframe with 'date' column and at least one column coercible to numeric 
+  # `colors`: character, palette name (see `hcl.pals()` or ...)
+  # `alph`: numeric in [0, 1], transparency of (all) lines
+  # `yaxis`: y axis label
+  # 
+  #
+  # RETURN VALUE:
+  #
+  # ggplot grob
+  #
+  # DETAILS: 
+  #
+  # non-date columns of `dat` may be `units` objects, in which case the unit is appended
+  # to the legend title. Cases of inconsistent units are resolved by converting everything
+  # to the units of the first `units`-type column. Mixtures of `units` and `numeric` type
+  # columns are accepted and plotted unchanged.
+  # 
+ 
+  # identify the date column
+  idx.date = which( names(dat) == 'date' )[1]
+  if( is.na(idx.date) ) idx.date = which( sapply(dat, class) == 'Date' )[1]
+  if( is.na(idx.date) ) stop('dat appears to have no date column') 
+  names(dat)[idx.date] = 'date'
+    
+  # parse the non-date columns, checking for units
+  idx.nondate = c( 1:ncol(dat) )[-idx.date]
+  ny = length(idx.nondate)
+  y.nm = names(dat)[idx.nondate]
+  y.hasunits = sapply(y.nm, function(x) inherits(dat[[x]], 'units'))
+  
+  # assign default units string (empty), then handle columns with units as needed
+  ysuffix = ''
+  if( sum(y.hasunits) > 0 )
+  {
+    # extract units as strings and covert to first type as needed
+    y.units = sapply(y.nm[y.hasunits], function(x) as.character( units(dat[[x]]) ) )
+    idx.match = y.units == y.units[1]
+    if( !all(idx.match) )
+    {
+      # unit conversion of mismatches
+      for( nm in names(idx.match)[!idx.match] )
+      {
+        dat[[nm]] = set_units(dat[[nm]], y.units[1], mode='standard')
+      }
+    }
+    
+    # drop units from df now that everything is matching (non-unit columns not modified!)
+    dat = drop_units(dat)
+    ysuffix = paste0('(', y.units[1], ')')
+    
+  }
+  
+  # set default colours as needed, checking for palette strings
+  if( is.null(colors) ) colors = 'Temps'
+  if( length(colors) == 1 )
+  {
+    # assign hcl colour palettes (+ 1 to avoid errors on ny == 1 calls) 
+    if( colors %in% hcl.pals() ) { colors = hcl.colors(ny + 1, palette=colors)[-(ny + 1)] }
+    
+    # TODO: add more palette options here
+  }
+
+  # set default mappings as needed
+  if( is.null( names(colors) ) ) names(colors) = y.nm
+  
+  # set up the axis labels
+  ggp.axlab = labs(x = names(dat)[idx.date], y = paste(yaxis, ysuffix), color = '')
+
+  # create the ggplot line objects
+  ggp.line = lapply(y.nm, function(nm) geom_line(aes_(y=dat[[nm]], color=nm)) )
+  
+  # make the plot grob
+  ggp.out = ggplot(data=dat, aes(date)) +
+    geom_line(aes(y=0), color='grey50') + ggp.line +
+    theme_minimal() + ggp.axlab +
+    scale_color_manual(values=setNames(adjustcolor(colors, alpha.f=alph), y.nm)) +
+    guides(color = guide_legend(override.aes = list(size=1, alpha=1))) + 
+    theme(legend.position='top')
+  
+  return(ggp.out)
 }
 ```

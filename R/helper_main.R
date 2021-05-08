@@ -98,8 +98,7 @@ lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my
 #' of the contents. This function handles the construction of the table. To call up the table for
 #' a specific script, simply use `my_metadata(script.name)`.
 #' 
-my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, 
-                       data.dir='data', v=TRUE)
+my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data', v=TRUE)
 {
   # creates and/or adds to a data frame of metadata documenting a given script, and (optionally)
   # writes it to disk as a CSV file 
@@ -129,7 +128,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   # appear in `entries.list`.
   #
   # Existing CSV files are never modified unless `use.file` and `overwrite` are both TRUE. In this
-  # cse, if the CSV file does not already exist on disk it will be created. The default
+  # case if the CSV file does not already exist on disk it will be created. The default
   # `entries.list==NA`, combined with `overwrite=TRUE` and `use.file=TRUE` will overwrite the CSV
   # with a default placeholder - a table containing only a single row, which describes the CSV file
   # itself.
