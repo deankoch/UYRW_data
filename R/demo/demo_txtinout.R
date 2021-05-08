@@ -42,7 +42,7 @@ head(gage)
 
 # set up the SWAT+ project config folder location to use in the demo
 zip.path = here( qswat.meta['txtinout', 'file'] )
-demo.dir = file.path( here(demo.subdir), gsub( '.zip', '', basename(zip.path) ) )
+demo.dir = file.path( demo.subdir, gsub( '.zip', '', basename(zip.path) ) )
 
 # store filenames created by this script
 files.towrite = list(
@@ -50,6 +50,12 @@ files.towrite = list(
   # directory for SWAT+ model files
   c(name='txtinout',
     file=demo.dir,
+    type='string',
+    description='directory for SWAT+ config files to use in demo'),
+  
+  # directory for SWAT+ model files
+  c(name='txtinout_bak',
+    file=file.path(demo.dir, 'backup_harg'),
     type='string',
     description='directory for SWAT+ config files to use in demo')
 )
@@ -59,7 +65,8 @@ txtinout.meta = my_metadata('demo_txtinout', files.towrite, overwrite=TRUE, data
 
 # unzip a fresh copy of "TxtInOut" to the demo folder
 print(demo.dir)
-unzip(zip.path, exdir=demo.dir, overwrite=TRUE)
+unlink(here(demo.dir), recursive=TRUE)
+unzip(zip.path, exdir=here(demo.dir), overwrite=TRUE)
 
 #' 
 #' ## managing SWAT+ configuration files in R
@@ -82,8 +89,7 @@ unzip(zip.path, exdir=demo.dir, overwrite=TRUE)
 #' created (ie. you don't have to use `qswat_run`)
 
 # assign the SWAT+ project directory. This builds a list of files in memory
-print(demo.dir)
-cio = rswat_cio(demo.dir)
+cio = rswat_cio( here(demo.dir) )
 
 #' Subsequent calls to rswat_cio() will list all config files in the project directory. eg here are the first
 #' few entries:
@@ -103,6 +109,9 @@ print(dir.backup)
 
 # restore the backup we just made
 opath = rswat_copy(from=dir.backup, overwrite=TRUE, quiet=TRUE)
+
+# delete the backup (we already have a zipped copy elsewhere)
+unlink(dir.backup, recursive=TRUE)
 
 #' To load a config file, pass its filename to `rswat_open` eg. the code below displays the first few rows
 #' from the SWAT+ aquifer parameters file, "aquifer.aqu"
@@ -302,6 +311,9 @@ rswat_output(vname='rchrg') %>% print
 #' alternative output mode in SWAT+ to speed up simulations, then demonstrates some basics of SWAT+ model
 #' fitting in R.
 #' 
+#' Make a backup of the "TxtInOut" folder to pick up from later
+fout = rswat_copy(to=here( txtinout.meta['txtinout_bak', 'file'] ), fname='.', quiet=TRUE)
+
 
 #+ include=FALSE
 # Development code

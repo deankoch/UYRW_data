@@ -57,7 +57,7 @@ head(gage)
 ``` r
 # set up the SWAT+ project config folder location to use in the demo
 zip.path = here( qswat.meta['txtinout', 'file'] )
-demo.dir = file.path( here(demo.subdir), gsub( '.zip', '', basename(zip.path) ) )
+demo.dir = file.path( demo.subdir, gsub( '.zip', '', basename(zip.path) ) )
 
 # store filenames created by this script
 files.towrite = list(
@@ -65,6 +65,12 @@ files.towrite = list(
   # directory for SWAT+ model files
   c(name='txtinout',
     file=demo.dir,
+    type='string',
+    description='directory for SWAT+ config files to use in demo'),
+  
+  # directory for SWAT+ model files
+  c(name='txtinout_bak',
+    file=file.path(demo.dir, 'backup_harg'),
     type='string',
     description='directory for SWAT+ config files to use in demo')
 )
@@ -80,10 +86,11 @@ txtinout.meta = my_metadata('demo_txtinout', files.towrite, overwrite=TRUE, data
 print(demo.dir)
 ```
 
-    ## [1] "D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout"
+    ## [1] "data/demo/demo_big_c_nr_emigrant_txtinout"
 
 ``` r
-unzip(zip.path, exdir=demo.dir, overwrite=TRUE)
+unlink(here(demo.dir), recursive=TRUE)
+unzip(zip.path, exdir=here(demo.dir), overwrite=TRUE)
 ```
 
 ## managing SWAT+ configuration files in R
@@ -111,13 +118,7 @@ regardless of how it was created (ie. you don’t have to use `qswat_run`)
 
 ``` r
 # assign the SWAT+ project directory. This builds a list of files in memory
-print(demo.dir)
-```
-
-    ## [1] "D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout"
-
-``` r
-cio = rswat_cio(demo.dir)
+cio = rswat_cio( here(demo.dir) )
 ```
 
     ## setting `ciopath` to D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout/file.cio 
@@ -132,12 +133,12 @@ cio %>% head
 ```
 
     ##              file      group              size            modified
-    ## 1        time.sim simulation 0.168 [kilobytes] 2021-05-08 15:16:19
-    ## 2       print.prt simulation 3.389 [kilobytes] 2021-05-08 15:16:19
-    ## 3      object.cnt simulation 0.577 [kilobytes] 2021-05-08 15:16:19
-    ## 4       codes.bsn      basin 0.599 [kilobytes] 2021-05-08 15:16:19
-    ## 5  parameters.bsn      basin 1.296 [kilobytes] 2021-05-08 15:16:19
-    ## 6 weather-sta.cli    climate 3.622 [kilobytes] 2021-05-08 15:16:19
+    ## 1        time.sim simulation 0.168 [kilobytes] 2021-05-08 16:07:03
+    ## 2       print.prt simulation 3.389 [kilobytes] 2021-05-08 16:07:03
+    ## 3      object.cnt simulation 0.577 [kilobytes] 2021-05-08 16:07:03
+    ## 4       codes.bsn      basin 0.599 [kilobytes] 2021-05-08 16:07:03
+    ## 5  parameters.bsn      basin 1.296 [kilobytes] 2021-05-08 16:07:03
+    ## 6 weather-sta.cli    climate 3.622 [kilobytes] 2021-05-08 16:07:03
 
 Each row of `cio` is a file containing a group of model parameters.
 Before changing anything it’s a good idea to have a backup. `rswat_copy`
@@ -151,7 +152,7 @@ dir.backup = dirname(path.backup[1])
 print(dir.backup)
 ```
 
-    ## [1] "D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout/_rswat_backup_file11085b867d16"
+    ## [1] "D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout/_rswat_backup_file9942b63547a"
 
 to start over later, restore this copy by passing the backup directory
 path back to `rswat_copy`
@@ -159,6 +160,9 @@ path back to `rswat_copy`
 ``` r
 # restore the backup we just made
 opath = rswat_copy(from=dir.backup, overwrite=TRUE, quiet=TRUE)
+
+# delete the backup (we already have a zipped copy elsewhere)
+unlink(dir.backup, recursive=TRUE)
 ```
 
 To load a config file, pass its filename to `rswat_open` eg. the code
@@ -171,10 +175,10 @@ cio %>% filter( grepl('aqu', file) ) %>% print
 ```
 
     ##              file   group               size            modified
-    ## 1     aquifer.con connect 13.793 [kilobytes] 2021-05-08 15:16:19
-    ## 2     initial.aqu aquifer  0.321 [kilobytes] 2021-05-08 15:16:19
-    ## 3     aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-08 15:16:19
-    ## 4 aqu_catunit.ele regions  5.165 [kilobytes] 2021-05-08 15:16:19
+    ## 1     aquifer.con connect 13.793 [kilobytes] 2021-05-08 16:07:03
+    ## 2     initial.aqu aquifer  0.321 [kilobytes] 2021-05-08 16:07:03
+    ## 3     aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-08 16:07:03
+    ## 4 aqu_catunit.ele regions  5.165 [kilobytes] 2021-05-08 16:07:03
 
 ``` r
 # this one contains the main process model parameters 
@@ -211,7 +215,7 @@ rswat_cio() %>% filter( file=='aquifer.aqu' )
 ```
 
     ##          file   group               size            modified nline nskip ntab nvar
-    ## 1 aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-08 15:16:25    51     0    1  936
+    ## 1 aquifer.aqu aquifer 13.481 [kilobytes] 2021-05-08 16:07:04    51     0    1  936
 
 The ‘nline’ column counts the total number of data rows in the file;
 ‘nskip’ indicates lines not understood by the parser (probably
@@ -234,73 +238,73 @@ print(cio)
 ```
 
     ##                 file          group                size            modified nline nskip ntab  nvar
-    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-08 15:16:25     1     0    1    10
-    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-08 15:16:25    46     0    5   223
-    ## 3         object.cnt     simulation   0.577 [kilobytes] 2021-05-08 15:16:25     1     0    1    42
-    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-08 15:16:25     1     0    1    48
-    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-08 15:16:25     1     0    1    88
-    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-08 15:16:25    16     0    1   153
-    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-08 15:16:25   223    16   16  2992
-    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-08 15:16:25    16     0    1    17
-    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-08 15:16:25    16     0    1    17
-    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-08 15:16:25    16     0    1    17
-    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-08 15:16:25    16     0    1    17
-    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-08 15:16:25    50     0    1   663
-    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-08 15:16:25    50     0    1  1479
-    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-08 15:16:25    51     0    1  1092
-    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-08 15:16:25    25     0    1   442
-    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-08 15:16:25    25     0    1   442
-    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-08 15:16:25     1     0    1    14
-    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-08 15:16:25     1     0    1    80
-    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-08 15:16:25    25     0    1   156
-    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-08 15:16:25    25     0    1   624
-    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-08 15:16:25    50     0    1   204
-    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-08 15:16:25    50     0    1   306
-    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-08 15:16:25    50     0    1   306
-    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-08 15:16:25    50     0    1   510
-    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-08 15:16:25    25     0    1   156
-    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-08 15:16:25    25     0    1   494
-    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-08 15:16:25    25     0    1   104
-    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-08 15:16:25     1     0    1    14
-    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-08 15:16:25    51     0    1   936
-    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-08 15:16:25    50     0    1   765
-    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-08 15:16:25   100     0    1   606
-    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-08 15:16:25    50     0    1   204
-    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-08 15:16:25     1     0    1    18
-    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-08 15:16:25     2     0    1    84
-    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-08 15:16:25     2     0    1    18
-    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-08 15:16:25     3     0    1    36
-    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-08 15:16:25     1     0    1    18
-    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-08 15:16:25   256     0    1 13878
-    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-08 15:16:25    59     0    1   480
-    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-08 15:16:25    78     0    1   553
-    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-08 15:16:25   233     0    1  3510
-    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-08 15:16:25     9     0    1   130
-    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-08 15:16:25    26     0    1   324
-    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-08 15:16:25     1     0    1    18
-    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-08 15:16:25    14     0    1    90
-    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-08 15:16:25    12     0    1    91
-    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-08 15:16:25     4     0    1    45
-    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-08 15:16:25    12     0    1   130
-    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-08 15:16:25     3     0    1    16
-    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-08 15:16:25     1     0    1     8
-    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-08 15:16:25     5     0    1    84
-    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-08 15:16:25    52     0    1   424
-    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-08 15:16:25    38     0    1   156
-    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-08 15:16:25    20     0    1   105
-    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-08 15:16:25   184     1    1   921
-    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-08 15:16:25    10     9    1   106
-    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-08 15:16:25     1     0    1    14
-    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-08 15:16:25     1     0    1    40
-    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-08 15:16:25   150     0    1  3171
-    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-08 15:16:25     1     0    1    26
-    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-08 15:16:25    NA    NA   NA    NA
-    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-08 15:16:25    NA    NA   NA    NA
-    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-08 15:16:25    NA    NA   NA    NA
-    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-08 15:16:25    NA    NA   NA    NA
-    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-08 15:16:25    50     0    1   357
-    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-08 15:16:25    51     1    1   256
-    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-08 15:16:25    51     0    1   364
+    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-08 16:07:04     1     0    1    10
+    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-08 16:07:04    46     0    5   223
+    ## 3         object.cnt     simulation   0.577 [kilobytes] 2021-05-08 16:07:04     1     0    1    42
+    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-08 16:07:04     1     0    1    48
+    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-08 16:07:04     1     0    1    88
+    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-08 16:07:04    16     0    1   153
+    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-08 16:07:04   223    16   16  2992
+    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-08 16:07:04    16     0    1    17
+    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-08 16:07:04    16     0    1    17
+    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-08 16:07:04    16     0    1    17
+    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-08 16:07:04    16     0    1    17
+    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-08 16:07:04    50     0    1   663
+    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-08 16:07:04    50     0    1  1479
+    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-08 16:07:04    51     0    1  1092
+    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-08 16:07:04    25     0    1   442
+    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-08 16:07:04    25     0    1   442
+    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-08 16:07:04     1     0    1    14
+    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-08 16:07:04     1     0    1    80
+    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-08 16:07:04    25     0    1   156
+    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-08 16:07:04    25     0    1   624
+    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-08 16:07:04    50     0    1   204
+    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-08 16:07:04    50     0    1   306
+    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-08 16:07:04    50     0    1   306
+    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-08 16:07:04    50     0    1   510
+    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-08 16:07:04    25     0    1   156
+    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-08 16:07:04    25     0    1   494
+    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-08 16:07:04    25     0    1   104
+    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-08 16:07:04     1     0    1    14
+    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-08 16:07:04    51     0    1   936
+    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-08 16:07:04    50     0    1   765
+    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-08 16:07:04   100     0    1   606
+    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-08 16:07:04    50     0    1   204
+    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-08 16:07:04     1     0    1    18
+    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-08 16:07:04     2     0    1    84
+    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-08 16:07:04     2     0    1    18
+    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-08 16:07:04     3     0    1    36
+    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-08 16:07:04     1     0    1    18
+    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-08 16:07:04   256     0    1 13878
+    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-08 16:07:04    59     0    1   480
+    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-08 16:07:04    78     0    1   553
+    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-08 16:07:04   233     0    1  3510
+    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-08 16:07:04     9     0    1   130
+    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-08 16:07:04    26     0    1   324
+    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-08 16:07:04     1     0    1    18
+    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-08 16:07:04    14     0    1    90
+    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-08 16:07:04    12     0    1    91
+    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-08 16:07:04     4     0    1    45
+    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-08 16:07:04    12     0    1   130
+    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-08 16:07:04     3     0    1    16
+    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-08 16:07:04     1     0    1     8
+    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-08 16:07:04     5     0    1    84
+    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-08 16:07:04    52     0    1   424
+    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-08 16:07:04    38     0    1   156
+    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-08 16:07:04    20     0    1   105
+    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-08 16:07:04   184     1    1   921
+    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-08 16:07:04    10     9    1   106
+    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-08 16:07:04     1     0    1    14
+    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-08 16:07:04     1     0    1    40
+    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-08 16:07:04   150     0    1  3171
+    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-08 16:07:04     1     0    1    26
+    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-08 16:07:04    NA    NA   NA    NA
+    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-08 16:07:04    NA    NA   NA    NA
+    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-08 16:07:04    NA    NA   NA    NA
+    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-08 16:07:04    NA    NA   NA    NA
+    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-08 16:07:04    50     0    1   357
+    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-08 16:07:04    51     1    1   256
+    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-08 16:07:04    51     0    1   364
 
 The summary info is now available for most of the files (get even more
 detail by toggling `trim=FALSE`) and any variable names appearing among
@@ -504,7 +508,7 @@ fout = rswat_exec()
 ```
 
     ## 
-    ## >> finished (18.58 seconds runtime)
+    ## >> finished (18.33 seconds runtime)
 
 ``` r
 print(fout)
@@ -545,12 +549,12 @@ odf %>% select(-path) %>% head
 ```
 
     ##                file      name type step activated         group oid                  size            modified
-    ## 1   aquifer_day.txt   aquifer  prt  day      TRUE       AQUIFER  NA 36146.989 [kilobytes] 2021-05-08 15:16:52
-    ## 2  basin_ls_day.txt  basin_ls  prt  day      TRUE         BASIN  NA   378.442 [kilobytes] 2021-05-08 15:16:52
-    ## 3  basin_nb_day.txt  basin_nb  prt  day      TRUE         BASIN  NA   540.702 [kilobytes] 2021-05-08 15:16:52
-    ## 4  basin_pw_day.txt  basin_pw  prt  day      TRUE         BASIN  NA   675.708 [kilobytes] 2021-05-08 15:16:52
-    ## 5  basin_wb_day.txt  basin_wb  prt  day      TRUE         BASIN  NA   999.996 [kilobytes] 2021-05-08 15:16:52
-    ## 6 basin_aqu_day.txt basin_aqu  prt  day      TRUE BASIN_AQUIFER  NA   709.489 [kilobytes] 2021-05-08 15:16:52
+    ## 1   aquifer_day.txt   aquifer  prt  day      TRUE       AQUIFER  NA 36146.989 [kilobytes] 2021-05-08 16:07:33
+    ## 2  basin_ls_day.txt  basin_ls  prt  day      TRUE         BASIN  NA   378.442 [kilobytes] 2021-05-08 16:07:33
+    ## 3  basin_nb_day.txt  basin_nb  prt  day      TRUE         BASIN  NA   540.702 [kilobytes] 2021-05-08 16:07:33
+    ## 4  basin_pw_day.txt  basin_pw  prt  day      TRUE         BASIN  NA   675.708 [kilobytes] 2021-05-08 16:07:32
+    ## 5  basin_wb_day.txt  basin_wb  prt  day      TRUE         BASIN  NA   999.996 [kilobytes] 2021-05-08 16:07:33
+    ## 6 basin_aqu_day.txt basin_aqu  prt  day      TRUE BASIN_AQUIFER  NA   709.489 [kilobytes] 2021-05-08 16:07:32
 
 Output files can be loaded as R dataframes by specifying their filename
 
@@ -642,12 +646,12 @@ odf %>% select(-path) %>% head
 ```
 
     ##               file     name type  step activated   group oid                  size            modified
-    ## 1   aquifer_aa.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-08 15:17:02
-    ## 2  aquifer_day.txt  aquifer  prt   day      TRUE AQUIFER  NA 36146.989 [kilobytes] 2021-05-08 15:17:02
+    ## 1   aquifer_aa.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-08 16:07:43
+    ## 2  aquifer_day.txt  aquifer  prt   day      TRUE AQUIFER  NA 36146.989 [kilobytes] 2021-05-08 16:07:43
     ## 3  aquifer_mon.txt  aquifer  prt month     FALSE AQUIFER  NA        NA [kilobytes]                <NA>
-    ## 4   aquifer_yr.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-08 15:17:02
-    ## 5  basin_ls_aa.txt basin_ls  prt  year     FALSE   BASIN  NA     0.442 [kilobytes] 2021-05-08 15:17:02
-    ## 6 basin_ls_day.txt basin_ls  prt   day      TRUE   BASIN  NA   378.442 [kilobytes] 2021-05-08 15:17:02
+    ## 4   aquifer_yr.txt  aquifer  prt  year     FALSE AQUIFER  NA     0.739 [kilobytes] 2021-05-08 16:07:43
+    ## 5  basin_ls_aa.txt basin_ls  prt  year     FALSE   BASIN  NA     0.442 [kilobytes] 2021-05-08 16:07:43
+    ## 6 basin_ls_day.txt basin_ls  prt   day      TRUE   BASIN  NA   378.442 [kilobytes] 2021-05-08 16:07:43
 
 Notice the filenames list now includes entries with NA fields for
 ‘size’, ‘modified’ (and ‘path’, though it is not shown here). These
@@ -676,3 +680,9 @@ that in model fitting. The next script in this series,
 [demo\_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md),
 uses an alternative output mode in SWAT+ to speed up simulations, then
 demonstrates some basics of SWAT+ model fitting in R.
+
+Make a backup of the “TxtInOut” folder to pick up from later
+
+``` r
+fout = rswat_copy(to=here( txtinout.meta['txtinout_bak', 'file'] ), fname='.', quiet=TRUE)
+```
