@@ -271,20 +271,34 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # has multiple tables). Toggling `simplify==FALSE` will wrap the single-table case(s) in a
   # list, for consistency with the other cases.
   # 
-  # If `fname` is empty (the default), all non-ignored files are loaded. See `rswat_cio`, and
-  # its `ignore` argument.
+  # If `fname` is empty (the default) the function returns the result of `rswat_cio()`
+  # (a list of files in the TxtInOut directory).
   #
   # If `reload==TRUE`, the function call returns nothing but loads and parses all requested
   # files into memory, overwriting anything already there. This is useful if you need to reload
   # project data after it's been modified on disk by external programs.
   
-  # parse the `fname` argument, assigning all non-ignored files by default
+  # parse the `fname` argument, assigning all existing files by default
   cio = rswat_cio(trim=FALSE) %>% filter(exists) 
-  if( length(fname) == 0 ) fname = cio %>% filter(!ignored) %>% pull(file) 
+  listmode = length(fname) == 0
+  if(listmode) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
   
   # message if no filenames match input string
   if(nrow(cio.match) == 0) warning(paste('no matches for', paste(fname, collapse=', '))) 
+  
+  # exit if not loading anything - `rswat_open()` calls end here
+  if( (!reload) & listmode )
+  {
+    # trim the output from `rswat_cio(trim=FALSE)`
+    cio.out = cio %>% 
+      filter( !ignored ) %>% 
+      filter( exists ) %>% 
+      select( file, group, size, modified, nline)
+    
+    # finish
+    return(cio.out)
+  }
   
   # check what's been loaded into memory already, enter loading loop if required 
   idx.loaded = cio.match$file %in% names(.rswat$stor$data)
@@ -366,43 +380,32 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   }
 }
 
+# TODO: combine this with rswat_ofind
 #' search tool for SWAT+ config parameter text, names, and filenames
-rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=NULL, ignore=NULL)
+rswat_find = function(pattern=NULL, fuzzy=NA, trim=TRUE, include=NULL, ignore=NULL)
 {
   # ARGUMENTS:
   #
-  # `pattern`: (optional) character vector, regular expressions or literal string to match 
-  # `fuzzy`:  numeric, specifying match mode (see details)
-  # `intext`: logical, indicating to search parameter values in addition to names
+  # `pattern`: character vector, the string(s) to search for
+  # `fuzzy`:  numeric, specifying tolerance for approximate matches (see DETAILS)
   # `trim`: logical, whether to omit detailed metadata about character positions
   # `include`: (optional) character vector, filenames to include in searches
   # `ignore`: (optional) character vector, filenames to omit from searches
   #
   # RETURN VALUE:
   #
-  # A dataframe of information about SWAT+ names matching the search pattern.
+  # A dataframe of information about SWAT+ names matching the search pattern(s).
   #
   # DETAILS
   # 
-  # Returns metadata on matches of pattern with SWAT+ parameter names, and optionally
-  # (via `intext`) the text of the parameter values themselves.
-  #
+  # Returns metadata on matches of `pattern` with SWAT+ parameter names
   # If no pattern is supplied, the function returns information on all parameters in the 
   # subset of files determined by `include` and `ignore`. If `include` is supplied, only
   # results from those files are returned (default is all files). Argument `ignore` has
   # the opposite effect, and supercedes anything in `include`.
   #
-  # `fuzzy < 0` (the default) is for Perl-style regular expressions (see `base::grepl`),
-  # `fuzzy = 0` is for exact matches only, and `fuzzy > 0` includes approximate matches
-  # up to the specified (Levenshtein) distance (see `base::agrep`). The case (upper or
-  # lower) is ignored in approximate matching.
-  # 
-  # TODO: write some examples: eg.`pattern` matches an element
-  # of the 'name' column of a table, all parameters in that row are returned.
-  #
-  
-  # default empty string for pattern matches everything in perl mode
-  if( is.null(pattern) ) pattern = ''
+  # `fuzzy = NA` is for exact matches only, `fuzzy = 0` includes substring matches, and
+  # `fuzzy > 0` includes approximate substring matches. See `?rswat_match`.
   
   # default exclusion string (single space) matches nothing
   if( is.null(ignore) ) ignore =  ' '
@@ -411,78 +414,37 @@ rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=N
   if( is.null(include) ) include = rswat_cio()$file
   include = include[ ! include %in% ignore ]
   
-  # find indices of ignored and included files
-  idx.include = .rswat$stor$linedf$file %in% include
-  idx.ignore = .rswat$stor$linedf$file %in% ignore
+  # identify ignored and included files and build 
+  is.included = .rswat$stor$linedf$file %in% include
+  is.ignored = .rswat$stor$linedf$file %in% ignore
+  which.include = which(is.included & (!is.ignored) )
   
   # handle premature calls and other invalid uses
   err.msg = 'file metadata not found. Have you run rswat_cio and loaded a file?'
-  if( length(idx.ignore) == 0 ) stop(err.msg)
-  if( length(idx.include) == 0 ) stop('`include` is empty. Try omitting `ignore`')
-  if( all(idx.ignore) ) stop('all known files are listed in `ignore`')
+  if( length(is.ignored) == 0 ) stop(err.msg)
+  if( length(is.included) == 0 ) stop('`include` is empty. Try omitting `ignore`')
+  if( all(is.ignored) ) stop('all known files are listed in `ignore`')
+  
+  # copy the names list to search and pass it to matching function
+  name.all = .rswat$stor$linedf$name[which.include]
+  idx.out = unlist( rswat_match(pattern=pattern, charvec=name.all, fuzzy=fuzzy, index=TRUE) )
+  linedf.out = .rswat$stor$linedf[ which.include[idx.out], ]
+  
+  # finish if not tidying up output
+  if( !trim ) return(linedf.out)
 
-  # extract the column subsets needed for searching
-  name.all = .rswat$stor$linedf$name[idx.include]
-  n.name = length(name.all)
-  #file.all = .rswat$stor$linedf$file[idx.include]
-  
-  # initialize (optional) in-text match vectors of the right length
-  string.match = rep(FALSE, sum(idx.include))
-  if(intext) string.all = .rswat$stor$linedf$string[idx.include]
-  
-  # handle fuzzy matching
-  if(fuzzy > 0)
-  {
-    # `agrep` with `max.distance=fuzzy`
-    name.match = agrepl(tolower(pattern), tolower(name.all), max.distance=fuzzy)
-    if(intext) string.match = agrepl(tolower(pattern), tolower(string.all), max.distance=fuzzy)
-  }
+  # omit skipped lines, header lines, etc
+  linedf.out = linedf.out %>% filter( !is.na(i) )
 
-  # handle regexp
-  if(fuzzy < 0)
-  {
-    # `grepl` to find matches
-    name.match = grepl(pattern, name.all, perl=TRUE)
-    if(intext) string.match = grepl(pattern, string.all, perl=TRUE)
-  } 
+  # omit all but fist data row, filter 'name' columns
+  linedf.out = linedf.out %>% filter(i == 1) %>% filter(name != 'name')
   
-  # handle exact searches
-  if(fuzzy == 0)
-  {
-    # simple matching
-    name.match = name.all %in% pattern
-    if(intext) string.match = string.all %in% pattern
-  }
+  # multirow columns are represented with NAs in place of row index and string
+  linedf.out$i[linedf.out$dim > 1] = NA
+  linedf.out$string[linedf.out$dim > 1] = NA
   
-  # extract results
-  linedf.out = .rswat$stor$linedf[ which(idx.include)[name.match | string.match], ]
-  
-  # for human readability
-  if(trim)
-  {
-    # omit skipped lines, header lines, etc
-    linedf.out = linedf.out %>% filter( !is.na(i) )
-    
-    # extra trimming when not searching parameter values
-    if(!intext)
-    {
-      # omit all but fist data row, filter 'name' columns
-      linedf.out = linedf.out %>% filter(i == 1) %>% filter(name != 'name')
-      
-      # multirow columns are represented with NAs in place of row index and string
-      linedf.out$i[linedf.out$dim > 1] = NA
-      linedf.out$string[linedf.out$dim > 1] = NA
-    }
-    
-    # tidy output and finish
-    return( linedf.out %>% arrange(tabular, file, table) %>%
-             select(name, string, class, dim, file, table, i, j) )
-    
-  } else {
-    
-    # or just return the full table subset
-    return(linedf.out)
-  }
+  # tidy output and finish
+  linedf.out %>% select(name, string, class, dim, file, table, i, j)
 }
 
 #' write a parameter value to its config file
@@ -572,9 +534,9 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
     return()
     
   }
-  
+
   # grab a copy of the relevant lines descriptions for this file 
-  linedf = rswat_find(include=fname, intext=TRUE, trim=FALSE) %>% 
+  linedf = rswat_find(include=fname, trim=FALSE) %>% 
     filter(name %in% nm.head) %>% 
     filter(table == tablenum) %>% 
     arrange(j,i)
@@ -870,6 +832,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   return(dat)
 }
 
+# TODO: 
 #' search tool for SWAT+ output variable names
 rswat_ofind = function(pattern=NULL, fuzzy=-1, trim=TRUE)
 {
@@ -1059,7 +1022,12 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   if( overwrite & ( length(fname.overwrite) > 0 ) & (to == textio) )
   {
     # handle 'file.cio' replacements by refreshing files list
-    if('file.cio' %in% fname.overwrite) cio = rswat_cio(ciopath, trim=FALSE, quiet=TRUE)
+    if('file.cio' %in% fname.overwrite)
+    {
+      # maintain ignored files list
+      ignore = cio %>% filter(ignored) %>% pull(file)
+      cio = rswat_cio(ciopath, trim=FALSE, ignore=ignore, quiet=TRUE)
+    }
 
     # check for overwrites that coincide with currently loaded files and reload them (if any)
     fname.loaded = cio %>% filter( !is.na(ntab) ) %>% filter( !ignored )
@@ -1131,6 +1099,21 @@ rswat_rlines = function(txtpath, omit=1, nmax=-1L)
   
   # initialize temporary storage list for this file if necessary
   if(is.null(.rswat$stor$temp)) .rswat$stor$temp = list()
+  
+  # handle empty files
+  if( txt.n.full == 0  )
+  {
+    # initialize the table in memory with no data
+    .rswat$stor$temp[[fname]] = list(linedf=data.frame(string = character(0),
+                                                       line_num = integer(0), 
+                                                       field_num = integer(0),
+                                                       start_pos = integer(0),
+                                                       end_pos = integer(0)))
+    
+    # return nothing
+    return(invisible())
+    
+  }
   
   # build index of lines to parse then measure and strip any leading whitespace
   idx = ! 1:txt.n.full %in% omit
@@ -1211,6 +1194,9 @@ rswat_rtext = function(fname, yn=FALSE)
   s = .rswat$stor$temp[[fname]]$linedf$string
   s.n = length(s)
   
+  # quit if the file is empty
+  if( s.n == 0 ) return( invisible() )
+  
   # handle booleans
   if(!yn)
   {
@@ -1244,7 +1230,7 @@ rswat_rtext = function(fname, yn=FALSE)
     na.class = .rswat$stor$temp[[fname]]$linedf$class[is.na(s)]
     s.class[is.na(s)][!is.na(na.class)] = na.class[!is.na(na.class)]
   }
-  
+
   # coerce the appropriate type, writing directly to storage
   .rswat$stor$temp[[fname]]$values = lapply(1:s.n, function(x) as(s[x], s.class[x]) )
   
@@ -2061,6 +2047,8 @@ rswat_2char = function(value, linedf, quiet=FALSE)
 
 
 
+
+
 #' ## OUTPUT: functions for manipulating and cataloguing SWAT+ output files/variables
 #' 
 
@@ -2303,6 +2291,15 @@ rswat_oparse = function(fname=NULL, textio=NULL)
     # recursive calls to generate list of dataframes
     cat(paste('parsing', length(fname), 'SWAT+ output files...\n'))
     vdf.list = lapply(fname, function(f) rswat_oparse(f, textio) )
+    # DEBUGGING
+    #
+    # 
+    # for(f in fname)
+    # {
+    #   print(f)
+    #   x = rswat_oparse(f, textio) 
+    # }
+    
     
     # join into single dataframe and finish
     vdf = do.call(rbind, vdf.list)
@@ -2324,6 +2321,9 @@ rswat_oparse = function(fname=NULL, textio=NULL)
     # tidy up these temporary tables in package environment
     .rswat$stor$temp[[fname]] = list()
     .rswat$stor$txt[[fname]] = list()
+    
+    # return NULL and add nothing to database if the file is empty
+    if( nrow(linedf) == 0 ) return( NULL )
     
     # ... prt files have comments, headers, units; whereas OHG files just have headers
     is.prt = fname.ref$type == 'prt'
@@ -2656,10 +2656,6 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
     
   } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
   
-  # # create a temporary directory for backups
-  # tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
-  # my_dir(tdir)
-  
   # define files to back up
   fname.b = list.files(textio, include.dirs=FALSE)
   idx.obak = endsWith(fname.b, '.txt') | endsWith(fname.b, '.out')  | endsWith(fname.b, '.ohg')
@@ -2670,14 +2666,6 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   if( !quiet ) cat('backing up files... ')
   bpath = rswat_copy(fname=fname, overwrite=TRUE, quiet=quiet)
   bdir = dirname(bpath)[1]
-  
-  # # define paths for the original and backup copies
-  # restore.path = file.path(textio, fname)
-  # backup.path = file.path(tdir, fname)
-  # 
-  # # copy the files in a loop
-  # cat('backing up files... ')
-  # for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
   
   # adjust the simulation period
   rswat_time(nday)
@@ -2702,16 +2690,6 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   odir = file.path(textio, subdir)
   opath = rswat_copy(to=odir, fname=fname.new, overwrite=TRUE, quiet=quiet)
   unlink( file.path(textio, fname.new) )
-  
-  # # define absolute paths for the output files and their destinations
-  # dest.dir = file.path(textio, subdir)
-  # fpath.new = file.path(textio, fname.new)
-  # fpath.dest = file.path(dest.dir, fname.new)
-  # my_dir(dest.dir)
-  
-  # # copy the new files to subdirectory and delete the originals
-  # for(ii in seq_along(fpath.dest)) file.copy(fpath.new[ii], fpath.dest[ii], overwrite=TRUE)
-  # unlink(fpath.new)
   
   # restore backup files and delete backup directory
   if( !quiet ) cat('restoring backup... ')
@@ -3335,8 +3313,7 @@ qswat_read = function(qswat)
 }
 
 # plot various GIS components of a QSWAT+ project
-qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=NULL, spos=NULL, 
-                      legwd=0.2, addto=NULL)
+qswat_plot = function(dat, r=NULL, titles=NULL, pal=NULL, style='cont', breaks=NULL, spos=NULL, legwd=0.2, addto=NULL)
 {
   # 'dat': list, the qswat+ project data (output of qswat_read)
   # 'r': Raster, to plot in background (default is DEM)
@@ -3655,7 +3632,7 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
     # toggle all of the print options off and write this change to disk
     print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
     print.prt[[5]]['daily'] = 'y'
-    rswat_write(print.prt[[5]], preview=F, quiet=quiet)
+    rswat_write(print.prt[[5]], preview=FALSE, quiet=quiet)
   }
   
   # modify 'nyskip' as requested
@@ -3886,191 +3863,7 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
 
 
 
-
-
 #' ## MISC: miscellaneous and in-development functions
-
-#' returns an objective function whose argument is vector of parameter values, output is NSE
-my_objective = function(cal, gage, textio, quiet=TRUE)
-{
-  # ARGUMENTS:
-  # 
-  # `cal`: dataframe, the SWAT+ parameters to modify
-  # `gage`: dataframe, containing flow and date (see `my_gage_objective`)
-  # `textio`: character, path to the text I/O directory for the SWAT+ model 
-  # `quiet`: logical, suppresses console messages
-  #
-  # RETURN VALUE:
-  #
-  # Returns a function `f(x)` that computes the NSE score for a given parameter set (specified
-  # in `cal`), supplied in vector `x`, where errors are computed over the time series of flow
-  # data in `gage`.
-  #
-  # DETAILS:
-  #
-  # `cal` should be the output of one or several (row-binded) `rswat_find(..., trim=T)` calls,
-  # having columns for 'name', 'i', 'j', etc. It specifies n parameters of interest, around
-  # which an n-to-1 objective function, suitable for numerical optimizers, is constructed and
-  # returned. When calling this function, the order of the paramaters in `x` must match the
-  # order in `cal` (there is no checking of names etc). 
-  #
-  # On multirow tables, `i=NA` in `cal` is taken to mean "write all rows of this parameter
-  # column". This is the default (trim=TRUE) return value for rswat_find when a match appears
-  # in a multirow table. To specify individual rows, either use rswat_find(..., trim=FALSE)
-  # or set `i` manually as needed.
-  #
-  
-  # scan for non-numerics
-  idx.nn = cal$class != 'numeric'
-  if( any(idx.nn) )
-  {
-    # print a warning
-    msg.info = paste(cal$name[idx.nn], collapse=', ')
-    warning(paste('removed non-numeric entries from cal:', msg.info))
-    
-    # remove the non-numeric entries
-    cal = cal[!idx.nn,]
-  }
-  
-  # length check
-  if( nrow(cal) == 0 ) stop('no numeric parameters found in cal')
-  
-  # fetch the file data - a copy of this (and `cal`) gets baked in to the function below
-  cal.fn = setNames(nm=unique(cal$file))
-  n.fn = length(cal.fn)
-  cal.values = lapply(cal.fn, rswat_open)
-  
-  # R makes a copy of the above objects as well as cal and gage upon defining the function
-  # below. This is everything we need for optimization baked in a tidy single-argument function
-  # TODO: optimize and check for issues related to function closure and lazy evaluation
-  
-  # begin definition of return function
-  function(x=NULL, refresh=FALSE, draw=FALSE)
-  {
-    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
-    # order as they appeared in `cal`, when this function was created (via a call to
-    # `my_objective`). To view this order, call the function without arguments.
-    
-    # TODO: write up arguments and return sections
-    
-    # refresh cal.values to get any modifications since the function was defined
-    if(refresh) cal.values = lapply(cal.fn, rswat_open)
-    
-    # if user supplied no parameter values, return the parameter info dataframe
-    if( is.null(x) )
-    {
-      # initialize a new column in cal for values and fill it by looping over filenames
-      cal = cal %>% select( -c(string, class, table) ) %>% mutate(value=NA)
-      for(fn in cal.fn)
-      {
-        # loop over cal entries for this file
-        fn.idx = which( cal$file == fn )
-        for(idx.par in 1:length(fn.idx))
-        {
-          # index in the cal.values table
-          i = cal$i[ fn.idx[idx.par] ]
-          j = cal$j[ fn.idx[idx.par] ]
-          
-          # extract the values, making list of unique ones in multivariate case
-          if( !is.na(i) ) par.value = unique(cal.values[[fn]][i,j])
-          if( is.na(i) ) par.value = unique(cal.values[[fn]][,j])
-          
-          # write the value if unique (non-uniqueness indicated by NA)
-          if( length(par.value) == 1 ) cal$value[ fn.idx[idx.par] ] = par.value
-        }
-      }
-      
-      # tidy and finish 
-      return( cal %>% select(value, name, file, dim, everything()) )
-    }
-    
-    # user supplied parameter values: loop over filenames to write them
-    for(fn in cal.fn)
-    {
-      # grab the subset of `cal` and replacement values in x
-      fn.idx = which( cal$file == fn )
-      fn.x = x[fn.idx]
-      
-      # loop over cal entries for this file
-      for(idx.par in 1:length(fn.idx))
-      {
-        # index in the cal.values table
-        i = cal$i[ fn.idx[idx.par] ]
-        j = cal$j[ fn.idx[idx.par] ]
-        
-        # make the replacement
-        if( !is.na(i) ) cal.values[[fn]][i,j] = fn.x[idx.par]
-        if( is.na(i) ) cal.values[[fn]][,j] = fn.x[idx.par]
-      }
-      
-      # finished with the table, write the changes
-      rswat_write(cal.values[[fn]], fname=fn, preview=FALSE, quiet=quiet)
-    }
-    
-    # TODO: memoize so we can skip this?
-    # run the simulation and return the objective function value
-    return(my_gage_objective(gage, textio, quiet=quiet, draw=draw))
-  }
-}
-
-# TODO: work on this
-#' set default bounds for a calibration parameter using data in cal_parms.cal
-my_bounds = function(param, fuzzy=TRUE)
-{
-  # initialize defaults and open cal_parms.cal
-  bds.out = c(-Inf, Inf)
-  bds.all = rswat_open('cal_parms.cal')
-  
-  # find exact matches
-  idx.exact = bds.all$name == param
-  if(any(idx.exact))
-  {
-    # finished
-    return(c(bds.all$abs_min[idx.exact], bds.all$abs_max[idx.exact]))
-    
-  } else {
-    
-    # TODO: vectorize (or at least put in a loop)
-    warn.msg = paste(param, 'had no exact matches in cal_parms.cal.')
-    
-    # handle fuzzy matching
-    if(fuzzy)
-    {
-      # try fuzzy matching at different levels (Levenshtein edits distances)
-      idx.f1 = agrep(param, bds.all$name, max.distance=1)[1]
-      idx.f2 = agrep(param, bds.all$name, max.distance=2)[1]
-      idx.f3 = agrep(param, bds.all$name, max.distance=3)[1]
-      
-      # fuzzy level 1
-      if( !is.na(idx.f1 > 1) )
-      {
-        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f1], '(distance=1)'))
-        bds.out = c(bds.all$abs_min[idx.f1], bds.all$abs_max[idx.f1])
-        return(bds.out)
-      }
-      
-      # fuzzy level 2
-      if( !is.na(idx.f2 > 1) )
-      {
-        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f2], '(distance=2)'))
-        bds.out = c(bds.all$abs_min[idx.f2], bds.all$abs_max[idx.f2])
-        return(bds.out)
-      }
-      
-      # fuzzy level 3
-      if( !is.na(idx.f3 > 1) )
-      {
-        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f3], '(distance=3)'))
-        bds.out = c(bds.all$abs_min[idx.f3], bds.all$abs_max[idx.f3])
-        return(bds.out)
-        
-      }
-    } else { warning(paste(warn.msg, 'Reverting to -Inf, Inf')) }
-    
-  }
-  
-  return(bds.out)
-}
 
 #' write weather input text files for QSWAT and SWAT2012
 my_swat_wmeteo = function(wdat, exdir, form='qswat', include=logical(0), suffix='', quiet=FALSE)
@@ -4342,14 +4135,854 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
   return(nse)
 }
 
+#' search character vectors, ordering results by string distance
+rswat_match = function(pattern=NULL, charvec=NULL, fuzzy=NA, index=TRUE)
+{
+  # ARGUMENTS:
+  #
+  # `pattern`: character, the search pattern 
+  # `charvec`: character vector, the data to sort through for matches
+  # `fuzzy`:  numeric, specifying tolerance for approximate matches (see DETAILS)
+  # `index`: logical, specifying to return the indice of matches instead of the elements
+  #
+  # RETURN VALUE:
+  #
+  # When `index=TRUE` (the default), an integer vector indexing `charvec` (or a subset), or
+  # a list of such vectors of the same length as `pattern`. When `index=FALSE`, the function
+  # returns the (ordered) subset of matching elements in charvec, ie `charvec[rswat_match(...)]` 
+  #
+  # DETAILS
+  # 
+  # `fuzzy = NA` is for exact matches only, `fuzzy = 0` includes substring matches, and
+  # `fuzzy > 0` includes approximate substring matches up to specified Levenstein distance
+  # (see `base::agrep`). The case (upper or lower) is ignored in approximate matching.
+  #
+  # If `fuzzy < -Inf` the function iteratively searches with fuzzy = 1, 2, 3, ... until a match
+  # is found. Negative (but bounded) `fuzzy` calls set a maximum value `abs(fuzzy)` for this mode.
+  #
+  # When `pattern` is not supplied, the function matches everything. When `charvec` is not
+  # supplied, the function searches among known SWAT+ config variable names (if available)
+  
+  # handle default `charvec`
+  if( is.null(charvec) )
+  {
+    # print message
+    cat('searching SWAT+ config variable names...\n')
+    charvec = rswat_find() %>% pull(name) 
+  }
+  
+  # handle vector input
+  if(length(pattern) > 1) 
+  {
+    # recursive call to run the function over all strings in `pattern`
+    list.out = lapply(pattern, function(x) rswat_match(x, charvec, fuzzy, index) ) 
+    
+    # return a named list
+    return( setNames(list.out, pattern))
+  }
 
+  # locate exact matches
+  idx.match = charvec %in% pattern
+  
+  # default empty string for pattern matches everything
+  if( is.null(pattern) ) idx.match = rep(TRUE, length(idx.match))
+  
+  # integer indices of matches
+  int.out = which(idx.match)
+  
+  # handle approximate match requests
+  if( !is.na(fuzzy) )
+  {
+    # positive `fuzzy` sets the maximum Levenstein distance  
+    if( !(fuzzy < 0) )
+    {
+      # convert to lowercase
+      lpattern = tolower(pattern)
+      lcharvec = tolower(charvec)
+      
+      # find substring matches (in lowercase), order by length, and append to results
+      idx.sin = grepl(lpattern, lcharvec, perl=TRUE) & ( !idx.match )
+      int.sin = which(idx.sin)[ order(nchar(lcharvec[idx.sin])) ]
+      int.out = c(int.out, int.sin)
+      
+      # find approximate substring matches (`agrep` with `max.distance=fuzzy`)
+      if(fuzzy > 0) 
+      {
+        # fuzzy match, but don't include results from above 
+        idx.fin = agrepl(lpattern, lcharvec, max.distance=fuzzy) & ( !idx.match ) & ( !idx.sin )
+        int.fin = which(idx.fin)[ order( adist( lpattern, lcharvec[idx.fin] ) ) ]
+        
+        # append to results
+        int.out = c(int.out, int.fin)
+      }
+    }
+    
+    # negative `fuzzy` indicates to iterate up to a maximum fuzziness until a match is found
+    if( ( fuzzy < 0 ) & ( !any(idx.match) ) )
+    {
+      # sensible fuzziness levels are between 1 and the max nchar among possible matches
+      fuzz.max = min( max(1, round(abs(fuzzy))), max( nchar( c(pattern, charvec) ), na.rm=TRUE ) )
+      
+      # initialize indexing variables for the loop
+      fuzz.test = 0
+      match.n = 0
+      
+      # iterate until a match is found, or we reach a maximum 
+      while( match.n == 0 )
+      {
+        # increment fuzzy level
+        fuzz.test = fuzz.test + 1
+        
+        # look for matches at a given fuzzy level and count results
+        match.int = match.test = rswat_match(pattern, charvec, fuzzy=fuzz.test, index=TRUE)
+        match.n = length(match.int)
+        
+        # exit when no more matches are possible
+        if(fuzz.test == fuzz.max) match.n = 1
+      }
+      
+      # copy match indices to output vector (if any)
+      int.out = c(int.out, match.int)
+    }
+  }
+  
+  # return integer indices of matches or, if requested, the matching elements 
+  if(index) return(int.out)
+  return( charvec[int.out] )
+}
+
+#' parse a page from the I/O pdf (requires `pdftools`)
+rswat_pdf_parse = function(pdftext, ragged=FALSE, header=NULL, section=NA)
+{
+  # Line-by-line parsing of pages from SWAT+ IO PDF document using `pdftools` output
+  #
+  # ARGUMENTS
+  #
+  # `pdftext`: one page of (newline delimited) output from `pdftools::pdf_text` 
+  # `ragged`: whether to check for a continued table appearing at the top
+  # `header`: character vector of length 2, a pair of keywords for identifying tables
+  # `section`: character, default value for section
+  #
+  # RETURN:
+  #
+  # A dataframe with nrow == length(pdftext) summarizing the table(s) found in
+  # the supplied page of text lines. 
+  #
+  #
+  # DETAILS:
+  #
+  # This is an internal function meant to be called by `rswat_pdf_open`
+  #
+  # Tables are identified as starting immediately after line(s) containing the two
+  # (whitespace delimited) fields supplied in `header`. Column  spacing is determined from
+  # the spacing in the header line(s). 
+  #
+  # In `ragged` mode, the first line(s) of `pdftext` are assumed to belong to an earlier
+  # table, for which there is (possibly) no header line. The `section` argument allows
+  # an earlier section name to be carried forward to these tail-end table values
+  #
+
+  # handle empty pages
+  if( length(pdftext) == 0 ) return(NULL)
+  
+  # this default should work for parsing SWAT+ IO docs
+  if( is.null(header) ) header = c('Variable name', 'Definition')
+
+  # regex for table header lines 
+  regex.thead = paste0('^(\\s*)(', header[1], ')(\\s+)(', header[2],')$')
+
+  # regex for page header lines (two forms)
+  regex.l = '^(\\s*[0-9]+\\s*SWAT\\+)'
+  regex.r = '^(\\s*SWAT\\+ INPUTS\\s*[0-9]+)'
+  regex.phead = paste0(regex.l, '|', regex.r)
+  
+  # regex for section headers (all-caps with period and extension)
+  regex.section = '^[A-Z]+[-_]*[A-Z]+\\.[A-Z]{2,3}$'
+  
+  # BUGFIX: exceptions nonstandard header formats
+  regex.exceptions = c('^recall\\_day\\.rec$')
+  regex.section = paste0('(', paste(c(regex.section, regex.exceptions), collapse=')|('), ')')
+  
+  # regex for variable names (all-caps, assume first character is alphabetical)
+  regex.fname = '([A-Z][A-Z0-9]*_*[A-Z0-9]+)'
+  
+  # allow the following suffixes to appear after a variable declaration (eg. for soils.sol)
+  nm.suffix = c(', cont\\.', '\\(layer \\#\\)', '\\(top\\slayer\\)')
+  regex.suffix =  paste0('((', paste(nm.suffix, collapse=')|('), '))')
+  regex.fname = paste0(regex.fname, regex.suffix, '?')
+  
+  # regex for footer lines
+  regex.foot = '^\\s+[0-9]+$'
+  
+  # detect and remove page header line (missing on some pages)
+  is.header = grepl(regex.phead, pdftext[1])
+  if(is.header) pdftext = pdftext[-1]
+  if( length(pdftext) == 0 ) return(NULL)
+  
+  # detect and remove page footer line (missing on most pages)
+  is.header = grepl(regex.phead, pdftext[1])
+  if( grepl(regex.foot, last(pdftext)) ) pdftext = pdftext[-length(pdftext)]
+  if( length(pdftext) == 0 ) return(NULL)
+  
+  # make dataframe to store text metadata for the trimmed page
+  page.n = length(pdftext)
+  page.df = data.frame(line = 1:length(pdftext),
+                       section = NA,
+                       table = FALSE,
+                       t_head = grepl(regex.thead, pdftext),
+                       nm_start = NA,
+                       nm = NA,
+                       desc_start = NA,
+                       desc = NA)
+  
+  # parse first table (if there is one)
+  if( any(page.df$t_head) )
+  {
+    # integer row number of first data line and a guess for the last one 
+    ln.min = which(page.df$t_head)[1] + 1
+    ln.max = which(page.df$t_head)[2] - 1
+    if( is.na(ln.max) ) ln.max = page.n
+    
+    # expected column positions based on table header line
+    text.header = pdftext[ ln.min - 1 ]
+    nm.pos = regexpr(header[1], text.header)[1]
+    desc.pos = regexpr(header[2], text.header)[1]
+    ln.desc = integer(0)
+    
+    # data row parsing (skipped when table header is on final line)
+    if( !( ln.max < ln.min ) )
+    {
+      # lines declaring a variable name should start with whitespace
+      text.nm = substr(pdftext[ln.min:ln.max], 1, desc.pos-1)
+      regex.nm = paste0('(^\\s{', nm.pos - 1, '})', regex.fname, '(\\s*)$')
+      is.nm = grepl(regex.nm, text.nm)
+
+      # extract names and copy to output dataframe
+      ln.nm = c(ln.min:ln.max)[ is.nm ]
+      page.df$nm[ page.df$line %in% ln.nm ] = gsub(' ', '', text.nm[is.nm])
+      page.df$nm_start[ page.df$line %in% ln.nm ] = nm.pos
+      
+      # regex for description lines without a variable name
+      regex.desc = paste0('(^\\s{', desc.pos - 1, '})')
+      is.desc = is.nm | grepl(regex.desc, pdftext[ln.min:ln.max]) 
+      
+      # include empty lines that are sometimes interleaved with table entries
+      is.desc = is.desc | ( nchar(pdftext[ln.min:ln.max]) == 0 )
+      
+      # extract descriptions and copy to output dataframe
+      ln.desc = c(ln.min:ln.max)[ is.desc ]
+      text.desc = substr(pdftext[ln.desc], desc.pos, nchar(pdftext[ln.desc]))
+      page.df$desc[ page.df$line %in% ln.desc ] = text.desc
+      page.df$desc_start[ page.df$line %in% ln.desc ] = desc.pos
+    }
+
+    # flag table-related lines
+    page.df$table[ page.df$line %in% c(ln.desc, ln.min-1) ] = TRUE
+    
+    # parse any remaining tables in recursive call
+    if( sum(page.df$t_head) > 1 )
+    {
+      # identify the unprocessed lines, parse them
+      ln.remaining = page.df$line[ !( page.df$line < which(page.df$t_head)[2] ) ] 
+      df.remaining = rswat_pdf_parse(pdftext[ln.remaining], header=header)
+      df.remaining$line = ln.remaining
+      
+      # join with the rest
+      idx.join = page.df$line %in% ln.remaining
+      page.df[idx.join,] = df.remaining
+    }
+  }
+  
+  # parse section headers, ignoring known tables
+  ln.unknown = page.df %>% filter( !table ) %>% pull(line)
+  is.section = grepl(regex.section, pdftext[ln.unknown])
+  
+  # if we find anything, add section attribute
+  if( any(is.section) )
+  {
+    # copy line numbers of section headers and pull the strings
+    ln.section = ln.unknown[is.section]
+    text.section = pdftext[ln.section]
+    
+    # loop over section line numbers
+    for( idx.ln in seq_along(ln.section) ) 
+    {
+      # set all subsequent lines to have this section label
+      ln.start = ln.section[idx.ln]
+      page.df$section[ !( page.df$line < ln.start ) ] = text.section[idx.ln]
+    }
+  }
+  
+  # as needed, parse tail of previous table
+  if( ragged & !page.df$table[1] & is.na(page.df$section[1]) )
+  {
+    # set up line numbers to parse
+    ln.min = min(page.df$line)
+    ln.max = which( page.df$t_head | !is.na(page.df$section) )[1] - 1
+    if( is.na(ln.max) ) ln.max = max(page.df$line)
+    
+    # regex for lines that appear to be a name declaration
+    regex.ragnm1 = paste0('(^\\s*', regex.fname, '\\s{2,})')
+    regex.ragnm2 = paste0('(^\\s+', regex.fname, ')')
+    is.nm = grepl(paste0(regex.ragnm1, '|', regex.ragnm2), pdftext[ln.min:ln.max])
+    
+    # bail if we can't find any by calling the function again with `ragged=FALSE`
+    if( !any(is.nm) ) return( rswat_pdf_parse(pdftext, header=header, section=section) )
+
+    # get name column start position from first match
+    ln.nm = c(ln.min:ln.max)[is.nm][1]
+    nm.pos = regexpr('[A-Z]', pdftext[ln.nm])[[1]]
+    
+    # find start position of descriptions from above line (in well-behaved case)
+    text.desc = substr(pdftext[ln.nm], nm.pos, nchar(pdftext[ln.nm]))
+    offset.desc = attr(gregexpr(regex.ragnm1, text.desc)[[1]],'match.length')
+    desc.pos = nm.pos + offset.desc
+
+    # BUGFIX: handle misaligned descriptions appearing before first name declaration
+    if( ln.nm > ln.min ) desc.pos = 1 + attr(regexpr('^\\s+', pdftext[ln.min]), 'match.length')
+
+    # proceed only if we can match a header description
+    is.unmatched = desc.pos < nm.pos + 1
+    if( is.unmatched ) return( rswat_pdf_parse(pdftext, header=header, section=section) )
+    
+    # build a dummy header line so we can parse table by a recursive call
+    header.dummy = c('XxXx', 'YyYy')
+    ws.pre = ''
+    if( nm.pos > 1 ) ws.pre = paste(rep(' ', nm.pos-1), collapse='')
+    ws.delim = paste(rep(' ', desc.pos - nm.pos - nchar(header.dummy[1]) ), collapse='')
+    text.header = paste0(ws.pre, header.dummy[1], ws.delim, header.dummy[2])
+    
+    # recursive call to get table data (removing the dummy header and matching line numbers)
+    pdftext.sub = c(text.header, pdftext[ln.min:ln.max])
+    ragged.out = rswat_pdf_parse(pdftext.sub, header=header.dummy, section=section )[-1,]
+    ragged.out$line = ln.min:ln.max
+    
+    # join with existing output table
+    idx.join = page.df$line %in% c(ln.min:ln.max)
+    page.df[idx.join,] = ragged.out
+
+  }
+  
+  # identify name declarations that have a misaligned description 
+  is.shifted = !is.na(page.df$nm) & ( page.df$desc == '' ) & c(FALSE, !is.na(page.df$nm)[-1])
+  
+  # shift the description lines to the correct place (down one line)
+  if( any(is.shifted) )
+  {
+    # copy description from line above, then wipe description at old location
+    page.df$desc[which(is.shifted)] = page.df$desc[which(is.shifted) - 1]
+    page.df$desc[which(is.shifted) - 1] = ''
+  }
+
+  # omit the suffixes that appear in certain variable name declarations
+  idx.nm = !is.na(page.df$nm)
+  regex.suffix = '(,cont\\.)|(\\(layer\\#\\))|(\\(toplayer\\))'
+  if( any( idx.nm ) ) page.df$nm[idx.nm] = gsub(regex.suffix, '', page.df$nm[idx.nm])
+  
+  # increment line numbers if we removed a header at the beginning
+  if( is.header ) page.df$line = page.df$line + 1
+  
+  # set default section header, then finish
+  page.df$section[ is.na(page.df$section) ] = section
+  return(page.df)
+}
+
+#' load and parse the SWAT+ I/O documentation PDF (requires `pdftools`)
+rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE)
+{
+  # ARGUMENTS:
+  # 
+  # `pdfpath`, character, the absolute path to the IO PDF document
+  # `reload`, logical, whether to proceed if the file has been loaded already
+  # `quiet`, logical, whether to suppress console output
+  #
+  # RETURN:
+  # 
+  # returns nothing but writes the following entries to the list `.rswat$docs` (in package
+  # environment), initializing/overwriting as needed:
+  #
+  #  `path`, the path to the PDF
+  #  `rawtext`, large list of character vectors (one per page), the newline-delimited strings
+  #  `vartable`, dataframe of parsed text from the doc
+  #  `filetable`, dataframe summarizing filenames found in the doc
+  #
+  # DETAILS:
+  #
+  # Internal, for use with `rswat_help`. Assumes environment `.rswat` exists
+  # For now this has only been tested on the latest IO doc (as of May 2021) 
+  # 
+  
+  # a default path to look for the PDF
+  pdfpath.def = 'D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf'
+  
+  # constants used to make shortened descriptions
+  desc.maxlen = 60
+  desc.suffix = '...'
+  
+  # initial data to keep track (in a loop) of the tables spanning multiple pages 
+  ragged = FALSE
+  section = last.section = 'FILE.CIO'
+  
+  # initialize internal storage if necessary
+  if( !( 'docs' %in% ls(.rswat) ) )
+  {
+    # `rawtext` stores output of `pdftools::pdf_text`, `vartable` and `filetable` are derived
+    .rswat$docs = list( path=character(), rawtext=character(), vartable=data.frame(), filetable=data.frame() )
+  }
+  
+  # handle unspecified path 
+  if( is.null(pdfpath) )
+  {
+    # carry forward the existing path, or assign a default one
+    pdfpath = ifelse( length(.rswat$docs$path) == 1,  .rswat$docs$path, pdfpath.def)
+  }
+  
+  # update path in package storage then load the PDF using `pdftools`
+  .rswat$docs$path = pdfpath
+  .rswat$docs$rawtext = pdftools::pdf_text(pdfpath)
+  
+  # handle calls that don't load anything
+  if( nrow(.rswat$docs$filetable) > 0 & !reload)
+  {
+    # print the first page of the doc to console and return loaded path
+    if( !quiet ) cat(.rswat$docs$rawtext[1])
+    return(pdfpath)
+  } 
+  
+  # split page data at newlines
+  pdf.delim =  strsplit(.rswat$docs$rawtext, '\n')
+  pdf.npage = length(pdf.delim)
+  
+  # loop over pages to get a list of dataframes containing page metadata and parsed text 
+  pageout.list = vector(mode='list', length=pdf.npage)
+  for(pnum in seq_along(pdf.delim))
+  {
+    # print a progress message
+    msg.maxlen = desc.maxlen
+    ws.trail = paste(rep(' ', msg.maxlen), collapse='')
+    msg.section = strtrim( paste0('reading section ', section, '...', ws.trail), msg.maxlen)
+    msg.percent = paste(round(100 * pnum / pdf.npage, 3), '%      ') 
+    if( !quiet ) cat( paste0('\r', msg.section, msg.percent) )
+    if( !quiet ) flush.console()
+    
+    # line-by-line text from the pdf page
+    pdftext = pdf.delim[[pnum]]
+    
+    # run the parser, append a page number, and add result to storage list
+    pageout.list[[pnum]] = rswat_pdf_parse(pdftext, ragged=ragged, section=section)
+    
+    # pull the last row of the output, assign section name to carry forward
+    pageout.last = last(pageout.list[[pnum]])
+    last.section = section
+    section = ifelse(is.null(pageout.list[[pnum]]), last.section, pageout.last$section) 
+    
+    # NULL output gets skipped (the page had to variable name definition tables)
+    if( !is.null(pageout.list[[pnum]]) )
+    {
+      # append the page number
+      pageout.list[[pnum]] = pageout.list[[pnum]] %>% mutate( page = pnum ) 
+      
+      # set ragged mode if the last table may run over to next page 
+      ragged = pageout.last$table
+      if( last.section != section ) ragged = TRUE
+    }
+  }
+  
+  # row-bind, filter redundant entries, switch to lowercase names, autofill 'name' field
+  .rswat$docs$vartable = do.call(rbind, pageout.list)  %>% filter(table) %>% filter(!t_head) %>% 
+    mutate( file = tolower(section) ) %>%
+    mutate( nm = tolower(nm) ) %>%
+    mutate( nm = gsub(',cont.', '', nm)) %>%
+    mutate( name = nm[nafill(replace(seq_along(nm), is.na(nm), NA_integer_), 'locf')] ) %>%
+    mutate( description = desc ) %>%
+    select( page, line, file, name, description) %>%
+    
+    # concatenate description lines for each variable name and summarize page numbers
+    group_by( file, name ) %>%
+    summarize(line = first(line), 
+              pstart = min(page), 
+              pend = max(page), 
+              description_full = paste0(description, collapse = '\n'), .groups='keep') %>%
+    
+    # trim whitespace and clip descriptions for dataframe printing
+    mutate( description = gsub('\n+', ' ', description_full) ) %>%
+    mutate( description = gsub('\\s+', ' ', description) ) %>%
+    mutate( suffix = c('', '...')[ 1 + as.integer( nchar(description) > desc.maxlen + 1 ) ] ) %>%
+    mutate( description = paste0(strtrim(description, desc.maxlen), suffix) ) %>%
+    select( -suffix ) %>%
+    
+    # omit entries with empty descriptions, header listings, reorder to match pdf
+    filter( nchar(description) > 1 ) %>%
+    filter( name != 'header' ) %>%
+    arrange(pstart, line) %>%
+    data.frame
+  
+  # build summary table of all filenames and variables parsed by the function
+  .rswat$docs$filetable = .rswat$docs$vartable %>% group_by(file) %>%
+    summarize( startpage = first(pstart), 
+               npage = 1 + last(pend) - first(pstart), 
+               ndef = n(), 
+               .groups='keep') %>% 
+    
+    # arrange in same order as pdf
+    arrange(startpage) %>% 
+    select(file, ndef, npage, startpage) %>% 
+    data.frame
+  
+  # finish
+  cat('done\n')
+}
+
+#' access/search the SWAT+ IO documentation PDF from within R
+rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printall=FALSE)
+{
+  # ARGUMENTS:
+  # 
+  # `pattern`, character, the search string to look up (see DETAILS)
+  # `fname`, character, a SWAT+ filename to limit search results  
+  # `fuzzy`, numeric, if nonzero enables approximate matching for `vname` (see DETAILS)
+  # `indesc`, logical, whether to search in descriptions
+  # `printall`, logical, whether to print the full descriptions to console
+  #
+  # RETURN:
+  # 
+  # If `pattern=NULL` (the default), the function to returns a dataframe listing the filenames
+  # known to `rswat_docs`. Otherwise, return type depends on the class of `pattern` and `fname`:
+  #
+  #  'df' mode returns a dataframe of variable name definitions parsed from the PDF
+  #  'index' mode returns the relevant page numbers of the PDF (integer vector)
+  #  'cat' mode prints the relevant pages of the PDF to the console and returns nothing
+  #
+  # DETAILS:
+  #
+  # `pattern` is the SWAT+ variable name or filename (with extension) to look up. With default
+  # `fuzzy=NA` this must be a (case-insensitive) exact match to some entry in the PDF. Nonzero
+  # `fuzzy` enables substring and approximate matches (see `rswat_match`).
+  # 
+  
+  # regex for filenames (assume lowercase)
+  regex.fname = '^[a-z]+[-_]*[a-z]+\\.[a-z]{2,3}$'
+  
+  # formatting for console printout headers
+  lrule = c('\n\n~~~', '~~~\n\n') 
+  
+  # assign default fuzzy level
+  if( is.null(fuzzy) ) fuzzy = ifelse(indesc, 0, NA)
+  
+  # make sure the PDF has been loaded
+  if( is.null(.rswat$docs$filetable) ) rswat_pdf_open()
+  
+  # default return value is the files summary table
+  if( is.null(pattern) & is.null(fname) ) return( .rswat$docs$filetable )
+  
+  # TODO: handle dataframe input similar to `rswat_write`
+  if( is.data.frame(pattern) )
+  {
+    is.fname = TRUE
+    stop('not yet implemented')
+  }
+  
+  # handle integer input (pattern treated as list of page numbers)
+  if( is.numeric(pattern) )
+  {
+    # coerce pattern if necessary
+    pattern = as.integer(pattern)
+    
+    # extract printable text and append page number indicators
+    page.msg = paste(lrule[1], 'page', pattern, lrule[2])
+    cat.out = paste0(page.msg, .rswat$docs$rawtext[pattern])
+    
+    # print the data and finish
+    cat(cat.out)
+    return(invisible())
+  }
+
+  # pattern is treated as filename in special case 
+  pattern.check = is.null(fname) & !is.null(pattern) & !indesc
+  pattern.isfname = ifelse(pattern.check, grepl(regex.fname, tolower(pattern)), FALSE)
+  if( pattern.isfname )
+  {
+    # swap inputs when filename supplied as pattern
+    fname = pattern 
+    pattern = NULL
+  }
+  
+  # default value for `pattern` matches everything when passed to grepl
+  pattern.msg = paste0('\"', pattern, '\"')
+  if( is.null(fname) ) fname = '.*'
+  
+  # same for `pattern`, but we use an alternative console message in this case
+  is.filerequest = FALSE
+  if( is.null(pattern) )
+  {
+    # set flag for alternate message and build the new string to cat
+    is.filerequest = TRUE
+    pattern.msg = paste('file(s)', paste(fname, collapse=', '))
+    
+    # fuzzy must not be NA so that pattern is treated as a regex
+    pattern = '.*' 
+    fuzzy = 0
+  }
+  
+  # load the relevant rows of the PDF text databases
+  vartable = .rswat$docs$vartable %>% filter( grepl(fname, file) )
+  filetable = .rswat$docs$filetable %>% filter( grepl(fname, file) )
+  
+  # copy character vector to search through and make labels for console message
+  colnm = c('name', 'description_full')[ 1 + as.integer(indesc) ]
+  msg.colnm = c('names', 'descriptions')[ 1 + as.integer(indesc) ]
+  charvec = vartable[[colnm]]
+  
+  # run search and handle no-match case
+  idx.match = rswat_match(pattern=pattern, charvec=charvec, fuzzy=fuzzy, index=TRUE)
+  if( length(idx.match) == 0 )
+  {
+    # console message about failed search
+    nomatch.msg = paste0('No matches among ', msg.colnm, ' for ', pattern.msg, '. ')
+    cat(nomatch.msg)
+    
+    # handle failures in exact match mode by switching to substring matching
+    if( is.na(fuzzy) ) fuzzy = 0
+      
+    # handle failures in exact match mode
+    if( !(fuzzy < 0) )
+    {
+      # try increasing fuzzy until a match is found (see `rswat_match`)
+      cat(' Reverting to approximate matching...\n')
+      fuzzy = -nchar(pattern)
+      
+      # look for exact substring matches among descriptions
+      return( rswat_docs(pattern, fname, indesc=indesc, fuzzy=fuzzy, printall=printall) )
+    }
+  }
+  
+  # copy subset of database matching pattern and count files and individual matches
+  vartable.match = vartable[idx.match, ]
+  n.files = length(unique(vartable.match$file))
+  n.results = nrow(vartable.match)
+  
+  # message about search results
+  msg.approx = ifelse( is.na(fuzzy), 'exact', 'approximate')
+  msg.matchtype = paste(msg.approx, 'match result(s) among', msg.colnm, 'for', pattern.msg)
+  msg.search = paste(n.results, msg.matchtype, 'in', n.files, 'file(s)\n\n')
+  
+  # alternate message and row order for file requests
+  if(is.filerequest)
+  {
+    msg.search = paste(n.results, 'result(s) in', pattern.msg, '\n') 
+    vartable.match = vartable.match %>% arrange(as.integer(rownames(vartable.match)))
+  }
+  
+  # print the message
+  cat(msg.search)
+  
+  # print the full description in single match case, or where requested by `printall`
+  if(n.results == 1) printall = TRUE
+  if(printall)
+  {
+    # add a header to each section of output
+    match.msg = paste(lrule[1], vartable.match$file, ':', vartable.match$name, lrule[2])
+    cat.out = paste0(match.msg, vartable.match$description_full)
+    
+    # print to console and finish
+    cat(cat.out)
+    return(invisible())
+  }
+
+  # return the dataframe of matches with abbreviated descriptions
+  return( vartable.match %>% select( name, file, pstart, description ) )
+}
 
 
 #' ## DEPRECATED: phasing these out
+#' 
 
-#' TODO: phase out this function (replaced by rswat_daily)
+#' returns an objective function whose argument is vector of parameter values, output is NSE
+my_objective = function(cal, gage, textio, quiet=TRUE)
+{
+  # ARGUMENTS:
+  # 
+  # `cal`: dataframe, the SWAT+ parameters to modify
+  # `gage`: dataframe, containing flow and date (see `my_gage_objective`)
+  # `textio`: character, path to the text I/O directory for the SWAT+ model 
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN VALUE:
+  #
+  # Returns a function `f(x)` that computes the NSE score for a given parameter set (specified
+  # in `cal`), supplied in vector `x`, where errors are computed over the time series of flow
+  # data in `gage`.
+  #
+  # DETAILS:
+  #
+  # `cal` should be the output of one or several (row-binded) `rswat_find(..., trim=T)` calls,
+  # having columns for 'name', 'i', 'j', etc. It specifies n parameters of interest, around
+  # which an n-to-1 objective function, suitable for numerical optimizers, is constructed and
+  # returned. When calling this function, the order of the paramaters in `x` must match the
+  # order in `cal` (there is no checking of names etc). 
+  #
+  # On multirow tables, `i=NA` in `cal` is taken to mean "write all rows of this parameter
+  # column". This is the default (trim=TRUE) return value for rswat_find when a match appears
+  # in a multirow table. To specify individual rows, either use rswat_find(..., trim=FALSE)
+  # or set `i` manually as needed.
+  #
+  
+  # scan for non-numerics
+  idx.nn = cal$class != 'numeric'
+  if( any(idx.nn) )
+  {
+    # print a warning
+    msg.info = paste(cal$name[idx.nn], collapse=', ')
+    warning(paste('removed non-numeric entries from cal:', msg.info))
+    
+    # remove the non-numeric entries
+    cal = cal[!idx.nn,]
+  }
+  
+  # length check
+  if( nrow(cal) == 0 ) stop('no numeric parameters found in cal')
+  
+  # fetch the file data - a copy of this (and `cal`) gets baked in to the function below
+  cal.fn = setNames(nm=unique(cal$file))
+  n.fn = length(cal.fn)
+  cal.values = lapply(cal.fn, rswat_open)
+  
+  # R makes a copy of the above objects as well as cal and gage upon defining the function
+  # below. This is everything we need for optimization baked in a tidy single-argument function
+  # TODO: optimize and check for issues related to function closure and lazy evaluation
+  
+  # begin definition of return function
+  function(x=NULL, refresh=FALSE, draw=FALSE)
+  {
+    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
+    # order as they appeared in `cal`, when this function was created (via a call to
+    # `my_objective`). To view this order, call the function without arguments.
+    
+    # TODO: write up arguments and return sections
+    
+    # refresh cal.values to get any modifications since the function was defined
+    if(refresh) cal.values = lapply(cal.fn, rswat_open)
+    
+    # if user supplied no parameter values, return the parameter info dataframe
+    if( is.null(x) )
+    {
+      # initialize a new column in cal for values and fill it by looping over filenames
+      cal = cal %>% select( -c(string, class, table) ) %>% mutate(value=NA)
+      for(fn in cal.fn)
+      {
+        # loop over cal entries for this file
+        fn.idx = which( cal$file == fn )
+        for(idx.par in 1:length(fn.idx))
+        {
+          # index in the cal.values table
+          i = cal$i[ fn.idx[idx.par] ]
+          j = cal$j[ fn.idx[idx.par] ]
+          
+          # extract the values, making list of unique ones in multivariate case
+          if( !is.na(i) ) par.value = unique(cal.values[[fn]][i,j])
+          if( is.na(i) ) par.value = unique(cal.values[[fn]][,j])
+          
+          # write the value if unique (non-uniqueness indicated by NA)
+          if( length(par.value) == 1 ) cal$value[ fn.idx[idx.par] ] = par.value
+        }
+      }
+      
+      # tidy and finish 
+      return( cal %>% select(value, name, file, dim, everything()) )
+    }
+    
+    # user supplied parameter values: loop over filenames to write them
+    for(fn in cal.fn)
+    {
+      # grab the subset of `cal` and replacement values in x
+      fn.idx = which( cal$file == fn )
+      fn.x = x[fn.idx]
+      
+      # loop over cal entries for this file
+      for(idx.par in 1:length(fn.idx))
+      {
+        # index in the cal.values table
+        i = cal$i[ fn.idx[idx.par] ]
+        j = cal$j[ fn.idx[idx.par] ]
+        
+        # make the replacement
+        if( !is.na(i) ) cal.values[[fn]][i,j] = fn.x[idx.par]
+        if( is.na(i) ) cal.values[[fn]][,j] = fn.x[idx.par]
+      }
+      
+      # finished with the table, write the changes
+      rswat_write(cal.values[[fn]], fname=fn, preview=FALSE, quiet=quiet)
+    }
+    
+    # TODO: memoize so we can skip this?
+    # run the simulation and return the objective function value
+    return(my_gage_objective(gage, textio, quiet=quiet, draw=draw))
+  }
+}
+
+# TODO: work on this
+#' set default bounds for a calibration parameter using data in cal_parms.cal
+my_bounds = function(param, fuzzy=TRUE)
+{
+  # initialize defaults and open cal_parms.cal
+  bds.out = c(-Inf, Inf)
+  bds.all = rswat_open('cal_parms.cal')
+  
+  # find exact matches
+  idx.exact = bds.all$name == param
+  if(any(idx.exact))
+  {
+    # finished
+    return(c(bds.all$abs_min[idx.exact], bds.all$abs_max[idx.exact]))
+    
+  } else {
+    
+    # TODO: vectorize (or at least put in a loop)
+    warn.msg = paste(param, 'had no exact matches in cal_parms.cal.')
+    
+    # handle fuzzy matching
+    if(fuzzy)
+    {
+      # try fuzzy matching at different levels (Levenshtein edits distances)
+      idx.f1 = agrep(param, bds.all$name, max.distance=1)[1]
+      idx.f2 = agrep(param, bds.all$name, max.distance=2)[1]
+      idx.f3 = agrep(param, bds.all$name, max.distance=3)[1]
+      
+      # fuzzy level 1
+      if( !is.na(idx.f1 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f1], '(distance=1)'))
+        bds.out = c(bds.all$abs_min[idx.f1], bds.all$abs_max[idx.f1])
+        return(bds.out)
+      }
+      
+      # fuzzy level 2
+      if( !is.na(idx.f2 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f2], '(distance=2)'))
+        bds.out = c(bds.all$abs_min[idx.f2], bds.all$abs_max[idx.f2])
+        return(bds.out)
+      }
+      
+      # fuzzy level 3
+      if( !is.na(idx.f3 > 1) )
+      {
+        warning(paste(warn.msg, 'Using fuzzy match', bds.all$name[idx.f3], '(distance=3)'))
+        bds.out = c(bds.all$abs_min[idx.f3], bds.all$abs_max[idx.f3])
+        return(bds.out)
+        
+      }
+    } else { warning(paste(warn.msg, 'Reverting to -Inf, Inf')) }
+    
+  }
+  
+  return(bds.out)
+}
+
+
+#' (replaced by rswat_daily)
 #' evaluate errors in prediction for a SWAT+ model
-my_gage_objective = function(gage, textio=NULL, oid=NULL, quiet=FALSE, draw=FALSE, exec=TRUE)
+dep_my_gage_objective = function(gage, textio=NULL, oid=NULL, quiet=FALSE, draw=FALSE, exec=TRUE)
 {
   # 'gage': dataframe of flow and date
   # 'textio': character, path to the text I/O directory for the SWAT+ model 
@@ -4451,9 +5084,9 @@ my_gage_objective = function(gage, textio=NULL, oid=NULL, quiet=FALSE, draw=FALS
   # TODO: allow different return value (residuals, fitted, etc)
 }
 
-#' TODO: phase out this function (replaced by rswat_exec)
+#' (replaced by rswat_exec)
 #' run the SWAT+ executable (NOTE: requires `rswat` helper function)
-rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
+dep_rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
 {
   # 'textio': character, path to the text I/O directory for the SWAT+ model 
   # `dates`: (optional) vector of Dates from which to derive simulation period
@@ -4544,9 +5177,8 @@ rswat_run = function(textio, dates=NULL, info=FALSE, object=NULL, quiet=FALSE)
   if(!quiet) cat('\n>> finished')
 }
 
-## DEPRACATED: remove once rswat_daily() is tested and working
 #' run a daily SWAT+ simulation of a physical variable, for a given location and time period 
-rswat_daily2 = function(dates=NULL, loc=NULL, vname='flo_out', quiet=FALSE, textio=NULL)
+dep_rswat_daily2 = function(dates=NULL, loc=NULL, vname='flo_out', quiet=FALSE, textio=NULL)
 {
   # ARGUMENTS:
   # 
@@ -4837,8 +5469,9 @@ rswat_daily = function(dates=NULL, loc=1, ofile=NULL, vname=NULL, exec=TRUE, qui
   return( rswat_output(object.nm, vname) %>% filter( gis_id == loc ) )
 }
 
+# replaced by rswat_copy
 #' load or write a backup of all SWAT+ text config files (or a subset of them)
-rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
+dep_rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
 {
   # In development. 
   #
@@ -5027,6 +5660,126 @@ rswat_backup = function(bpath=NULL, fname=NULL, bmode='backup', overwrite=FALSE)
   
   return(invisible())
   
+}
+
+# replaced by rswat_find
+#' search tool for SWAT+ config parameter text, names, and filenames
+dep_rswat_find = function(pattern=NULL, fuzzy=-1, intext=FALSE, trim=TRUE, include=NULL, ignore=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `pattern`: (optional) character vector, regular expressions or literal string to match 
+  # `fuzzy`:  numeric, specifying match mode (see details)
+  # `intext`: logical, indicating to search parameter values in addition to names
+  # `trim`: logical, whether to omit detailed metadata about character positions
+  # `include`: (optional) character vector, filenames to include in searches
+  # `ignore`: (optional) character vector, filenames to omit from searches
+  #
+  # RETURN VALUE:
+  #
+  # A dataframe of information about SWAT+ names matching the search pattern.
+  #
+  # DETAILS
+  # 
+  # Returns metadata on matches of pattern with SWAT+ parameter names, and optionally
+  # (via `intext`) the text of the parameter values themselves.
+  #
+  # If no pattern is supplied, the function returns information on all parameters in the 
+  # subset of files determined by `include` and `ignore`. If `include` is supplied, only
+  # results from those files are returned (default is all files). Argument `ignore` has
+  # the opposite effect, and supercedes anything in `include`.
+  #
+  # `fuzzy < 0` (the default) is for Perl-style regular expressions (see `base::grepl`),
+  # `fuzzy = 0` is for exact matches only, and `fuzzy > 0` includes approximate matches
+  # up to the specified (Levenshtein) distance (see `base::agrep`). The case (upper or
+  # lower) is ignored in approximate matching.
+  # 
+  # TODO: write some examples: eg.`pattern` matches an element
+  # of the 'name' column of a table, all parameters in that row are returned.
+  #
+  
+  # default empty string for pattern matches everything in perl mode
+  if( is.null(pattern) ) pattern = ''
+  
+  # default exclusion string (single space) matches nothing
+  if( is.null(ignore) ) ignore =  ' '
+  
+  # default is to include all files but `ignore` always takes precedence
+  if( is.null(include) ) include = rswat_cio()$file
+  include = include[ ! include %in% ignore ]
+  
+  # find indices of ignored and included files
+  idx.include = .rswat$stor$linedf$file %in% include
+  idx.ignore = .rswat$stor$linedf$file %in% ignore
+  
+  # handle premature calls and other invalid uses
+  err.msg = 'file metadata not found. Have you run rswat_cio and loaded a file?'
+  if( length(idx.ignore) == 0 ) stop(err.msg)
+  if( length(idx.include) == 0 ) stop('`include` is empty. Try omitting `ignore`')
+  if( all(idx.ignore) ) stop('all known files are listed in `ignore`')
+  
+  # extract the column subsets needed for searching
+  name.all = .rswat$stor$linedf$name[idx.include]
+  n.name = length(name.all)
+  #file.all = .rswat$stor$linedf$file[idx.include]
+  
+  # initialize (optional) in-text match vectors of the right length
+  string.match = rep(FALSE, sum(idx.include))
+  if(intext) string.all = .rswat$stor$linedf$string[idx.include]
+  
+  # handle fuzzy matching
+  if(fuzzy > 0)
+  {
+    # `agrep` with `max.distance=fuzzy`
+    name.match = agrepl(tolower(pattern), tolower(name.all), max.distance=fuzzy)
+    if(intext) string.match = agrepl(tolower(pattern), tolower(string.all), max.distance=fuzzy)
+  }
+  
+  # handle regexp
+  if(fuzzy < 0)
+  {
+    # `grepl` to find matches
+    name.match = grepl(pattern, name.all, perl=TRUE)
+    if(intext) string.match = grepl(pattern, string.all, perl=TRUE)
+  } 
+  
+  # handle exact searches
+  if(fuzzy == 0)
+  {
+    # simple matching
+    name.match = name.all %in% pattern
+    if(intext) string.match = string.all %in% pattern
+  }
+  
+  # extract results from in-memory dataframe
+  linedf.out = .rswat$stor$linedf[ which(idx.include)[name.match | string.match], ]
+  
+  # for human readability
+  if(trim)
+  {
+    # omit skipped lines, header lines, etc
+    linedf.out = linedf.out %>% filter( !is.na(i) )
+    
+    # extra trimming when not searching parameter values
+    if(!intext)
+    {
+      # omit all but fist data row, filter 'name' columns
+      linedf.out = linedf.out %>% filter(i == 1) %>% filter(name != 'name')
+      
+      # multirow columns are represented with NAs in place of row index and string
+      linedf.out$i[linedf.out$dim > 1] = NA
+      linedf.out$string[linedf.out$dim > 1] = NA
+    }
+    
+    # tidy output and finish
+    return( linedf.out %>% arrange(tabular, file, table) %>%
+              select(name, string, class, dim, file, table, i, j) )
+    
+  } else {
+    
+    # or just return the full table subset
+    return(linedf.out)
+  }
 }
 
 
