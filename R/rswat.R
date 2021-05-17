@@ -4633,8 +4633,8 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE)
   cat('done\n')
 }
 
-#' access/search the SWAT+ IO documentation PDF from within R
-rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printall=FALSE)
+#' access/search the SWAT+ IO documentation PDF from within R (requires `pdftools`)
+rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=FALSE)
 {
   # ARGUMENTS:
   # 
@@ -4642,7 +4642,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printa
   # `fname`, character, a SWAT+ filename to limit search results  
   # `fuzzy`, numeric, if nonzero enables approximate matching for `vname` (see DETAILS)
   # `indesc`, logical, whether to search in descriptions
-  # `printall`, logical, whether to print the full descriptions to console
+  # `full`, logical, whether to include full descriptions (instead of shortened ones)
   #
   # RETURN:
   # 
@@ -4664,7 +4664,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printa
   regex.fname = '^[a-z]+[-_]*[a-z]+\\.[a-z]{2,3}$'
   
   # formatting for console printout headers
-  lrule = c('\n\n~~~', '~~~\n\n') 
+  lrule = c('\n~~~', '~~~\n') 
   
   # assign default fuzzy level
   if( is.null(fuzzy) ) fuzzy = ifelse(indesc, 0, NA)
@@ -4752,7 +4752,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printa
       fuzzy = -nchar(pattern)
       
       # look for exact substring matches among descriptions
-      return( rswat_docs(pattern, fname, indesc=indesc, fuzzy=fuzzy, printall=printall) )
+      return( rswat_docs(pattern, fname, indesc=indesc, fuzzy=fuzzy, full=full) )
     }
   }
   
@@ -4777,8 +4777,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printa
   cat(msg.search)
   
   # print the full description in single match case, or where requested by `printall`
-  if(n.results == 1) printall = TRUE
-  if(printall)
+  if( n.results == 1 )
   {
     # add a header to each section of output
     match.msg = paste(lrule[1], vartable.match$file, ':', vartable.match$name, lrule[2])
@@ -4789,8 +4788,15 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, printa
     return(invisible())
   }
 
-  # return the dataframe of matches with abbreviated descriptions
-  return( vartable.match %>% select( name, file, pstart, description ) )
+  # select the requested description (full or trimmed)
+  if( full ) vartable.match = vartable.match %>% mutate( description = description_full )
+  
+  # remove unneeded columns and omit rownames (to not confuse them with page numbers)
+  vartable.out = vartable.match %>% select( name, file, pstart, description )
+  rownames(vartable.out) = c()
+  
+  # return the dataframe of matches
+  return( vartable.out )
 }
 
 
