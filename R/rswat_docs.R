@@ -12,12 +12,27 @@
 #' See the vignette
 #' [demo_rswat_docs](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_rswat_docs.md)
 #' for a demonstration of how to use `rswat_docs`
+#' 
+#' ## .rswat environment
+#' 
+#' We need a place to store the text data from the PDF. The line below defines an environment
+#' that can be accessed from inside the functions below. This is a temporary fix until I bundle
+#' things into a package.
+
+# define (internal) environment to store the SWAT+ project file data
+if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() )
 
 #' 
 #' ## dependencies
-#' [`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) simplifies complicated
-#' table operations 
+#' 
+#' [`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) provides a pleasant
+#' syntax for complicated table operations 
 library(dplyr)
+
+#' 
+#' [`data.table`](https://cran.r-project.org/web/packages/data.table/index.html) simplifies
+#' and speeds up table operations.
+library(data.table) 
 
 #' [`pdftools`](https://cran.r-project.org/web/packages/pdftools/index.html) renders
 #' PDF textboxes as character vectors in R
@@ -25,8 +40,7 @@ library(pdftools)
 
 #' 
 #' ## core functions
-#' Note that `rswat_pdf_open` initializes the environment `.rswat` and overwrites the
-#' entry `.rswat$docs` without warning! This is used for internal storage of the PDF text.
+#' Note that these require the `.rswat` environment defined above
 #' 
 #' load and parse the SWAT+ I/O documentation PDF
 rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=70)
@@ -60,9 +74,6 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=7
   # a default path to look for the PDF
   pdfpath.def = 'D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf'
   
-  # (internal) environment to store the SWAT+ project file data
-  if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() )
-  
   # suffix used to indicate a clipped description
   desc.suffix = '...'
   
@@ -74,7 +85,10 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=7
   if( !( 'docs' %in% ls(.rswat) ) )
   {
     # `rawtext` stores output of `pdftools::pdf_text`, `vartable` and `filetable` are derived
-    .rswat$docs = list( path=character(), rawtext=character(), vartable=data.frame(), filetable=data.frame() )
+    .rswat$docs = list( path=character(), 
+                        rawtext=character(), 
+                        vartable=data.frame(), 
+                        filetable=data.frame() )
   }
   
   # handle unspecified path 
@@ -119,7 +133,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=7
     pageout.list[[pnum]] = .rswat_pdf_parse(pdftext, ragged=ragged, section=section)
     
     # pull the last row of the output, assign section name to carry forward
-    pageout.last = last(pageout.list[[pnum]])
+    pageout.last = data.table::last(pageout.list[[pnum]])
     last.section = section
     section = ifelse(is.null(pageout.list[[pnum]]), last.section, pageout.last$section) 
     
