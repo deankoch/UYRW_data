@@ -9,9 +9,11 @@
 #' 
 #' **demo_rswat_docs.R**: Access variable definition tables in SWAT+ documentation PDF from R
 #' 
-#' This script demonstrates the `rswat_docs` function, which reads and parses the SWAT+
-#' inputs PDF ("CHAPTER FILE.CIO: SWAT+ INPUT DATA") returning its name/definition
-#' table entries as dataframes, or printing them to the console.
+#' This script demonstrates
+#' [rswat_docs.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md), which
+#' reads and parses the SWAT+ inputs PDF ("inputs_swatplus_rev60_5.pdf") into a large name/definition
+#' dataframes, whose entries can then be searched or printed to the console.
+#' 
 #' 
 #' ## introduction
 #' 
@@ -19,39 +21,39 @@
 #' a bit overwhelming. There are a LOT of variables to keep track of. The latest configuration
 #' file documentation PDF ("inputs_swatplus_rev60_5.pdf",
 #' [available here](https://swatplus.gitbook.io/docs/user/io)) runs over 250 pages! And that's just
-#' variable name definitions.
+#' input variable name definitions.
 #' 
-#' As I learn the model, I find I'm spending a lot of time scrolling this PDF to look up definitions,
-#' units, and coding schemes. This is fine at the first, as you don't want to just skim through and miss
-#' something important when you're learning. But later on, when using the doc as a reference,
-#' it gets tedious. Variable names are often mentioned multiple times in the document before we get
-#' to their full definitions, and it can be hard to track down the SWAT+ version of a SWAT name
-#' (or names you can't remember exactly) using just ctrl-F.
+#' The code below demonstrates an indexing and search tool to help R-based
+#' SWAT+ users like me navigate this document. The codebase render the PDF into text strings, building
+#' a giant searchable list of all "Variable Name"/"Definition" entries.
 #' 
-#' To streamline things I've written some helper functions that load the PDF and build a big
-#' list of all its "Variable Name" - "Definition" entries. The list can be searched using
-#' approximate matching (allowing character substitutions, etc). R users may find this a quicker
-#' and more direct route to accessing the variable definitions they need, and for exploring the model.
 #' 
-
+#' ## what's wrong with ctrl-f?
+#' 
+#' Yes, you could just search for keywords using your favorite PDF viewer, except that: 
+#' 
+#' * abbreviations won't turn up in literal keyword searches with viewers like Acrobat or Sumatra
+#' * variable names are often mentioned multiple times in the document before we get to their full definitions
+#' * many variable names are slightly different in SWAT+ versus SWAT2012 (and the theory documentation
+#' was written for the latter)
+#' 
+#' By my count there are 1000+ variable names defined in this document - I don't think anyone is going to
+#' memorize them all. So when you know what you're looking for but can't quite remember the exact name
+#' it can be a real chore to track it down. `rswat_docs` provides a more direct search tool that supports fuzzy
+#' matching of multiple keywords to both names and definitions.
 #'
-#' ## libraries
-#' [pdftools](https://cran.r-project.org/web/packages/pdftools/index.html) is required to render
-#' the PDF textboxes as character vectors in R,
-#' [helper_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
-#' [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md)
-#' load some required libraries, global variables, and some helper functions.
+#' ## libraries and installation
+#' 
+#' The easiest way to try this code out yourself is to simply download the Rscript sourced below
+#' ([rswat_docs.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md))
+#' and install any missing packages on your machine.
 
+# library `here` is not strictly necessary; I just use it to simplify paths
 library(here)
-library(pdftools)
-source(here('R/helper_main.R'))
-source(here('R/rswat.R'))
+source(here('R/rswat_docs.R'))
 
-#' Note that "rswat.R" is sourced in the line above to initialize the `.rswat` environment in
-#' your session. The relevant functions definitions in that file are `rswat_docs`, `rswat_pdf_open`,
-#' `rswat_pdf_parse`, and `rswat_match`. Other functions are not needed at this point.
-
-
+#' `rswat_docs.R` will initialize an environment called `.rswat` in your session, and define
+#' four functions; `rswat_docs`, `rswat_pdf_open`, `rswat_pdf_parse`, and `my_adist`. 
 #' 
 #' ## getting started
 #' 
@@ -60,7 +62,7 @@ source(here('R/rswat.R'))
 #' point to their local copy. `rswat_pdf_open` will then load and parse the PDF for you:
 
 # set the PDF path
-pdfpath = 'D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf'
+pdfpath = here('development/inputs_swatplus_rev60_5.pdf')
 
 # load the file into memory
 rswat_pdf_open(pdfpath, quiet=TRUE)
@@ -79,13 +81,15 @@ rswat_docs() %>% nrow
 #' The parser finds 105 different name-definition tables in the document, each associated with
 #' a different SWAT+ configuration file. The `ndef` field counts the number of definitions for
 #' each table, `startpage` indicates the page (in the PDF) on which this table starts, and
-#' `npage` counts the number of pages it runs.
+#' `npage` counts the number of pages a table runs for.
+#' 
+#' ## accessing documentation from R
 #' 
 #' Let's look at the example of the "snow.sno" file, which controls snowfall/snowmelt processes:
 rswat_docs() %>% filter(file=='snow.sno')
 
 #' This starts on page 176 and runs for three pages. To view the full text of one of these pages
-#' in R, simply pass a page number or a vector of them to `rswat_docs`:
+#' in R, simply pass a page number or a vector of them:
 
 # print a specific page of the PDF
 rswat_docs(176)
@@ -102,65 +106,141 @@ rswat_docs('snow.sno')
 #' you can use the `full=TRUE` argument
 #' 
 
-# if you like tibbles, use `full=TRUE` and pipe to `tibble` to copy the full descriptions
+# if you like tibbles, use `full=TRUE` and pipe to `tibble`
 rswat_docs('snow.sno', full=TRUE) %>% tibble %>% print
 
-
-#' Notice the *slash-"n"'s*, which indicate where a newline happened in the source file. Since R is
-#' printing the literal strings here, the output looks ugly unless we pipe it to a `cat` call.
-#' `rswat_docs` will do this by default (instead of returning the dataframe) when it finds one
-#' single match for a search query.
- 
-# eg. search for the pattern "title" in filename "snow.sno" like this:
-rswat_docs('title', fname='snow.sno')
-
-#' The result is a printout of the full description as it would appear in the PDF (including newlines).
-
+#' Since R is printing the literal description strings, which often contain newline characters, the
+#' output is full of "\\n"s, which causes the description text to look messy. If we pipe these strings
+#' to `cat`, the newlines will render correctly and show us the original text (more or less) as it
+#' appeared in the PDF.
 #' 
-#' ## searching names
+#' By default, `rswat_docs` does this automatically whenever a search query yields a unique match.
+#' For example the following call selects the "falltmp" variable from "snow.sno". Since this the only
+#' match for "falltmp", the function prints its full description in addition to returning the dataframe:
+
+# demonstrate filename argument and single match behaviour
+rswat_docs('falltmp', fname='snow.sno')
+
+#' In this case the first argument (`pattern`) is our search keyword, and we have passed the filename
+#' in the second argument (`fname`). `rswat_docs` will automatically detect when `pattern` is a filename
+#' and return the full table of variables for the file as it did above, with the exception of
+#' description-only queries (where `descw=1`); an example of this can be found in the next section.
 #' 
-#' The first argument of `rswat_docs` can be filename (as in the first two calls above), or a
-#' search string for some keyword (as in the last function call). When the argument `fname` is
-#' missing, all filenames are included in the search:
-
-# eg. repeat the last call without specifying "snow.sno" and get 99 matches (print the first few)
-rswat_docs('title') %>% head
-
-#' By default, when exact matches are found, `rswat_docs` returns (only) them. If no exact matches
-#' are found, it then looks for substring matches and returns those. If still nothing is found, it then
-#' tries approximate matching with increasing fuzziness until it gets at least one match. 
+#' ## searching for keywords 
 #' 
-#' This can be pretty effective for tracking down variable names when you have a rough idea of the
-#' name but you're not sure about the exact abbreviation in use. eg. a search for the Hargreaves PET
-#' coefficient finds 'harg_pet' right away:
+#' Some SWAT+ variable names are unique enough to turn up a single match in searches. For example we
+#' can repeat the previous call without `fname` and get the same unique result:
 
+# demonstrate unique single match among all files
+rswat_docs('falltmp')
+
+#' By default, when exact (substring) matches are found, `rswat_docs` returns only them. If no
+#' exact matches are found, it returns approximate matches. This can be pretty effective for tracking
+#' down variable names when you have a rough idea of the name but you're not sure about the exact
+#' abbreviation in use. 
+#' 
+#' For example we can find entries related to the Hargreaves-Samani PET model like this:
+
+# search for "Hargreaves" in descriptions and names
 rswat_docs('Hargreaves')
 
-#' It's not a very sopthisticated search tool, however, so you will get false positives with less-unique
-#' letter combinations. eg. a search for (snow) "melt" parameters turns up some things that have nothing
-#' to do with melting
-
-rswat_docs('melt')
-
-#' and a search for "snowmelt" omits some relevant entries from file "snow.sno" because their names
-#' are less similar to the search pattern than a match found in "temperature.cha":
-
-rswat_docs('snowmelt')
-
+#' Three parameters are matched (exactly) because the literal string 'Hargreaves' appears in their
+#' descriptions. By default `rswat_docs` searches both names and descriptions, but this can be 
+#' changed via parameter `descw`. This is a number from 0 to 1 (inclusive) giving the weight
+#' to assign to matches in descriptions (versus matches in names) when ordering results.
 #' 
-#' ## searching descriptions
+#' For example with `descw=0` descriptions are ignored and only names are searched:
+
+# search names only
+rswat_docs('Hargreaves', descw=0)
+
+#' In this case no exact matches are found so the function reverts to approximate matching
+#' and finds a unique best result ("harg_pet", which turned up first in the last search).
+#' This match is based on character order and length. The other two results from before, "pet"
+#' and "ipet", have little in common with "Hargreaves" in that sense, so they are not matched.
 #' 
-#' To avoid the problem above with vague keywords, it's best to search the variable *descriptions* text.
-#' Specify this search mode using the `indesc=TRUE` argument:
+#' Description-only searching (`descw=1`) is useful for finding links between tables:
 
-# a better snow melt parameter search
-rswat_docs('melt', indesc=TRUE)
+# demonstrate description-only search 
+rswat_docs('snow.sno', descw=1)
 
-#' this turns up two places where a code must be set to enable the Hargreaves model
-rswat_docs('Hargreaves', indesc=TRUE)
+#' In this case `pattern` is a filename, but since `descw=1` it is interpreted as a search query.
+#' So instead of returning the 10 variables in the file "snow.sno" (as before), the function searches
+#' for the keyword "snow.sno" in the description text, and it finds one exact match. This match is to
+#' the description of variable"snow" from another file, "hru-data.hru", which provides a key for joining
+#' to the rows in "snow.sno"
+#' 
+#' The default `descw=0.5` provides equal weight to descriptions and names. This works well for
+#' matching broad keywords to variable names that may or may not be an abbreviation of those keywords.
+#' For example a search for "tile" turns up a number of variables related to tile drainage on the
+#' basis of their descriptions
+ 
+# demonstrate mixture of name and description matches
+rswat_docs('tile')
 
+#'
+#' ## multiple keywords and fuzzy matching
+
+#' Two of the results in the last call (from file "septic.sep") were matched only because of the
+#' word "tex**tile**" in their descriptions. To avoid these kinds of false positives you can turn
+#' off substring matching with `fuzzy=-1`
+
+# example of exact (no substring) matching
+rswat_docs('tile', fuzzy=-1)
+
+#' The redundant results are gone but we are now missing the "cn" result (in file "codes.bsn"), because
+#' it uses the term "tiled-drained". If you need to match more than one keyword in one search, you can
+#' separate multiple words in `pattern` by a pipe: 
+ 
+# example of multiple keywords with OR operation
+rswat_docs('tile|tiled', fuzzy=-1)
+
+#' Pipes in `pattern` are interpreted as a logical OR operator. Similarly, whitespace works like an
+#' approximate OR operator; whitespace-delimited elements of `pattern` are searched separately,
+#' and their string distances averaged to rank results:
+ 
+# example of whitespace delimited keywords
+rswat_docs('tile runoff ratio')
+
+#' This works pretty well for identifying a small number of "best" matches to a set of keywords.
+#' In this case we dropped the `fuzzy` argument, so the function uses the default 0 (exact
+#' substring matching). If you want more results, set `fuzzy` to have a value > 1:
+
+# example of higher fuzziness level
+rswat_docs('tile runoff ratio', fuzzy=1)
+
+#' One additional result is added to the list. With positive `fuzzy`, the function ranks all
+#' approximate matches by their "distance" to the search pattern, bins the results into groups of
+#' (nearly) equal rank, and returns the first `ceiling(fuzzy)` groups.
+#' 
+#' More simply, this just means `fuzzy` controls the number of results indirectly. Note that you may
+#' get more than one additional result by setting `fuzzy=1`, and more than two with `fuzzy=2`, etc. To
+#' request a fixed number of results, say `n`, simply set `fuzzy=Inf` to return everything, and pipe the
+#' results to `head(n)`:
+
+# example of setting a fixed number of results (10)
+rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
+
+#' Here, `rswat_docs` returns a dataframe with all 1059 possible matches, and `head(10)` extracts
+#' the top 10. The dataframe rows are ordered from best to worst, so eg. the first three matches
+#' in this case are the same as what we got with `fuzzy=1`
+
+#'
+#' ## thoughts and development plans
+#' 
+#' This is my first attempt at writing a text search tool, so it's pretty simple and ad-hoc in many
+#' ways. But I think it does the job well enough. If you think it would be useful in your project,
+#' feel free to contact me for help getting it to work on your machine. And if there's any interest
+#' in an R package based on this code, please let me know and I'll start tidying it up for CRAN. 
+#' 
+#' In future it would be good to improve support for boolean queries and maybe do some indexing on
+#' startup to make it snappier in `fuzzy=-1` mode. I also plan to work on extensions that support the
+#' SWAT2012 documentation files.
+#' 
 
 #+ include=FALSE
 # Development code
-#my_markdown('demo_rswat_docs', 'R/demo')  
+# library(here)
+# source(here('R/helper_main.R'))
+# my_markdown('demo_rswat_docs', 'R/demo')  
   

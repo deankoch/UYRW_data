@@ -4180,14 +4180,14 @@ rswat_match = function(pattern=NULL, charvec=NULL, fuzzy=NA, index=TRUE)
     # return a named list
     return( setNames(list.out, pattern))
   }
+  
+  # convert to lowercase
+  lpattern = tolower(pattern)
+  lcharvec = tolower(charvec)
 
-  # locate exact matches
-  idx.match = charvec %in% pattern
-  
-  # default empty string for pattern matches everything
-  if( is.null(pattern) ) idx.match = rep(TRUE, length(idx.match))
-  
-  # integer indices of matches
+  # locate exact matches (if pattern not supplied, match everything)
+  idx.match = lcharvec %in% lpattern
+  if( is.null(lpattern) ) idx.match = rep(TRUE, length(idx.match))
   int.out = which(idx.match)
   
   # handle approximate match requests
@@ -4196,12 +4196,10 @@ rswat_match = function(pattern=NULL, charvec=NULL, fuzzy=NA, index=TRUE)
     # positive `fuzzy` sets the maximum Levenstein distance  
     if( !(fuzzy < 0) )
     {
-      # convert to lowercase
-      lpattern = tolower(pattern)
-      lcharvec = tolower(charvec)
-      
-      # find substring matches (in lowercase), order by length, and append to results
+      # find substring matches, omitting exact matches found earlier
       idx.sin = grepl(lpattern, lcharvec, perl=TRUE) & ( !idx.match )
+      
+      # order by length and append to results
       int.sin = which(idx.sin)[ order(nchar(lcharvec[idx.sin])) ]
       int.out = c(int.out, int.sin)
       
@@ -4488,13 +4486,14 @@ rswat_pdf_parse = function(pdftext, ragged=FALSE, header=NULL, section=NA)
 }
 
 #' load and parse the SWAT+ I/O documentation PDF (requires `pdftools`)
-rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE)
+rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=70)
 {
   # ARGUMENTS:
   # 
   # `pdfpath`, character, the absolute path to the IO PDF document
   # `reload`, logical, whether to proceed if the file has been loaded already
   # `quiet`, logical, whether to suppress console output
+  # `desc.maxlen`, integer > 0, the number of characters to include in shortened descriptions
   #
   # RETURN:
   # 
@@ -4515,8 +4514,10 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE)
   # a default path to look for the PDF
   pdfpath.def = 'D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf'
   
-  # constants used to make shortened descriptions
-  desc.maxlen = 60
+  # (internal) environment to store the SWAT+ project file data
+  if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() )
+  
+  # suffix used to indicate a clipped description
   desc.suffix = '...'
   
   # initial data to keep track (in a loop) of the tables spanning multiple pages 
@@ -4633,31 +4634,41 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE)
   cat('done\n')
 }
 
-#' access/search the SWAT+ IO documentation PDF from within R (requires `pdftools`)
-rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=FALSE)
+#' case-insensitive search of SWAT+ IO documentation PDF from within R (requires `pdftools`)
+rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
 {
   # ARGUMENTS:
   # 
-  # `pattern`, character, the search string to look up (see DETAILS)
-  # `fname`, character, a SWAT+ filename to limit search results  
-  # `fuzzy`, numeric, if nonzero enables approximate matching for `vname` (see DETAILS)
-  # `indesc`, logical, whether to search in descriptions
-  # `full`, logical, whether to include full descriptions (instead of shortened ones)
+  # `pattern`, character, the search string to match against names and descriptions
+  # `fname`, character, a SWAT+ filename to limit search results 
+  # `fuzzy`, numeric, the fuzziness level to use in matching (see DETAILS)
+  # `descw`, numeric in [0,1], the weight given to description (versus name) matches 
+  # `full`, logical, whether to include full descriptions instead of abbreviated ones
   #
   # RETURN:
-  # 
-  # If `pattern=NULL` (the default), the function to returns a dataframe listing the filenames
-  # known to `rswat_docs`. Otherwise, return type depends on the class of `pattern` and `fname`:
   #
-  #  'df' mode returns a dataframe of variable name definitions parsed from the PDF
-  #  'index' mode returns the relevant page numbers of the PDF (integer vector)
-  #  'cat' mode prints the relevant pages of the PDF to the console and returns nothing
+  # If `pattern=NULL` (the default), the function to returns a dataframe listing the filenames
+  # known to `rswat_docs`.
+  #
+  # For non-NULL `pattern`, the function returns a dataframe containing names and descriptions
+  # of matching entries in the SWAT+ inputs documentation.
   #
   # DETAILS:
   #
-  # `pattern` is the SWAT+ variable name or filename (with extension) to look up. With default
-  # `fuzzy=NA` this must be a (case-insensitive) exact match to some entry in the PDF. Nonzero
-  # `fuzzy` enables substring and approximate matches (see `rswat_match`).
+  # All matching is case-insensitive. If `descw` is 0, only the variable names are searched;
+  # If `descw` is 1 only the descriptions are searched. Intermediate values match both lists
+  # and order the results by the weighted sum of the two string distances.
+  #
+  # Negative `fuzzy` will attempt to return exact matches only; fuzzy=0 also includes exact
+  # substring matches. Higher `fuzzy` levels indicate to include approximate matches of
+  # substrings up to the specified fuzziness level (non-integer `fuzzy` gets rounded up):
+  #
+  # fuzziness is defined by calling `my_adist` to compute a string distance against `pattern`
+  # (based on Leveinstein distance and string length heuristics), and the resulting distance scores
+  # are binned into groups of like values. `fuzzy` indicates how many of these groups to include in
+  # search results. eg `fuzzy=1` includes (all elements) of the closest group, `fuzzy=2` includes
+  # the two closest groups, and so on.
+  # 
   # 
   
   # regex for filenames (assume lowercase)
@@ -4666,10 +4677,8 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   # formatting for console printout headers
   lrule = c('\n~~~', '~~~\n') 
   
-  # assign default fuzzy level
-  if( is.null(fuzzy) ) fuzzy = ifelse(indesc, 0, NA)
-  
-  # make sure the PDF has been loaded
+  # make sure weighting factor lies in the correct range and the PDF has been loaded
+  descw = max(min(descw, 1), 0)
   if( is.null(.rswat$docs$filetable) ) rswat_pdf_open()
   
   # default return value is the files summary table
@@ -4685,8 +4694,11 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   # handle integer input (pattern treated as list of page numbers)
   if( is.numeric(pattern) )
   {
-    # coerce pattern if necessary
-    pattern = as.integer(pattern)
+    # coerce to integer and correct range if necessary
+    page.nmax = length(.rswat$docs$rawtext)
+    page.warn = paste('valid page numbers are: 1, 2, ...,', page.nmax)
+    if( ( pattern > page.nmax ) | ( pattern > page.nmax ) ) warning(page.warn)
+    pattern = max(min(as.integer(pattern), page.nmax), 1)
     
     # extract printable text and append page number indicators
     page.msg = paste(lrule[1], 'page', pattern, lrule[2])
@@ -4698,7 +4710,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   }
 
   # pattern is treated as filename in special case 
-  pattern.check = is.null(fname) & !is.null(pattern) & !indesc
+  pattern.check = is.null(fname) & !is.null(pattern) & ( descw != 1 )
   pattern.isfname = ifelse(pattern.check, grepl(regex.fname, tolower(pattern)), FALSE)
   if( pattern.isfname )
   {
@@ -4707,20 +4719,20 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
     pattern = NULL
   }
   
-  # default value for `pattern` matches everything when passed to grepl
+  # default value for `fname` matches everything
   pattern.msg = paste0('\"', pattern, '\"')
-  if( is.null(fname) ) fname = '.*'
+  if( is.null(fname) ) fname = '*'
   
   # same for `pattern`, but we use an alternative console message in this case
-  is.filerequest = FALSE
+  is.file = FALSE
   if( is.null(pattern) )
   {
     # set flag for alternate message and build the new string to cat
-    is.filerequest = TRUE
+    is.file = TRUE
     pattern.msg = paste('file(s)', paste(fname, collapse=', '))
     
-    # fuzzy must not be NA so that pattern is treated as a regex
-    pattern = '.*' 
+    # set special search pattern and fuzzy level
+    pattern = '*' 
     fuzzy = 0
   }
   
@@ -4728,46 +4740,76 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   vartable = .rswat$docs$vartable %>% filter( grepl(fname, file) )
   filetable = .rswat$docs$filetable %>% filter( grepl(fname, file) )
   
-  # copy character vector to search through and make labels for console message
-  colnm = c('name', 'description_full')[ 1 + as.integer(indesc) ]
-  msg.colnm = c('names', 'descriptions')[ 1 + as.integer(indesc) ]
-  charvec = vartable[[colnm]]
+  # initialize score vectors
+  adist.nm = adist.desc = rep(1, nrow(vartable))
   
-  # run search and handle no-match case
-  idx.match = rswat_match(pattern=pattern, charvec=charvec, fuzzy=fuzzy, index=TRUE)
-  if( length(idx.match) == 0 )
+  # search names and descriptions as needed
+  if( descw > 0 ) adist.desc = my_adist(pattern, vartable$description_full, lu.split=fuzzy<0)
+  if( descw < 1 ) adist.nm = my_adist(pattern, vartable$name)
+
+  # the first results are always the exact matches
+  idx.ematch = ( adist.nm * adist.desc ) == 0
+  
+  # initialize ordered vector of match indices
+  int.match = which(idx.ematch)
+  
+  # compute weighted sum of the two string distance scores
+  adist.sum = ( (1 - descw) * adist.nm ) + ( descw * adist.desc)
+  
+  # as needed, find substring matches (string distance < 1), sort
+  if( !(fuzzy < 0) )
   {
-    # console message about failed search
-    nomatch.msg = paste0('No matches among ', msg.colnm, ' for ', pattern.msg, '. ')
-    cat(nomatch.msg)
+    # excluding exact matches from this index, sort according to weighted score
+    idx.smatch = !(idx.ematch) & ( ( adist.nm < 1 ) | ( adist.desc < 1 ) )
+    int.smatch = which(idx.smatch)[ order( adist.sum[idx.smatch] ) ]
     
-    # handle failures in exact match mode by switching to substring matching
-    if( is.na(fuzzy) ) fuzzy = 0
-      
-    # handle failures in exact match mode
-    if( !(fuzzy < 0) )
-    {
-      # try increasing fuzzy until a match is found (see `rswat_match`)
-      cat(' Reverting to approximate matching...\n')
-      fuzzy = -nchar(pattern)
-      
-      # look for exact substring matches among descriptions
-      return( rswat_docs(pattern, fname, indesc=indesc, fuzzy=fuzzy, full=full) )
-    }
+    # add sorted indices to the stack of results
+    int.match = c(int.match, int.smatch)
+  }
+  
+  # approximate search mode
+  if( fuzzy > 0 )
+  {
+    # sort remaining elements into bins of equal distance to `pattern` 
+    idx.rem = !( idx.smatch | idx.ematch )
+    adist.bin = unique( sort( round(adist.sum[idx.rem], 2) ) )
+    
+    # find matching elements from the closest bins, add sorted indices to stack
+    idx.amatch = round(adist.sum, 2) %in% adist.bin[ seq_along(adist.bin) < ceiling(fuzzy) + 1 ]
+    int.amatch = which(idx.amatch)[ order( adist.sum[idx.amatch] ) ]
+    int.match = c(int.match, int.amatch)
+  }
+
+  # handle no-match cases
+  if( length(int.match) == 0 )
+  {
+    # increment fuzzy until we get a match (fuzzy==1 will always produce a match)
+    if( fuzzy == 0 ) newfuzzy = 1
+    
+    # if no exact matches try switching to substring matching
+    if( fuzzy < 0 ) newfuzzy = 0
+    
+    # console message about failed search
+    nomatch.msg = paste0('No exact matches for ', pattern.msg, '. ')
+    nomatch.info = paste('Repeating search at fuzzy level', newfuzzy, '\n')
+    cat( paste0(nomatch.msg, nomatch.info) )
+    
+    # run the search again with higher fuzzy level
+    return( rswat_docs(pattern, fname, fuzzy=newfuzzy, descw=descw, full=full) )
   }
   
   # copy subset of database matching pattern and count files and individual matches
-  vartable.match = vartable[idx.match, ]
+  vartable.match = vartable %>% slice(int.match)
   n.files = length(unique(vartable.match$file))
   n.results = nrow(vartable.match)
   
   # message about search results
-  msg.approx = ifelse( is.na(fuzzy), 'exact', 'approximate')
-  msg.matchtype = paste(msg.approx, 'match result(s) among', msg.colnm, 'for', pattern.msg)
-  msg.search = paste(n.results, msg.matchtype, 'in', n.files, 'file(s)\n\n')
+  msg.approx = ifelse(fuzzy < 1, 'exact', 'approximate')
+  msg.matchtype = paste(msg.approx, 'result(s) for', pattern.msg)
+  msg.search = paste(n.results, msg.matchtype, 'in', n.files, 'file(s)\n')
   
   # alternate message and row order for file requests
-  if(is.filerequest)
+  if(is.file)
   {
     msg.search = paste(n.results, 'result(s) in', pattern.msg, '\n') 
     vartable.match = vartable.match %>% arrange(as.integer(rownames(vartable.match)))
@@ -4779,13 +4821,10 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   # print the full description in single match case, or where requested by `printall`
   if( n.results == 1 )
   {
-    # add a header to each section of output
+    # add a header to each section of output and print to console
     match.msg = paste(lrule[1], vartable.match$file, ':', vartable.match$name, lrule[2])
-    cat.out = paste0(match.msg, vartable.match$description_full)
-    
-    # print to console and finish
+    cat.out = paste0(match.msg, vartable.match$description_full, '\n\n')
     cat(cat.out)
-    return(invisible())
   }
 
   # select the requested description (full or trimmed)
@@ -4798,6 +4837,8 @@ rswat_docs = function(pattern=NULL, fname=NULL, indesc=FALSE, fuzzy=NULL, full=F
   # return the dataframe of matches
   return( vartable.out )
 }
+
+
 
 
 #' ## DEPRECATED: phasing these out

@@ -43,7 +43,7 @@ library(pdftools)
 #' Note that these require the `.rswat` environment defined above
 #' 
 #' load and parse the SWAT+ I/O documentation PDF
-rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=70)
+rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=50)
 {
   # ARGUMENTS:
   # 

@@ -1,17 +1,19 @@
 demo\_rswat\_docs.R
 ================
 Dean Koch
-2021-05-17
+2021-05-20
 
 **Mitacs UYRW project**
 
 **demo\_rswat\_docs.R**: Access variable definition tables in SWAT+
 documentation PDF from R
 
-This script demonstrates the `rswat_docs` function, which reads and
-parses the SWAT+ inputs PDF (“CHAPTER FILE.CIO: SWAT+ INPUT DATA”)
-returning its name/definition table entries as dataframes, or printing
-them to the console.
+This script demonstrates
+[rswat\_docs.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md),
+which reads and parses the SWAT+ inputs PDF
+(“inputs\_swatplus\_rev60\_5.pdf”) into a large name/definition
+dataframes, whose entries can then be searched or printed to the
+console.
 
 ## introduction
 
@@ -20,45 +22,48 @@ submodels and associated parameters a bit overwhelming. There are a LOT
 of variables to keep track of. The latest configuration file
 documentation PDF (“inputs\_swatplus\_rev60\_5.pdf”, [available
 here](https://swatplus.gitbook.io/docs/user/io)) runs over 250 pages\!
-And that’s just variable name definitions.
+And that’s just input variable name definitions.
 
-As I learn the model, I find I’m spending a lot of time scrolling this
-PDF to look up definitions, units, and coding schemes. This is fine at
-the first, as you don’t want to just skim through and miss something
-important when you’re learning. But later on, when using the doc as a
-reference, it gets tedious. Variable names are often mentioned multiple
-times in the document before we get to their full definitions, and it
-can be hard to track down the SWAT+ version of a SWAT name (or names you
-can’t remember exactly) using just ctrl-F.
+The code below demonstrates an indexing and search tool to help R-based
+SWAT+ users like me navigate this document. The codebase render the PDF
+into text strings, building a giant searchable list of all “Variable
+Name”/“Definition” entries.
 
-To streamline things I’ve written some helper functions that load the
-PDF and build a big list of all its “Variable Name” - “Definition”
-entries. The list can be searched using approximate matching (allowing
-character substitutions, etc). R users may find this a quicker and more
-direct route to accessing the variable definitions they need, and for
-exploring the model.
+## what’s wrong with ctrl-f?
 
-## libraries
+Yes, you could just search for keywords using your favorite PDF viewer,
+except that:
 
-[pdftools](https://cran.r-project.org/web/packages/pdftools/index.html)
-is required to render the PDF textboxes as character vectors in R,
-[helper\_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md)
-and
-[rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md)
-load some required libraries, global variables, and some helper
-functions.
+  - abbreviations won’t turn up in literal keyword searches with viewers
+    like Acrobat or Sumatra
+  - variable names are often mentioned multiple times in the document
+    before we get to their full definitions
+  - many variable names are slightly different in SWAT+ versus SWAT2012
+    (and the theory documentation was written for the latter)
+
+By my count there are 1000+ variable names defined in this document - I
+don’t think anyone is going to memorize them all. So when you know what
+you’re looking for but can’t quite remember the exact name it can be a
+real chore to track it down. `rswat_docs` provides a more direct search
+tool that supports fuzzy matching of multiple keywords to both names and
+definitions.
+
+## libraries and installation
+
+The easiest way to try this code out yourself is to simply download the
+Rscript sourced below
+([rswat\_docs.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md))
+and install any missing packages on your machine.
 
 ``` r
+# library `here` is not strictly necessary; I just use it to simplify paths
 library(here)
-library(pdftools)
-source(here('R/helper_main.R'))
-source(here('R/rswat.R'))
+source(here('R/rswat_docs.R'))
 ```
 
-Note that “rswat.R” is sourced in the line above to initialize the
-`.rswat` environment in your session. The relevant functions definitions
-in that file are `rswat_docs`, `rswat_pdf_open`, `rswat_pdf_parse`, and
-`rswat_match`. Other functions are not needed at this point.
+`rswat_docs.R` will initialize an environment called `.rswat` in your
+session, and define four functions; `rswat_docs`, `rswat_pdf_open`,
+`rswat_pdf_parse`, and `my_adist`.
 
 ## getting started
 
@@ -69,13 +74,13 @@ change the PDF path variable below to point to their local copy.
 
 ``` r
 # set the PDF path
-pdfpath = 'D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf'
+pdfpath = here('development/inputs_swatplus_rev60_5.pdf')
 
 # load the file into memory
 rswat_pdf_open(pdfpath, quiet=TRUE)
 ```
 
-    ## done
+    ## [1] "D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf"
 
 This function call does a lot of stuff in the background - it uses the
 `pdftools` package to render text boxes into character strings, then
@@ -127,7 +132,9 @@ The parser finds 105 different name-definition tables in the document,
 each associated with a different SWAT+ configuration file. The `ndef`
 field counts the number of definitions for each table, `startpage`
 indicates the page (in the PDF) on which this table starts, and `npage`
-counts the number of pages it runs.
+counts the number of pages a table runs for.
+
+## accessing documentation from R
 
 Let’s look at the example of the “snow.sno” file, which controls
 snowfall/snowmelt processes:
@@ -141,7 +148,7 @@ rswat_docs() %>% filter(file=='snow.sno')
 
 This starts on page 176 and runs for three pages. To view the full text
 of one of these pages in R, simply pass a page number or a vector of
-them to `rswat_docs`:
+them:
 
 ``` r
 # print a specific page of the PDF
@@ -202,17 +209,17 @@ rswat_docs('snow.sno')
 
     ## 10 result(s) in file(s) snow.sno
 
-    ##       name     file pstart                                                     description
-    ## 1    title snow.sno    176 The first line is reserved for user comments. This line is n...
-    ## 2     name snow.sno    176                                     Name of the snow parameters
-    ## 3  falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which pre...
-    ## 4  melttmp snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt...
-    ## 5   meltmx snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the wate...
-    ## 6   meltmn snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the ...
-    ## 7     timp snow.sno    178 Snow pack temperature lag factor. The influence of the previ...
-    ## 8    covmx snow.sno    178                             Minimum snow water content (mm H20)
-    ## 9    cov50 snow.sno    178                                               Fraction of COVMX
-    ## 10 init_mm snow.sno    178               Initial snow water content at start of simulation
+    ##       name     file pstart                                                               description
+    ## 1    title snow.sno    176 The first line is reserved for user comments. This line is not process...
+    ## 2     name snow.sno    176                                               Name of the snow parameters
+    ## 3  falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
+    ## 4  melttmp snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt until the...
+    ## 5   meltmx snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the watershed is i...
+    ## 6   meltmn snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the watershed ...
+    ## 7     timp snow.sno    178 Snow pack temperature lag factor. The influence of the previous day’s ...
+    ## 8    covmx snow.sno    178                                       Minimum snow water content (mm H20)
+    ## 9    cov50 snow.sno    178                                                         Fraction of COVMX
+    ## 10 init_mm snow.sno    178                         Initial snow water content at start of simulation
 
 Longer definitions are clipped (they end with ‘…’) so that they can fit
 cleanly into an R console printout of a dataframe (similar to
@@ -220,156 +227,305 @@ cleanly into an R console printout of a dataframe (similar to
 `full=TRUE` argument
 
 ``` r
-# if you like tibbles, use `full=TRUE` and pipe to `tibble` to copy the full descriptions
+# if you like tibbles, use `full=TRUE` and pipe to `tibble`
 rswat_docs('snow.sno', full=TRUE) %>% tibble %>% print
 ```
 
     ## 10 result(s) in file(s) snow.sno 
     ## # A tibble: 10 x 4
-    ##    name    file    pstart description                                                                           
-    ##    <chr>   <chr>    <int> <chr>                                                                                 
-    ##  1 title   snow.s~    176 "The first line is reserved for user comments. This line is not\nprocessed by the mod~
-    ##  2 name    snow.s~    176 "Name of the snow parameters"                                                         
-    ##  3 falltmp snow.s~    176 "Snowfall temperature (ºC).\nMean air temperature at which precipitation is equally l~
-    ##  4 melttmp snow.s~    176 "Snow melt base temperature (ºC).\nThe snow pack will not melt until the snow pack te~
-    ##  5 meltmx  snow.s~    177 "Melt factor for snow on June 21 (mm H2O/ºC-day).\nIf the watershed is in the Norther~
-    ##  6 meltmn  snow.s~    178 "Melt factor for snow on December 21 (mm H2O/ºC-day).\nIf the watershed is in the Nor~
-    ##  7 timp    snow.s~    178 "Snow pack temperature lag factor.\nThe influence of the previous day’s snow pack tem~
-    ##  8 covmx   snow.s~    178 "Minimum snow water content (mm H20)"                                                 
-    ##  9 cov50   snow.s~    178 "Fraction of COVMX"                                                                   
+    ##    name    file    pstart description                                                                                   
+    ##    <chr>   <chr>    <int> <chr>                                                                                         
+    ##  1 title   snow.s~    176 "The first line is reserved for user comments. This line is not\nprocessed by the model and m~
+    ##  2 name    snow.s~    176 "Name of the snow parameters"                                                                 
+    ##  3 falltmp snow.s~    176 "Snowfall temperature (ºC).\nMean air temperature at which precipitation is equally likely\nt~
+    ##  4 melttmp snow.s~    176 "Snow melt base temperature (ºC).\nThe snow pack will not melt until the snow pack temperatur~
+    ##  5 meltmx  snow.s~    177 "Melt factor for snow on June 21 (mm H2O/ºC-day).\nIf the watershed is in the Northern Hemisp~
+    ##  6 meltmn  snow.s~    178 "Melt factor for snow on December 21 (mm H2O/ºC-day).\nIf the watershed is in the Northern He~
+    ##  7 timp    snow.s~    178 "Snow pack temperature lag factor.\nThe influence of the previous day’s snow pack temperature~
+    ##  8 covmx   snow.s~    178 "Minimum snow water content (mm H20)"                                                         
+    ##  9 cov50   snow.s~    178 "Fraction of COVMX"                                                                           
     ## 10 init_mm snow.s~    178 "Initial snow water content at start of simulation"
 
-Notice the *slash-“n”’s*, which indicate where a newline happened in the
-source file. Since R is printing the literal strings here, the output
-looks ugly unless we pipe it to a `cat` call. `rswat_docs` will do this
-by default (instead of returning the dataframe) when it finds one single
-match for a search query.
+Since R is printing the literal description strings, which often contain
+newline characters, the output is full of “\\n”s, which causes the
+description text to look messy. If we pipe these strings to `cat`, the
+newlines will render correctly and show us the original text (more or
+less) as it appeared in the PDF.
+
+By default, `rswat_docs` does this automatically whenever a search query
+yields a unique match. For example the following call selects the
+“falltmp” variable from “snow.sno”. Since this the only match for
+“falltmp”, the function prints its full description in addition to
+returning the dataframe:
 
 ``` r
-# eg. search for the pattern "title" in filename "snow.sno" like this:
-rswat_docs('title', fname='snow.sno')
+# demonstrate filename argument and single match behaviour
+rswat_docs('falltmp', fname='snow.sno')
 ```
 
-    ## 1 exact match result(s) among names for "title" in 1 file(s)
+    ## 1 exact result(s) for "falltmp" in 1 file(s)
     ## 
-    ## 
-    ## ~~~ snow.sno : title ~~~
-    ## The first line is reserved for user comments. This line is not
-    ## processed by the model and may be left blank.
-    ## Optional.
+    ## ~~~ snow.sno : falltmp ~~~
+    ## Snowfall temperature (ºC).
+    ## Mean air temperature at which precipitation is equally likely
+    ## to be rain as snow/freezing rain. The snowfall temperature
+    ## should be between –5 ºC and 5 ºC.
+    ## A default recommended for this variable is SFTMP = 1.0.
+    ## Required in watersheds where snowfall is significant.
 
-The result is a printout of the full description as it would appear in
-the PDF (including newlines).
+    ##      name     file pstart                                                               description
+    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
 
-## searching names
+In this case the first argument (`pattern`) is our search keyword, and
+we have passed the filename in the second argument (`fname`).
+`rswat_docs` will automatically detect when `pattern` is a filename and
+return the full table of variables for the file as it did above, with
+the exception of description-only queries (where `descw=1`); an example
+of this can be found in the next section.
 
-The first argument of `rswat_docs` can be filename (as in the first two
-calls above), or a search string for some keyword (as in the last
-function call). When the argument `fname` is missing, all filenames are
-included in the search:
+## searching for keywords
+
+Some SWAT+ variable names are unique enough to turn up a single match in
+searches. For example we can repeat the previous call without `fname`
+and get the same unique result:
 
 ``` r
-# eg. repeat the last call without specifying "snow.sno" and get 99 matches (print the first few)
-rswat_docs('title') %>% head
+# demonstrate unique single match among all files
+rswat_docs('falltmp')
 ```
 
-    ## 99 exact match result(s) among names for "title" in 99 file(s)
+    ## 1 exact result(s) for "falltmp" in 1 file(s)
+    ## 
+    ## ~~~ snow.sno : falltmp ~~~
+    ## Snowfall temperature (ºC).
+    ## Mean air temperature at which precipitation is equally likely
+    ## to be rain as snow/freezing rain. The snowfall temperature
+    ## should be between –5 ºC and 5 ºC.
+    ## A default recommended for this variable is SFTMP = 1.0.
+    ## Required in watersheds where snowfall is significant.
 
-    ##    name            file pstart                                                     description
-    ## 1 title        file.cio      2 The first line of ‘file.cio’ is reserved for a description o...
-    ## 2 title       print.prt      5                               Description of the print.prt file
-    ## 3 title      object.prt      7                            Description of the object print file
-    ## 4 title      object.cnt      8                            Description of the object count file
-    ## 5 title constituents.cs     17 The first line of the file is reserved for user comments. Th...
-    ## 6 title       codes.bsn     18 The first line is reserved for user comments. This line is n...
+    ##      name     file pstart                                                               description
+    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
 
-By default, when exact matches are found, `rswat_docs` returns (only)
-them. If no exact matches are found, it then looks for substring matches
-and returns those. If still nothing is found, it then tries approximate
-matching with increasing fuzziness until it gets at least one match.
+By default, when exact (substring) matches are found, `rswat_docs`
+returns only them. If no exact matches are found, it returns approximate
+matches. This can be pretty effective for tracking down variable names
+when you have a rough idea of the name but you’re not sure about the
+exact abbreviation in use.
 
-This can be pretty effective for tracking down variable names when you
-have a rough idea of the name but you’re not sure about the exact
-abbreviation in use. eg. a search for the Hargreaves PET coefficient
-finds ‘harg\_pet’ right away:
+For example we can find entries related to the Hargreaves-Samani PET
+model like this:
 
 ``` r
+# search for "Hargreaves" in descriptions and names
 rswat_docs('Hargreaves')
 ```
 
-    ## No matches among names for "Hargreaves".  Reverting to approximate matching...
-    ## 1 approximate match result(s) among names for "Hargreaves" in 1 file(s)
-    ## 
+    ## 3 exact result(s) for "Hargreaves" in 3 file(s)
+
+    ##       name          file pstart                                                               description
+    ## 1 harg_pet hydrology.hyd    126              Coefficient related to radiation used in Hargreaves equation
+    ## 2     ipet   hru-lte.hru     88 Potential evapotranspiration (PET) method (character): ‘harg’ = Hargre...
+    ## 3      pet     codes.bsn     18 Potential evapotranspiration (PET) method. There are four options for ...
+
+Three parameters are matched (exactly) because the literal string
+‘Hargreaves’ appears in their descriptions. By default `rswat_docs`
+searches both names and descriptions, but this can be changed via
+parameter `descw`. This is a number from 0 to 1 (inclusive) giving the
+weight to assign to matches in descriptions (versus matches in names)
+when ordering results.
+
+For example with `descw=0` descriptions are ignored and only names are
+searched:
+
+``` r
+# search names only
+rswat_docs('Hargreaves', descw=0)
+```
+
+    ## No exact matches for "Hargreaves". Repeating search at fuzzy level 1 
+    ## 1 approximate result(s) for "Hargreaves" in 1 file(s)
     ## 
     ## ~~~ hydrology.hyd : harg_pet ~~~
     ## Coefficient related to radiation used in Hargreaves equation
 
-It’s not a very sopthisticated search tool, however, so you will get
-false positives with less-unique letter combinations. eg. a search for
-(snow) “melt” parameters turns up some things that have nothing to do
-with melting
+    ##       name          file pstart                                                  description
+    ## 1 harg_pet hydrology.hyd    126 Coefficient related to radiation used in Hargreaves equation
+
+In this case no exact matches are found so the function reverts to
+approximate matching and finds a unique best result (“harg\_pet”, which
+turned up first in the last search). This match is based on character
+order and length. The other two results from before, “pet” and “ipet”,
+have little in common with “Hargreaves” in that sense, so they are not
+matched.
+
+Description-only searching (`descw=1`) is useful for finding links
+between tables:
 
 ``` r
-rswat_docs('melt')
+# demonstrate description-only search 
+rswat_docs('snow.sno', descw=1)
 ```
 
-    ## No matches among names for "melt".  Reverting to approximate matching...
-    ## 8 approximate match result(s) among names for "melt" in 6 file(s)
-
-    ##         name            file pstart                                                     description
-    ## 1     meltmx        snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the wate...
-    ## 2     meltmn        snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the ...
-    ## 3    melttmp        snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt...
-    ## 4   timestep        atmo.cli     48 There are three different timesteps for the file to be read ...
-    ## 5    sno_mlt temperature.cha     69      Coefficient influencing snowmelt temperature contributions
-    ## 6   cha_hmet channel-lte.cha     68         Channel lte heavy metals file (points to hmet.cha file)
-    ## 7 num_metals constituents.cs     17                                Number of heavy metals simulated
-    ## 8  op_method  management.sch    192                                         Plant name in community
-
-and a search for “snowmelt” omits some relevant entries from file
-“snow.sno” because their names are less similar to the search pattern
-than a match found in “temperature.cha”:
-
-``` r
-rswat_docs('snowmelt')
-```
-
-    ## No matches among names for "snowmelt".  Reverting to approximate matching...
-    ## 1 approximate match result(s) among names for "snowmelt" in 1 file(s)
+    ## 1 exact result(s) for "snow.sno" in 1 file(s)
     ## 
-    ## 
-    ## ~~~ temperature.cha : sno_mlt ~~~
-    ## Coefficient influencing snowmelt temperature contributions
+    ## ~~~ hru-data.hru : snow ~~~
+    ## Snow database name (points to snow.sno)
 
-## searching descriptions
+    ##   name         file pstart                             description
+    ## 1 snow hru-data.hru     86 Snow database name (points to snow.sno)
 
-To avoid the problem above with vague keywords, it’s best to search the
-variable *descriptions* text. Specify this search mode using the
-`indesc=TRUE` argument:
+In this case `pattern` is a filename, but since `descw=1` it is
+interpreted as a search query. So instead of returning the 10 variables
+in the file “snow.sno” (as before), the function searches for the
+keyword “snow.sno” in the description text, and it finds one exact
+match. This match is to the description of variable“snow” from another
+file, “hru-data.hru”, which provides a key for joining to the rows in
+“snow.sno”
 
-``` r
-# a better snow melt parameter search
-rswat_docs('melt', indesc=TRUE)
-```
-
-    ## 4 approximate match result(s) among descriptions for "melt" in 2 file(s)
-
-    ##      name            file pstart                                                     description
-    ## 1 sno_mlt temperature.cha     69      Coefficient influencing snowmelt temperature contributions
-    ## 2 melttmp        snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt...
-    ## 3  meltmx        snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the wate...
-    ## 4  meltmn        snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the ...
-
-this turns up two places where a code must be set to enable the
-Hargreaves model
+The default `descw=0.5` provides equal weight to descriptions and names.
+This works well for matching broad keywords to variable names that may
+or may not be an abbreviation of those keywords. For example a search
+for “tile” turns up a number of variables related to tile drainage on
+the basis of their descriptions
 
 ``` r
-rswat_docs('Hargreaves', indesc=TRUE)
+# demonstrate mixture of name and description matches
+rswat_docs('tile')
 ```
 
-    ## 3 approximate match result(s) among descriptions for "Hargreaves" in 3 file(s)
+    ## 9 exact result(s) for "tile" in 6 file(s)
 
-    ##       name          file pstart                                                     description
-    ## 1 harg_pet hydrology.hyd    126    Coefficient related to radiation used in Hargreaves equation
-    ## 2     ipet   hru-lte.hru     88 Potential evapotranspiration (PET) method (character): ‘harg...
-    ## 3      pet     codes.bsn     18 Potential evapotranspiration (PET) method. There are four op...
+    ##        name              file pstart                                                               description
+    ## 1 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
+    ## 2       lag     tiledrain.str    129                                                       Drain tile lag time
+    ## 3       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ## 4      dist     tiledrain.str    129    Distance between two drain tubes or tiles (mm) Range (7600 – 30000 mm)
+    ## 5  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
+    ## 6      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
+    ## 7       typ        septic.str    130 The type of septic system Type Definition 1 Generic type conventional ...
+    ## 8     sepnm        septic.sep    173 Abridged name of a septic system sptname Definition GCON Generic type ...
+    ## 9        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+
+## multiple keywords and fuzzy matching
+
+Two of the results in the last call (from file “septic.sep”) were
+matched only because of the word “tex**tile**” in their descriptions. To
+avoid these kinds of false positives you can turn off substring matching
+with `fuzzy=-1`
+
+``` r
+# example of exact (no substring) matching
+rswat_docs('tile', fuzzy=-1)
+```
+
+    ## 5 exact result(s) for "tile" in 4 file(s)
+
+    ##        name              file pstart                                                               description
+    ## 1      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
+    ## 2       lag     tiledrain.str    129                                                       Drain tile lag time
+    ## 3  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
+    ## 4 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
+    ## 5       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+
+The redundant results are gone but we are now missing the “cn” result
+(in file “codes.bsn”), because it uses the term “tiled-drained”. If you
+need to match more than one keyword in one search, you can separate
+multiple words in `pattern` by a pipe:
+
+``` r
+# example of multiple keywords with OR operation
+rswat_docs('tile|tiled', fuzzy=-1)
+```
+
+    ## 6 exact result(s) for "tile|tiled" in 4 file(s)
+
+    ##        name              file pstart                                                               description
+    ## 1        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+    ## 2      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
+    ## 3       lag     tiledrain.str    129                                                       Drain tile lag time
+    ## 4  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
+    ## 5 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
+    ## 6       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+
+Pipes in `pattern` are interpreted as a logical OR operator. Similarly,
+whitespace works like an approximate OR operator; whitespace-delimited
+elements of `pattern` are searched separately, and their string
+distances averaged to rank results:
+
+``` r
+# example of whitespace delimited keywords
+rswat_docs('tile runoff ratio')
+```
+
+    ## 2 exact result(s) for "tile runoff ratio" in 2 file(s)
+
+    ##   name              file pstart                                                               description
+    ## 1  tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ## 2   cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+
+This works pretty well for identifying a small number of “best” matches
+to a set of keywords. In this case we dropped the `fuzzy` argument, so
+the function uses the default 0 (exact substring matching). If you want
+more results, set `fuzzy` to have a value \> 1:
+
+``` r
+# example of higher fuzziness level
+rswat_docs('tile runoff ratio', fuzzy=1)
+```
+
+    ## 3 approximate result(s) for "tile runoff ratio" in 3 file(s)
+
+    ##       name              file pstart                                                               description
+    ## 1      tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ## 2       cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+    ## 3 vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges from 0 to ...
+
+One additional result is added to the list. With positive `fuzzy`, the
+function ranks all approximate matches by their “distance” to the search
+pattern, bins the results into groups of (nearly) equal rank, and
+returns the first `ceiling(fuzzy)` groups.
+
+More simply, this just means `fuzzy` controls the number of results
+indirectly. Note that you may get more than one additional result by
+setting `fuzzy=1`, and more than two with `fuzzy=2`, etc. To request a
+fixed number of results, say `n`, simply set `fuzzy=Inf` to return
+everything, and pipe the results to `head(n)`:
+
+``` r
+# example of setting a fixed number of results (10)
+rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
+```
+
+    ## 1059 approximate result(s) for "tile runoff ratio" in 105 file(s)
+
+    ##         name              file pstart                                                               description
+    ## 1        tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ## 2         cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+    ## 3   vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges from 0 to ...
+    ## 4  tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
+    ## 5     nperco    parameters.bsn     27 Nitrate percolation coefficient. NPERCO controls the amount of nitrate...
+    ## 6     percop    parameters.bsn     30 Pesticide percolation coefficient. PERCOP controls the amount of pesti...
+    ## 7    urbcoef         urban.urb    169 Wash-off coefficient for removal of constituents from impervious area ...
+    ## 8     erorgn     hydrology.hyd    125 Organic N enrichment ratio for loading with sediment. As surface runof...
+    ## 9   pst_wsol     pesticide.pst    165 Solubility of the chemical in water (mg/L or ppm) The water solubility...
+    ## 10     title      delratio.del    113                                        The title of the delratio.del file
+
+Here, `rswat_docs` returns a dataframe with all 1059 possible matches,
+and `head(10)` extracts the top 10. The dataframe rows are ordered from
+best to worst, so eg. the first three matches in this case are the same
+as what we got with `fuzzy=1`
+
+## thoughts and development plans
+
+This is my first attempt at writing a text search tool, so it’s pretty
+simple and ad-hoc in many ways. But I think it does the job well enough.
+If you think it would be useful in your project, feel free to contact me
+for help getting it to work on your machine. And if there’s any interest
+in an R package based on this code, please let me know and I’ll start
+tidying it up for CRAN.
+
+In future it would be good to improve support for boolean queries and
+maybe do some indexing on startup to make it snappier in `fuzzy=-1`
+mode. I also plan to work on extensions that support the SWAT2012
+documentation files.
