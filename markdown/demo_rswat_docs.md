@@ -5,15 +5,14 @@ Dean Koch
 
 **Mitacs UYRW project**
 
-**demo\_rswat\_docs.R**: Access variable definition tables in SWAT+
+**demo\_rswat\_docs.R**: Access variable definition tables in the SWAT+
 documentation PDF from R
 
 This script demonstrates
 [rswat\_docs.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md),
 which reads and parses the SWAT+ inputs PDF
 (“inputs\_swatplus\_rev60\_5.pdf”) into a large name/definition
-dataframes, whose entries can then be searched or printed to the
-console.
+dataframe, whose entries can then be searched or printed to the console.
 
 ## introduction
 
@@ -467,7 +466,7 @@ rswat_docs('tile runoff ratio')
 This works pretty well for identifying a small number of “best” matches
 to a set of keywords. In this case we dropped the `fuzzy` argument, so
 the function uses the default 0 (exact substring matching). If you want
-more results, set `fuzzy` to have a value \> 1:
+more results, set `fuzzy` to have a value \>= 1:
 
 ``` r
 # example of higher fuzziness level
