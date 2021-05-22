@@ -1,7 +1,7 @@
 demo\_rswat\_docs.R
 ================
 Dean Koch
-2021-05-21
+2021-05-22
 
 **Mitacs UYRW project**
 
@@ -38,10 +38,10 @@ that:
     able to remember (or guess) the particular abbreviation in use, or a
     substring of it
   - many abbreviations aren’t really guessable for the unitiated
-    (“SED\_DET”?)
-  - a short/generic variable name like ‘LONG’ can appear dozens of times
-    in the document before you get to the definition you’re interested
-    in
+    (“SED\_DET” is a… rainfall distribution code?)
+  - a generic variable name like ‘LONG’ or ‘FLO’ can appear dozens of
+    times in the document before you get to the definition you’re
+    interested in
   - variable names are slightly different in SWAT+ versus SWAT2012 and
     the theory documentation was written for the latter
 
@@ -518,7 +518,7 @@ rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
     ## 9   pst_wsol     pesticide.pst    165 Solubility of the chemical in water (mg/L or ppm) The water ...
     ## 10     title      delratio.del    113                              The title of the delratio.del file
 
-Here, `rswat_docs` returns a dataframe with all 1059 possible matches,
+Here, `rswat_docs` returns a dataframe with all 1066 possible matches,
 and `head(10)` extracts the top 10. The dataframe rows are ordered from
 best to worst, so eg. the first three matches in this case are the same
 as what we got with `fuzzy=1`
