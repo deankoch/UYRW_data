@@ -23,23 +23,26 @@
 #' [available here](https://swatplus.gitbook.io/docs/user/io)) runs over 250 pages! And that's just
 #' input variable name definitions.
 #' 
-#' The code below demonstrates an indexing and search tool to help R-based
-#' SWAT+ users like me navigate this document. The codebase render the PDF into text strings, building
+#' It's too much to scroll through all the time, so I've written an indexing and search tool to help R-based
+#' SWAT+ users like me navigate this document. This code will render the PDF into text strings, building
 #' a giant searchable list of all "Variable Name"/"Definition" entries.
 #' 
 #' 
-#' ## what's wrong with ctrl-f?
+#' ## Why not just ctrl-f?
 #' 
-#' Yes, you could just search for keywords using your favorite PDF viewer, except that: 
+#' You could search for keywords using your favorite PDF viewer, except that: 
 #' 
-#' * abbreviations won't turn up in literal keyword searches with viewers like Acrobat or Sumatra
-#' * variable names are often mentioned multiple times in the document before we get to their full definitions
-#' * many variable names are slightly different in SWAT+ versus SWAT2012 (and the theory documentation
-#' was written for the latter)
+#' * the 'find' tool in viewers like Acrobat or Sumatra searches for literal strings, so to get straight to
+#' a definition you have to be able to remember (or guess) the particular abbreviation in use, or a substring of it
+#' * many abbreviations aren't really guessable for the unitiated ("SED_DET"?)
+#' * a short/generic variable name like 'LONG' can appear dozens of times in the document before you get to the
+#' definition you're interested in
+#' * variable names are slightly different in SWAT+ versus SWAT2012 and the theory documentation
+#' was written for the latter
 #' 
 #' By my count there are 1000+ variable names defined in this document - I don't think anyone is going to
 #' memorize them all. So when you know what you're looking for but can't quite remember the exact name
-#' it can be a real chore to track it down. `rswat_docs` provides a more direct search tool that supports fuzzy
+#' it can be a real chore to track it down. `rswat_docs` helps with this by allowing fuzzy
 #' matching of multiple keywords to both names and definitions.
 #'
 #' ## libraries and installation
@@ -78,7 +81,7 @@ rswat_pdf_open(pdfpath, quiet=TRUE)
 rswat_docs() %>% head(25)
 rswat_docs() %>% nrow
 
-#' The parser finds 105 different name-definition tables in the document, each associated with
+#' The parser finds 108 different name-definition tables in the document, each associated with
 #' a different SWAT+ configuration file. The `ndef` field counts the number of definitions for
 #' each table, `startpage` indicates the page (in the PDF) on which this table starts, and
 #' `npage` counts the number of pages a table runs for.
@@ -229,9 +232,20 @@ rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
 #' ## thoughts and development plans
 #' 
 #' This is my first attempt at writing a text search tool, so it's pretty simple and ad-hoc in many
-#' ways. But I think it does the job well enough. If you think it would be useful in your project,
-#' feel free to contact me for help getting it to work on your machine. And if there's any interest
-#' in an R package based on this code, please let me know and I'll start tidying it up for CRAN. 
+#' ways. But I think it does the job well enough. Feel free to use it in your own project. If there's
+#' any interest in an R package based on this code, please let me know and I'll start tidying it up for 
+#' CRAN. 
+#' 
+#' Note that I make no guarantees that this tool will find and parse every table in the PDF correctly.
+#' It relies on what I *assume* are consistent patterns in the formatting of the document (after
+#' rendering by `pdftools::pdf_text`). eg. all-caps variable names, left-justified table entries,
+#' filename headers preceeding the table on a line of their own. This appears to work for all of the
+#' tables that I have so far been interested in, but it's possible I am missing others.
+#' 
+#' Note also that the PDF itself has some typos and errors. For example the 'channel.cha' table has
+#' names and descriptions offset by one row, and most of the names for 'nutrients.cha' have not been
+#' updated to their SWAT+ versions. `rswat_docs` can't detect or repair these kinds of problems, it
+#' simply renders whatever is in the PDF. 
 #' 
 #' In future it would be good to improve support for boolean queries and maybe do some indexing on
 #' startup to make it snappier in `fuzzy=-1` mode. I also plan to work on extensions that support the

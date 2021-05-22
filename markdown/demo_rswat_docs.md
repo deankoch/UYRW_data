@@ -1,7 +1,7 @@
 demo\_rswat\_docs.R
 ================
 Dean Koch
-2021-05-20
+2021-05-21
 
 **Mitacs UYRW project**
 
@@ -23,29 +23,33 @@ documentation PDF (“inputs\_swatplus\_rev60\_5.pdf”, [available
 here](https://swatplus.gitbook.io/docs/user/io)) runs over 250 pages\!
 And that’s just input variable name definitions.
 
-The code below demonstrates an indexing and search tool to help R-based
-SWAT+ users like me navigate this document. The codebase render the PDF
-into text strings, building a giant searchable list of all “Variable
-Name”/“Definition” entries.
+It’s too much to scroll through all the time, so I’ve written an
+indexing and search tool to help R-based SWAT+ users like me navigate
+this document. This code will render the PDF into text strings, building
+a giant searchable list of all “Variable Name”/“Definition” entries.
 
-## what’s wrong with ctrl-f?
+## Why not just ctrl-f?
 
-Yes, you could just search for keywords using your favorite PDF viewer,
-except that:
+You could search for keywords using your favorite PDF viewer, except
+that:
 
-  - abbreviations won’t turn up in literal keyword searches with viewers
-    like Acrobat or Sumatra
-  - variable names are often mentioned multiple times in the document
-    before we get to their full definitions
-  - many variable names are slightly different in SWAT+ versus SWAT2012
-    (and the theory documentation was written for the latter)
+  - the ‘find’ tool in viewers like Acrobat or Sumatra searches for
+    literal strings, so to get straight to a definition you have to be
+    able to remember (or guess) the particular abbreviation in use, or a
+    substring of it
+  - many abbreviations aren’t really guessable for the unitiated
+    (“SED\_DET”?)
+  - a short/generic variable name like ‘LONG’ can appear dozens of times
+    in the document before you get to the definition you’re interested
+    in
+  - variable names are slightly different in SWAT+ versus SWAT2012 and
+    the theory documentation was written for the latter
 
 By my count there are 1000+ variable names defined in this document - I
 don’t think anyone is going to memorize them all. So when you know what
 you’re looking for but can’t quite remember the exact name it can be a
-real chore to track it down. `rswat_docs` provides a more direct search
-tool that supports fuzzy matching of multiple keywords to both names and
-definitions.
+real chore to track it down. `rswat_docs` helps with this by allowing
+fuzzy matching of multiple keywords to both names and definitions.
 
 ## libraries and installation
 
@@ -59,6 +63,10 @@ and install any missing packages on your machine.
 library(here)
 source(here('R/rswat_docs.R'))
 ```
+
+    ## Warning: package 'pdftools' was built under R version 4.0.5
+
+    ## Using poppler version 21.04.0
 
 `rswat_docs.R` will initialize an environment called `.rswat` in your
 session, and define four functions; `rswat_docs`, `rswat_pdf_open`,
@@ -79,7 +87,7 @@ pdfpath = here('development/inputs_swatplus_rev60_5.pdf')
 rswat_pdf_open(pdfpath, quiet=TRUE)
 ```
 
-    ## [1] "D:/UYRW_data/development/inputs_swatplus_rev60_5.pdf"
+    ## done
 
 This function call does a lot of stuff in the background - it uses the
 `pdftools` package to render text boxes into character strings, then
@@ -118,16 +126,16 @@ rswat_docs() %>% head(25)
     ## 21   hydrology.cha    4     1        55
     ## 22    sediment.cha   13     1        56
     ## 23   nutrients.cha   40    10        57
-    ## 24 channel-lte.cha   34     3        67
+    ## 24 channel-lte.cha   11     2        67
     ## 25      metals.cha    2     1        67
 
 ``` r
 rswat_docs() %>% nrow
 ```
 
-    ## [1] 105
+    ## [1] 108
 
-The parser finds 105 different name-definition tables in the document,
+The parser finds 108 different name-definition tables in the document,
 each associated with a different SWAT+ configuration file. The `ndef`
 field counts the number of definitions for each table, `startpage`
 indicates the page (in the PDF) on which this table starts, and `npage`
@@ -208,17 +216,17 @@ rswat_docs('snow.sno')
 
     ## 10 result(s) in file(s) snow.sno
 
-    ##       name     file pstart                                                               description
-    ## 1    title snow.sno    176 The first line is reserved for user comments. This line is not process...
-    ## 2     name snow.sno    176                                               Name of the snow parameters
-    ## 3  falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
-    ## 4  melttmp snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt until the...
-    ## 5   meltmx snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the watershed is i...
-    ## 6   meltmn snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the watershed ...
-    ## 7     timp snow.sno    178 Snow pack temperature lag factor. The influence of the previous day’s ...
-    ## 8    covmx snow.sno    178                                       Minimum snow water content (mm H20)
-    ## 9    cov50 snow.sno    178                                                         Fraction of COVMX
-    ## 10 init_mm snow.sno    178                         Initial snow water content at start of simulation
+    ##       name     file pstart                                                     description
+    ## 1    title snow.sno    176 The first line is reserved for user comments. This line is n...
+    ## 2     name snow.sno    176                                     Name of the snow parameters
+    ## 3  falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which pre...
+    ## 4  melttmp snow.sno    176 Snow melt base temperature (ºC). The snow pack will not melt...
+    ## 5   meltmx snow.sno    177 Melt factor for snow on June 21 (mm H2O/ºC-day). If the wate...
+    ## 6   meltmn snow.sno    178 Melt factor for snow on December 21 (mm H2O/ºC-day). If the ...
+    ## 7     timp snow.sno    178 Snow pack temperature lag factor. The influence of the previ...
+    ## 8    covmx snow.sno    178                             Minimum snow water content (mm H20)
+    ## 9    cov50 snow.sno    178                                               Fraction of COVMX
+    ## 10 init_mm snow.sno    178               Initial snow water content at start of simulation
 
 Longer definitions are clipped (they end with ‘…’) so that they can fit
 cleanly into an R console printout of a dataframe (similar to
@@ -272,8 +280,8 @@ rswat_docs('falltmp', fname='snow.sno')
     ## A default recommended for this variable is SFTMP = 1.0.
     ## Required in watersheds where snowfall is significant.
 
-    ##      name     file pstart                                                               description
-    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
+    ##      name     file pstart                                                     description
+    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which pre...
 
 In this case the first argument (`pattern`) is our search keyword, and
 we have passed the filename in the second argument (`fname`).
@@ -303,8 +311,8 @@ rswat_docs('falltmp')
     ## A default recommended for this variable is SFTMP = 1.0.
     ## Required in watersheds where snowfall is significant.
 
-    ##      name     file pstart                                                               description
-    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which precipitation...
+    ##      name     file pstart                                                     description
+    ## 1 falltmp snow.sno    176 Snowfall temperature (ºC). Mean air temperature at which pre...
 
 By default, when exact (substring) matches are found, `rswat_docs`
 returns only them. If no exact matches are found, it returns approximate
@@ -322,10 +330,10 @@ rswat_docs('Hargreaves')
 
     ## 3 exact result(s) for "Hargreaves" in 3 file(s)
 
-    ##       name          file pstart                                                               description
-    ## 1 harg_pet hydrology.hyd    126              Coefficient related to radiation used in Hargreaves equation
-    ## 2     ipet   hru-lte.hru     88 Potential evapotranspiration (PET) method (character): ‘harg’ = Hargre...
-    ## 3      pet     codes.bsn     18 Potential evapotranspiration (PET) method. There are four options for ...
+    ##       name          file pstart                                                     description
+    ## 1 harg_pet hydrology.hyd    126    Coefficient related to radiation used in Hargreaves equation
+    ## 2     ipet   hru-lte.hru     88 Potential evapotranspiration (PET) method (character): ‘harg...
+    ## 3      pet     codes.bsn     18 Potential evapotranspiration (PET) method. There are four op...
 
 Three parameters are matched (exactly) because the literal string
 ‘Hargreaves’ appears in their descriptions. By default `rswat_docs`
@@ -395,16 +403,16 @@ rswat_docs('tile')
 
     ## 9 exact result(s) for "tile" in 6 file(s)
 
-    ##        name              file pstart                                                               description
-    ## 1 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
-    ## 2       lag     tiledrain.str    129                                                       Drain tile lag time
-    ## 3       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
-    ## 4      dist     tiledrain.str    129    Distance between two drain tubes or tiles (mm) Range (7600 – 30000 mm)
-    ## 5  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
-    ## 6      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
-    ## 7       typ        septic.str    130 The type of septic system Type Definition 1 Generic type conventional ...
-    ## 8     sepnm        septic.sep    173 Abridged name of a septic system sptname Definition GCON Generic type ...
-    ## 9        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+    ##        name              file pstart                                                     description
+    ## 1 tiledrain       landuse.lum    188                  Tile drain file name (points to tiledrain.str)
+    ## 2       lag     tiledrain.str    129                                             Drain tile lag time
+    ## 3       tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
+    ## 4      dist     tiledrain.str    129 Distance between two drain tubes or tiles (mm) Range (7600 –...
+    ## 5  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routine...
+    ## 6      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines fla...
+    ## 7       typ        septic.str    130 The type of septic system Type Definition 1 Generic type con...
+    ## 8     sepnm        septic.sep    173 Abridged name of a septic system sptname Definition GCON Gen...
+    ## 9        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN ...
 
 ## multiple keywords and fuzzy matching
 
@@ -420,12 +428,12 @@ rswat_docs('tile', fuzzy=-1)
 
     ## 5 exact result(s) for "tile" in 4 file(s)
 
-    ##        name              file pstart                                                               description
-    ## 1      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
-    ## 2       lag     tiledrain.str    129                                                       Drain tile lag time
-    ## 3  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
-    ## 4 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
-    ## 5       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ##        name              file pstart                                                     description
+    ## 1      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines fla...
+    ## 2       lag     tiledrain.str    129                                             Drain tile lag time
+    ## 3  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routine...
+    ## 4 tiledrain       landuse.lum    188                  Tile drain file name (points to tiledrain.str)
+    ## 5       tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
 
 The redundant results are gone but we are now missing the “cn” result
 (in file “codes.bsn”), because it uses the term “tiled-drained”. If you
@@ -439,13 +447,13 @@ rswat_docs('tile|tiled', fuzzy=-1)
 
     ## 6 exact result(s) for "tile|tiled" in 4 file(s)
 
-    ##        name              file pstart                                                               description
-    ## 1        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
-    ## 2      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines flag/code: 1 ...
-    ## 3       lag     tiledrain.str    129                                                       Drain tile lag time
-    ## 4  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routines flag/cod...
-    ## 5 tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
-    ## 6       tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
+    ##        name              file pstart                                                     description
+    ## 1        cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN ...
+    ## 2      tdrn         codes.bsn     21 Tile drainage equations flag/code Tile drainage routines fla...
+    ## 3       lag     tiledrain.str    129                                             Drain tile lag time
+    ## 4  drain_co     tiledrain.str    129 Daily drainage coefficient (mm day-1). Tile drainage routine...
+    ## 5 tiledrain       landuse.lum    188                  Tile drain file name (points to tiledrain.str)
+    ## 6       tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
 
 Pipes in `pattern` are interpreted as a logical OR operator. Similarly,
 whitespace works like an approximate OR operator; whitespace-delimited
@@ -459,9 +467,9 @@ rswat_docs('tile runoff ratio')
 
     ## 2 exact result(s) for "tile runoff ratio" in 2 file(s)
 
-    ##   name              file pstart                                                               description
-    ## 1  tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
-    ## 2   cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
+    ##   name              file pstart                                                     description
+    ## 1  tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
+    ## 2   cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN ...
 
 This works pretty well for identifying a small number of “best” matches
 to a set of keywords. In this case we dropped the `fuzzy` argument, so
@@ -475,10 +483,10 @@ rswat_docs('tile runoff ratio', fuzzy=1)
 
     ## 3 approximate result(s) for "tile runoff ratio" in 3 file(s)
 
-    ##       name              file pstart                                                               description
-    ## 1      tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
-    ## 2       cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
-    ## 3 vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges from 0 to ...
+    ##       name              file pstart                                                     description
+    ## 1      tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
+    ## 2       cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN ...
+    ## 3 vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges ...
 
 One additional result is added to the list. With positive `fuzzy`, the
 function ranks all approximate matches by their “distance” to the search
@@ -496,19 +504,19 @@ everything, and pipe the results to `head(n)`:
 rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
 ```
 
-    ## 1059 approximate result(s) for "tile runoff ratio" in 105 file(s)
+    ## 1066 approximate result(s) for "tile runoff ratio" in 108 file(s)
 
-    ##         name              file pstart                                                               description
-    ## 1        tfr water_balance.sft    208                                  Tile flow ratio – tile flow/total runoff
-    ## 2         cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN value as a...
-    ## 3   vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges from 0 to ...
-    ## 4  tiledrain       landuse.lum    188                            Tile drain file name (points to tiledrain.str)
-    ## 5     nperco    parameters.bsn     27 Nitrate percolation coefficient. NPERCO controls the amount of nitrate...
-    ## 6     percop    parameters.bsn     30 Pesticide percolation coefficient. PERCOP controls the amount of pesti...
-    ## 7    urbcoef         urban.urb    169 Wash-off coefficient for removal of constituents from impervious area ...
-    ## 8     erorgn     hydrology.hyd    125 Organic N enrichment ratio for loading with sediment. As surface runof...
-    ## 9   pst_wsol     pesticide.pst    165 Solubility of the chemical in water (mg/L or ppm) The water solubility...
-    ## 10     title      delratio.del    113                                        The title of the delratio.del file
+    ##         name              file pstart                                                     description
+    ## 1        tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
+    ## 2         cn         codes.bsn     20 Daily curve number calculation method: 0 calculate daily CN ...
+    ## 3   vfsratio   filterstrip.str    134 Ratio of field area to filter strip area (unitless). Ranges ...
+    ## 4  tiledrain       landuse.lum    188                  Tile drain file name (points to tiledrain.str)
+    ## 5     nperco    parameters.bsn     27 Nitrate percolation coefficient. NPERCO controls the amount ...
+    ## 6     percop    parameters.bsn     30 Pesticide percolation coefficient. PERCOP controls the amoun...
+    ## 7    urbcoef         urban.urb    169 Wash-off coefficient for removal of constituents from imperv...
+    ## 8     erorgn     hydrology.hyd    125 Organic N enrichment ratio for loading with sediment. As sur...
+    ## 9   pst_wsol     pesticide.pst    165 Solubility of the chemical in water (mg/L or ppm) The water ...
+    ## 10     title      delratio.del    113                              The title of the delratio.del file
 
 Here, `rswat_docs` returns a dataframe with all 1059 possible matches,
 and `head(10)` extracts the top 10. The dataframe rows are ordered from
@@ -519,10 +527,23 @@ as what we got with `fuzzy=1`
 
 This is my first attempt at writing a text search tool, so it’s pretty
 simple and ad-hoc in many ways. But I think it does the job well enough.
-If you think it would be useful in your project, feel free to contact me
-for help getting it to work on your machine. And if there’s any interest
-in an R package based on this code, please let me know and I’ll start
-tidying it up for CRAN.
+Feel free to use it in your own project. If there’s any interest in an R
+package based on this code, please let me know and I’ll start tidying it
+up for CRAN.
+
+Note that I make no guarantees that this tool will find and parse every
+table in the PDF correctly. It relies on what I *assume* are consistent
+patterns in the formatting of the document (after rendering by
+`pdftools::pdf_text`). eg. all-caps variable names, left-justified table
+entries, filename headers preceeding the table on a line of their own.
+This appears to work for all of the tables that I have so far been
+interested in, but it’s possible I am missing others.
+
+Note also that the PDF itself has some typos and errors. For example the
+‘channel.cha’ table has names and descriptions offset by one row, and
+most of the names for ‘nutrients.cha’ have not been updated to their
+SWAT+ versions. `rswat_docs` can’t detect or repair these kinds of
+problems, it simply renders whatever is in the PDF.
 
 In future it would be good to improve support for boolean queries and
 maybe do some indexing on startup to make it snappier in `fuzzy=-1`

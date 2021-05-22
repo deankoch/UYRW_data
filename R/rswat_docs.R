@@ -43,7 +43,7 @@ library(pdftools)
 #' Note that these require the `.rswat` environment defined above
 #' 
 #' load and parse the SWAT+ I/O documentation PDF
-rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=50)
+rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=60)
 {
   # ARGUMENTS:
   # 
@@ -231,7 +231,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   # the two closest groups, and so on.
   
   # regex for filenames (assume lowercase)
-  regex.fname = '^[a-z]+[-_]*[a-z]+\\.[a-z]{2,3}$'
+  regex.fname = '^[a-z]+[-_]*[a-z]*[-_]*[a-z]+\\.[a-z]{2,3}$'
   
   # formatting for console printout headers
   lrule = c('\n~~~', '~~~\n') 
@@ -299,6 +299,13 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   vartable = .rswat$docs$vartable %>% filter( grepl(fname, file) )
   filetable = .rswat$docs$filetable %>% filter( grepl(fname, file) )
   
+  # catch unknown filename requests
+  if( (fname != '*') & !( fname %in% filetable$file ) )
+  {
+    cat( paste('fname', paste0('\"', fname, '\"'), 'not recognized\n') ) 
+    return( vartable %>% select( name, file, pstart, description ) )
+  }
+  
   # initialize score vectors
   adist.nm = adist.desc = rep(1, nrow(vartable))
   
@@ -342,14 +349,24 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   # handle no-match cases
   if( length(int.match) == 0 )
   {
+    # console message about failed search
+    nomatch.msg = paste0('No exact matches for ', pattern.msg, '. ')
+    
+    # don't repeat search when fuzzy = -Inf
+    if( fuzzy == -Inf )
+    {
+      # print a message and return empty dataframe
+      cat( paste(nomatch.msg, '\n') )
+      return( vartable %>% slice(int.match) %>% select( name, file, pstart, description ) )
+    }
+    
     # increment fuzzy until we get a match (fuzzy==1 will always produce a match)
     if( fuzzy == 0 ) newfuzzy = 1
     
     # if no exact matches try switching to substring matching
     if( fuzzy < 0 ) newfuzzy = 0
-    
-    # console message about failed search
-    nomatch.msg = paste0('No exact matches for ', pattern.msg, '. ')
+
+    # message about increasing fuzzy
     nomatch.info = paste('Repeating search at fuzzy level', newfuzzy, '\n')
     cat( paste0(nomatch.msg, nomatch.info) )
     
@@ -446,7 +463,9 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   regex.phead = paste0(regex.l, '|', regex.r)
   
   # regex for section headers (all-caps with period and extension)
-  regex.section = '^[A-Z]+[-_]*[A-Z]+\\.[A-Z]{2,3}$'
+  #regex.section = '^[A-Z]+[-_]*[A-Z]+\\.[A-Z]{2,3}$'
+  
+  regex.section = '^[A-Z]+[-_]*[A-Z]*[-_]*[A-Z]+\\.[A-Z]{2,3}$'
   
   # BUGFIX: exceptions nonstandard header formats
   regex.exceptions = c('^recall\\_day\\.rec$')
