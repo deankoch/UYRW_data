@@ -16,8 +16,9 @@
 #' ## .rswat environment
 #' 
 #' We need a place to store the text data from the PDF. The line below defines an environment
-#' that can be accessed from inside the functions below. This is a temporary fix until I bundle
-#' things into a package.
+#' that can be accessed from inside the functions below. It is unnecessary (but harmless) if you
+#' are already sourcing [rswat.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md).
+#' This is a temporary fix until I bundle things into a package.
 
 # define (internal) environment to store the SWAT+ project file data
 if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() )
@@ -250,7 +251,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
     stop('not yet implemented')
   }
   
-  # handle integer input (pattern treated as list of page numbers)
+  # handle integer input to `pattern`, treated as list of page numbers
   if( is.numeric(pattern) )
   {
     # coerce to integer and correct range if necessary
