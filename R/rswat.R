@@ -20,13 +20,19 @@
 #' ## dependencies
 #' 
 
-# `dplyr` syntax simplification for complex table operations 
+#' [`here`](https://cran.r-project.org/web/packages/here/index.html) simplifies paths
+#' involving a project working directory
+library(here)
+
+#' [`dplyr`](https://dplyr.tidyverse.org/R) syntax simplification for complex table operations 
 library(dplyr)
 
-# `data.table` faster table loading
+#' [`data.table`](https://cran.r-project.org/web/packages/data.table/index.html) faster table
+#' loading
 library(data.table)
 
-# we need `my_adist` from here for rswat_find
+#' `rswat_find` (defined below) requires `my_adist` from helper script
+#' [rswat_docs](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md)
 source(here('R/rswat_docs.R'))
 
 #' ## initialization:
@@ -504,7 +510,9 @@ rswat_find = function(pattern='*', fuzzy=-1, trim=TRUE, include=NULL, ignore=NUL
   linedf.out$string[linedf.out$dim > 1] = NA
   
   # tidy output and finish
-  linedf.out %>% select(name, string, class, dim, file, table, i, j)
+  linedf.out = linedf.out %>% select(name, string, class, dim, file, table, i, j)
+  rownames(linedf.out) = c()
+  return(linedf.out)
 }
 
 #' write a parameter value to its config file
@@ -548,6 +556,9 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
     tablenum = value.index$tablenum
     
   } else {
+    
+    # UNFINISHED -if input `value` is not a dataframe the function returns nothing
+    # TODO: add support for multiple files, simple individual parameter changes, etc
     
     # check whether names of list input match filenames
     idx.named = nm.head %in% cio$file
@@ -892,7 +903,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
   return(dat)
 }
 
-# TODO: 
+# TODO: combine this with rswat_find
 #' search tool for SWAT+ output variable names
 rswat_ofind = function(pattern=NULL, fuzzy=-1, trim=TRUE)
 {
@@ -1103,8 +1114,6 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   if( !quiet ) cat('done\n')
   return(dest.path)
 }
-
-# TODO: update rswat_odummy and rswat_flo to use this function
 
 
 #' ## INTERNAL: internal functions for file I/O interface (mostly for config files)
@@ -3636,7 +3645,8 @@ rswat_exec = function(textio=NULL, exe=NULL, fout=TRUE, quiet=FALSE)
   
   # stop timer, prepare execution time message
   timer.end = Sys.time()
-  timer.msg = paste(round(as.numeric(timer.end - timer.start), 2), 'seconds')
+  seconds.msg = round(difftime(timer.end, timer.start, units='secs')[[1]], 2)
+  timer.msg = paste(seconds.msg, 'seconds')
   if( !quiet ) cat(paste0('\n>> finished (', timer.msg, ' runtime) \n'))
   
   # return filenames if requested
@@ -3923,6 +3933,9 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
 
 
 
+
+
+
 #' ## MISC: miscellaneous and in-development functions
 
 #' write weather input text files for QSWAT and SWAT2012
@@ -4195,12 +4208,135 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
   return(nse)
 }
 
+#' returns an objective function whose argument is vector of parameter values, output is NSE
+my_objective = function(cal, gage, errfn, quiet=TRUE)
+{
+  # ARGUMENTS:
+  # 
+  # `cal`: dataframe, the SWAT+ parameters to modify
+  # `gage`: dataframe, containing flow and date (see `my_gage_objective`)
+  # `errfn`: an (anonymous) error function `errfn(x,y)` for simulations x given observations y
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN VALUE:
+  #
+  # Returns a function `f(x)` that computes the NSE score for a given parameter set (specified
+  # in `cal`), supplied in vector `x`, where errors are computed over the time series of flow
+  # data in `gage`.
+  #
+  # DETAILS:
+  #
+  # `cal` should be the output of one or several (row-binded) `rswat_find(..., trim=T)` calls,
+  # having columns for 'name', 'i', 'j', etc. It specifies n parameters of interest, around
+  # which an n-to-1 objective function, suitable for numerical optimizers, is constructed and
+  # returned. When calling this function, the order of the paramaters in `x` must match the
+  # order in `cal` (there is no checking of names etc). 
+  #
+  # On multirow tables, `i=NA` in `cal` is taken to mean "write all rows of this parameter
+  # column". This is the default (trim=TRUE) return value for rswat_find when a match appears
+  # in a multirow table. To specify individual rows, either use rswat_find(..., trim=FALSE)
+  # or set `i` manually as needed.
+  #
+  
+  # scan for non-numerics
+  idx.nn = cal$class != 'numeric'
+  if( any(idx.nn) )
+  {
+    # print a warning
+    msg.info = paste(cal$name[idx.nn], collapse=', ')
+    warning(paste('removed non-numeric entries from cal:', msg.info))
+    
+    # remove the non-numeric entries
+    cal = cal[!idx.nn,]
+  }
+  
+  # length check
+  if( nrow(cal) == 0 ) stop('no numeric parameters found in cal')
+  
+  # fetch the file data - a copy of this (and `cal`) gets baked in to the function below
+  cal.fn = setNames(nm=unique(cal$file))
+  n.fn = length(cal.fn)
+  cal.values = lapply(cal.fn, rswat_open)
+  
+  # R makes a copy of the above objects as well as cal and gage upon defining the function
+  # below. This is everything we need for optimization baked in a tidy single-argument function
+  # TODO: optimize and check for issues related to function closure and lazy evaluation
+  
+  # begin definition of return function
+  function(x=NULL, refresh=FALSE)
+  {
+    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
+    # order as they appeared in `cal`, when this function was created (via a call to
+    # `my_objective`). To view this order, call the function without arguments.
+    
+    # TODO: write up arguments and return sections
+    
+    # refresh cal.values to get any modifications since the function was defined
+    if(refresh) cal.values = lapply(cal.fn, rswat_open)
+    
+    # if user supplied no parameter values, return the parameter info dataframe
+    if( is.null(x) )
+    {
+      # initialize a new column in cal for values and fill it by looping over filenames
+      cal = cal %>% select( -c(string, class, table) ) %>% mutate(value=NA)
+      for(fn in cal.fn)
+      {
+        # loop over cal entries for this file
+        fn.idx = which( cal$file == fn )
+        for(idx.par in 1:length(fn.idx))
+        {
+          # index in the cal.values table
+          i = cal$i[ fn.idx[idx.par] ]
+          j = cal$j[ fn.idx[idx.par] ]
+          
+          # extract the values, making list of unique ones in multivariate case
+          if( !is.na(i) ) par.value = unique(cal.values[[fn]][i,j])
+          if( is.na(i) ) par.value = unique(cal.values[[fn]][,j])
+          
+          # write the value if unique (non-uniqueness indicated by NA)
+          if( length(par.value) == 1 ) cal$value[ fn.idx[idx.par] ] = par.value
+        }
+      }
+      
+      # tidy and finish 
+      return( cal %>% select(value, name, file, dim, everything()) )
+    }
+    
+    # user supplied parameter values: loop over filenames to write them
+    for(fn in cal.fn)
+    {
+      # grab the subset of `cal` and replacement values in x
+      fn.idx = which( cal$file == fn )
+      fn.x = x[fn.idx]
+      
+      # loop over cal entries for this file
+      for(idx.par in 1:length(fn.idx))
+      {
+        # index in the cal.values table
+        i = cal$i[ fn.idx[idx.par] ]
+        j = cal$j[ fn.idx[idx.par] ]
+        
+        # make the replacement
+        if( !is.na(i) ) cal.values[[fn]][i,j] = fn.x[idx.par]
+        if( is.na(i) ) cal.values[[fn]][,j] = fn.x[idx.par]
+      }
+      
+      # finished with the table, write the changes
+      rswat_write(cal.values[[fn]], fname=fn, preview=FALSE, quiet=quiet)
+    }
+    
+    # TODO: memoize so we can skip this?
+    # run the simulation and return the objective function value
+    return( rswat_flo(dates=gage, errfn=errfn, quiet=quiet) )
+  }
+}
+
 
 #' ## DEPRECATED: phasing these out
 #' 
 
 #' returns an objective function whose argument is vector of parameter values, output is NSE
-my_objective = function(cal, gage, textio, quiet=TRUE)
+dep_my_objective = function(cal, gage, textio, quiet=TRUE)
 {
   # ARGUMENTS:
   # 
