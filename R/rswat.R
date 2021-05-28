@@ -515,7 +515,7 @@ rswat_find = function(pattern='*', fuzzy=-1, trim=TRUE, include=NULL, ignore=NUL
   return(linedf.out)
 }
 
-#' write a parameter value to its config file
+#' write a dataframe to the corresponding SWAT+ config file
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
   # In development. Currently only supports writing a single dataframe at a time.
@@ -676,6 +676,152 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   }
 }
 
+#' construct an anonymous function that reads/modifies a selection of SWAT+ parameters
+rswat_amod = function(parm)
+{
+  # 
+  # ARGUMENTS:
+  #
+  # `parm`: dataframe, the SWAT+ parameters to modify (see DETAILS)
+  # `quiet`: logical, indicating to suppress console messages
+  #
+  # RETURN VALUE:
+  #
+  # Returns an anonymous function whose first argument `x`, a numeric vector, specifies
+  # new value(s) to write to the corresponding SWAT+ file(s) (as specified in `parm`).
+  # This function also has arguments `quiet` (for suppressing console messages,
+  # default TRUE), and `reload` (for forcing the function to reload the file instead of
+  # using the current values in memory, default TRUE)
+  #
+  # DETAILS:
+  #
+  # This is a helper function to assist in building anonymous functions that perform
+  # simple read/write operations, where we aren't interested in the entire config file.
+  #
+  # `parm` must contain columns 'i', 'name' and 'file', and these must correspond to
+  # 'numeric' type SWAT+ parameters as they are listed by `rswat_find`. `parm` will usually
+  # be the (row-binded) output of one or several `rswat_find(..., trim=T)` calls.
+  # 
+  # The returned function, when called with default arguments, will return the dataframe `parm`
+  # with the additional column `value` appended, displaying the parameter value(s) as 
+  # currently specified in the SWAT+ config file(s). If the first argument `x` is supplied, its
+  # entries overwrite the value(s) on disk, and the function returns the new value(s) in
+  # the dataframe
+  #
+  # On multirow tables, `i=NA` in `parm` is taken to mean "all rows of this parameter
+  # column". To specify individual rows, either use rswat_find(..., trim=FALSE) or set `i`
+  # manually as needed.
+  #
+  
+  # scan for non-numerics
+  idx.nn = parm$class != 'numeric'
+  if( any(idx.nn) )
+  {
+    # print a warning
+    msg.info = paste(cal$name[idx.nn], collapse=', ')
+    warning(paste('removed non-numeric entries from parm:', msg.info))
+  }
+  
+  # copy `parm`, omitting any non-numeric entries / string column
+  parm.bake = parm[!idx.nn,] 
+  if( 'string' %in% names(parm.bake) ) parm.bake = parm.bake %>% select(-string)
+  
+  # length check
+  if( nrow(parm.bake) == 0 ) stop('no numeric parameters found in parm')
+  
+  # begin definition of return function (`parm.bake` gets baked-in)
+  function(x=NULL, quiet=TRUE, reload=TRUE)
+  {
+    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
+    # order as they appeared in `parm`, when this function was created (via a call to
+    # `rswat_amod`). To view this order, call the function without arguments.
+    #
+    # `quiet` suppresses console messages, and `reload=FALSE` allows the function to
+    # pull parameter values from memory (useful for speeding up objective function
+    # related write calls)
+    
+    # reload the files associated with parameters in `parm`
+    n.parm = nrow(parm.bake)
+    parm.fn = setNames(nm=unique(parm.bake$file))
+    parm.values = lapply(parm.fn, function(fn) {
+      if( reload ) rswat_open(fn, reload=TRUE, quiet=TRUE)
+      rswat_open(fn, quiet=TRUE)
+      })
+    
+    # initialize output dataframe
+    parm.out = parm.bake %>% mutate(value=NA)
+    
+    # if user supplied no parameter values, return the parameter info dataframe
+    if( is.null(x) )
+    {
+      #  fill appended field by looping over filenames
+      for(fn in parm.fn)
+      {
+        # loop over parm.bake entries for this file
+        fn.idx = which( parm.bake$file == fn )
+        for(idx.par in 1:length(fn.idx))
+        {
+          # row index in the `parm.values` table for this parameter
+          i = parm.bake$i[ fn.idx[idx.par] ]
+          
+          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
+          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
+          
+          # extract the values, making list of unique ones in multivariate case
+          if( !is.na(i) ) parm.value = unique(parm.values[[fn]][i,j])
+          if( is.na(i) ) parm.value = unique(parm.values[[fn]][,j])
+          
+          # copy the value if unique (non-uniqueness indicated by NA)
+          if( length(parm.value) == 1 ) parm.out$value[ fn.idx[idx.par] ] = parm.value
+        }
+      }
+    }
+    
+    # handle user supplied parameter value overwrite calls
+    if( !is.null(x) )
+    {
+      # type and length checks before we modify any files
+      msg.fail = paste('first argument must be a length', n.parm, 'numeric vector!')
+      if( !is.numeric(x) | ( length(x) != nrow(parm.bake) ) ) stop(msg.fail)
+
+      # loop over filenames to write them
+      for(fn in parm.fn)
+      {
+        # grab the subset of `parm.bake` and replacement values in `x`
+        fn.idx = which( parm.bake$file == fn )
+        fn.x = x[fn.idx]
+        
+        # loop over `parm.bake` entries for this file
+        for(idx.par in 1:length(fn.idx))
+        {
+          # row index in the `parm.bake` table for this parameter
+          i = parm.bake$i[ fn.idx[idx.par] ]
+          
+          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
+          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
+          
+          # make the replacement of a single entry
+          if( !is.na(i) ) parm.values[[fn]][i,j] = fn.x[idx.par]
+          
+          # make the replacement of an entire column
+          if( is.na(i) ) parm.values[[fn]][,j] = fn.x[idx.par]
+        }
+        
+        # finished with the table, write the changes
+        rswat_write(parm.values[[fn]], fname=fn, preview=FALSE, reload=reload, quiet=quiet)
+        
+      } 
+    
+      # set new values in the output dataframe
+      parm.out$value = x
+    }
+    
+    # tidy up return dataframe
+    return( parm.out %>% select(value, everything()) )
+  }
+  
+}
+  
 #' read a SWAT+ output file as dataframe, or return a list of files or output variables
 rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE)
 {
@@ -890,7 +1036,7 @@ rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, lo
       return(dat)
       
     },
-    # redirect function call to fread on errors
+    # redirect function call to data.table::fread on errors
     error = function(err) {
 
       cat('rswat failed to parse the file. Attempting fread...\n')
@@ -1114,6 +1260,8 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   if( !quiet ) cat('done\n')
   return(dest.path)
 }
+
+ 
 
 
 #' ## INTERNAL: internal functions for file I/O interface (mostly for config files)
@@ -3833,7 +3981,6 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
     # copy the files in a loop
     if( !quiet ) cat('backing up files... ')
     for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
-    
   }
 
   # copy observed data (if supplied) from dataframe input
@@ -3924,16 +4071,11 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
         }
       }
       
-      # data and simulation should now be in common unnits - call the error function
+      # data and simulation should now be in common units - call the error function
       return( errfn(sim, obs) ) 
     }
   }
 }
-
-
-
-
-
 
 
 #' ## MISC: miscellaneous and in-development functions
