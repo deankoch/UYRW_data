@@ -8,12 +8,13 @@ Dean Koch
 **rswat\_qgis**: R functions for generating a SWAT+ model via QSWAT+,
 and reading QSWAT+ files
 
-Construction of a SWAT+ model usually starts in QGIS3, where
-georeferenced data are assembled and processed by the QSWAT+ plugin to
-generate a set of shapefiles and tables that can be interpreted by
-SWAT+Editor. The latter then creates the SWAT+ text input/output
-directory and populates it with configuration files needed by the
-simulation executable.
+Construction of a SWAT+ model usually starts in
+[QGIS3](https://www.qgis.org/en/site/), where georeferenced data are
+assembled and processed by the [QSWAT+
+plugin](https://swat.tamu.edu/software/plus/) to generate a set of
+shapefiles and tables that can be interpreted by SWAT+Editor. The latter
+then creates the SWAT+ text input/output directory and populates it with
+configuration files needed by the simulation executable.
 
 Since QSWAT+ uses a point-and-click interface, it is difficult to
 automate and document this model construction process. The functions
@@ -84,11 +85,16 @@ library(data.table)
 
 ## dependencies
 
-There should be no dependencies beyond the libraries listed above,
+There should be no R dependencies beyond the libraries listed above,
 however note that these functions are written specifically to work with
 output from the `get_data` workflow. We plan to work on generalizing
 them so that they can be useful outside of the context of the UYRW
 project.
+
+Users will need to install the long-term release of
+[QGIS3](https://qgis.org/en/site/forusers/download.html) (64 bit) along
+with the [SWAT+ installer](https://swat.tamu.edu/software/plus/), which
+includes QSWAT+, SWAT+Editor, and the SWAT+ model executable.
 
 One of the challenges with this will be to identify paths needed for
 setting up the PyQGIS environment and running the model. The code below
