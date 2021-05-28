@@ -1,7 +1,7 @@
 demo\_objective.R
 ================
 Dean Koch
-2021-05-08
+2021-05-28
 
 **Mitacs UYRW project**
 
@@ -23,6 +23,10 @@ library(here)
 source(here('R/helper_main.R'))
 source(here('R/rswat.R'))
 ```
+
+    ## Warning: package 'pdftools' was built under R version 4.0.5
+
+    ## Using poppler version 21.04.0
 
 ## project data
 
@@ -78,76 +82,76 @@ rswat_cio(demo.dir)
 ```
 
     ## setting `ciopath` to D:/UYRW_data/data/demo/demo_big_c_nr_emigrant_txtinout/file.cio 
-    ## file.cio: written by SWAT+ editor v2.0.0 on 2021-05-08 13:48
+    ## file.cio: written by SWAT+ editor v2.0.0 on 2021-05-28 15:49
 
     ##                 file          group                size            modified
-    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-08 16:24:07
-    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-08 16:25:40
-    ## 3         object.cnt     simulation   0.577 [kilobytes] 2021-05-08 16:23:32
-    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-08 16:23:30
-    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-08 16:23:32
-    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-08 16:23:33
-    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-08 16:23:33
-    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-08 16:23:32
-    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-08 16:23:33
-    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-08 16:23:30
-    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-08 16:23:33
-    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-08 16:23:30
-    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-08 16:23:32
-    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-08 16:23:29
-    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-08 16:23:32
-    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-08 16:23:29
-    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-08 16:23:32
-    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-08 16:23:32
-    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-08 16:23:29
-    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-08 16:23:30
-    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-08 16:23:32
-    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-08 16:23:32
-    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-08 16:23:32
-    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-08 16:23:30
-    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-08 16:23:30
-    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-08 16:23:30
-    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-08 16:23:32
-    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-08 16:23:32
-    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-08 16:23:29
-    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-08 16:23:32
-    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-08 16:23:33
-    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-08 16:23:30
-    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-08 16:23:33
-    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-08 16:23:33
-    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-08 16:23:30
-    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-08 16:23:30
-    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-08 16:23:29
-    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-08 16:23:32
-    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-08 16:23:30
-    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-08 16:23:33
-    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-08 16:23:32
-    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-08 16:23:33
-    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-08 16:23:33
-    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-08 16:23:33
-    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-08 16:23:30
-    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-08 16:23:30
-    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-08 16:23:32
-    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-08 16:23:30
-    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-08 16:23:30
-    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-08 16:23:33
-    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-08 16:23:32
-    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-08 16:23:30
-    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-08 16:23:30
-    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-08 16:23:32
-    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-08 16:23:29
-    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-08 16:23:32
-    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-08 16:23:33
-    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-08 16:23:32
-    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-08 16:23:33
-    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-08 16:23:32
-    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-08 16:23:32
-    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-08 16:23:32
-    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-08 16:23:33
-    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-08 16:23:30
-    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-08 16:23:32
-    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-08 16:23:32
-    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-08 16:23:29
+    ## 1           time.sim     simulation   0.168 [kilobytes] 2021-05-28 16:16:21
+    ## 2          print.prt     simulation   3.389 [kilobytes] 2021-05-28 16:16:21
+    ## 3         object.cnt     simulation   0.577 [kilobytes] 2021-05-28 16:14:17
+    ## 4          codes.bsn          basin   0.599 [kilobytes] 2021-05-28 16:14:14
+    ## 5     parameters.bsn          basin   1.296 [kilobytes] 2021-05-28 16:14:17
+    ## 6    weather-sta.cli        climate   3.622 [kilobytes] 2021-05-28 16:14:17
+    ## 7    weather-wgn.cli        climate  42.549 [kilobytes] 2021-05-28 16:14:17
+    ## 8            pcp.cli        climate   0.359 [kilobytes] 2021-05-28 16:14:17
+    ## 9            tmp.cli        climate   0.357 [kilobytes] 2021-05-28 16:14:17
+    ## 10           hmd.cli        climate   0.363 [kilobytes] 2021-05-28 16:14:14
+    ## 11           wnd.cli        climate   0.356 [kilobytes] 2021-05-28 16:14:17
+    ## 12           hru.con        connect   8.425 [kilobytes] 2021-05-28 16:14:14
+    ## 13     rout_unit.con        connect  16.283 [kilobytes] 2021-05-28 16:14:17
+    ## 14       aquifer.con        connect  13.793 [kilobytes] 2021-05-28 16:14:14
+    ## 15        recall.con        connect   5.680 [kilobytes] 2021-05-28 16:14:17
+    ## 16       chandeg.con        connect   5.629 [kilobytes] 2021-05-28 16:14:14
+    ## 17       initial.cha        channel   0.321 [kilobytes] 2021-05-28 16:14:16
+    ## 18     nutrients.cha        channel   1.166 [kilobytes] 2021-05-28 16:14:17
+    ## 19   channel-lte.cha        channel   2.721 [kilobytes] 2021-05-28 16:14:14
+    ## 20   hyd-sed-lte.cha        channel   8.712 [kilobytes] 2021-05-28 16:14:15
+    ## 21     rout_unit.def   routing_unit   2.617 [kilobytes] 2021-05-28 16:14:17
+    ## 22     rout_unit.ele   routing_unit   4.453 [kilobytes] 2021-05-28 16:14:17
+    ## 23     rout_unit.rtu   routing_unit   5.269 [kilobytes] 2021-05-28 16:14:17
+    ## 24      hru-data.hru            hru   8.940 [kilobytes] 2021-05-28 16:14:14
+    ## 25          exco.exc           exco   2.922 [kilobytes] 2021-05-28 16:14:14
+    ## 26       exco_om.exc           exco   7.137 [kilobytes] 2021-05-28 16:14:14
+    ## 27        recall.rec         recall   1.572 [kilobytes] 2021-05-28 16:14:17
+    ## 28       initial.aqu        aquifer   0.321 [kilobytes] 2021-05-28 16:14:16
+    ## 29       aquifer.aqu        aquifer  13.481 [kilobytes] 2021-05-28 16:14:14
+    ## 30     hydrology.hyd      hydrology  11.083 [kilobytes] 2021-05-28 16:31:30
+    ## 31    topography.hyd      hydrology   9.158 [kilobytes] 2021-05-28 16:14:17
+    ## 32         field.fld      hydrology   3.225 [kilobytes] 2021-05-28 16:14:14
+    ## 33     tiledrain.str     structural   0.331 [kilobytes] 2021-05-28 16:14:17
+    ## 34        septic.str     structural   1.211 [kilobytes] 2021-05-28 16:14:17
+    ## 35   filterstrip.str     structural   0.341 [kilobytes] 2021-05-28 16:14:14
+    ## 36     grassedww.str     structural   0.560 [kilobytes] 2021-05-28 16:14:14
+    ## 37       bmpuser.str     structural   0.304 [kilobytes] 2021-05-28 16:14:14
+    ## 38        plants.plt    hru_parm_db 194.373 [kilobytes] 2021-05-28 16:14:17
+    ## 39    fertilizer.frt    hru_parm_db   7.216 [kilobytes] 2021-05-28 16:14:14
+    ## 40       tillage.til    hru_parm_db   8.311 [kilobytes] 2021-05-28 16:14:17
+    ## 41     pesticide.pes    hru_parm_db  49.945 [kilobytes] 2021-05-28 16:14:17
+    ## 42         urban.urb    hru_parm_db   1.832 [kilobytes] 2021-05-28 16:14:17
+    ## 43        septic.sep    hru_parm_db   4.644 [kilobytes] 2021-05-28 16:14:17
+    ## 44          snow.sno    hru_parm_db   0.326 [kilobytes] 2021-05-28 16:41:50
+    ## 45          harv.ops            ops   1.273 [kilobytes] 2021-05-28 16:14:14
+    ## 46         graze.ops            ops   1.626 [kilobytes] 2021-05-28 16:14:14
+    ## 47           irr.ops            ops   0.662 [kilobytes] 2021-05-28 16:14:16
+    ## 48      chem_app.ops            ops   1.897 [kilobytes] 2021-05-28 16:14:14
+    ## 49          fire.ops            ops   0.265 [kilobytes] 2021-05-28 16:14:14
+    ## 50         sweep.ops            ops   0.170 [kilobytes] 2021-05-28 16:14:17
+    ## 51       landuse.lum            lum   1.613 [kilobytes] 2021-05-28 16:14:16
+    ## 52       cntable.lum            lum  11.089 [kilobytes] 2021-05-28 16:14:14
+    ## 53 cons_practice.lum            lum   3.243 [kilobytes] 2021-05-28 16:14:14
+    ## 54     ovn_table.lum            lum   1.755 [kilobytes] 2021-05-28 16:14:17
+    ## 55     cal_parms.cal            chg  15.543 [kilobytes] 2021-05-28 16:14:14
+    ## 56         plant.ini           init   1.151 [kilobytes] 2021-05-28 16:14:17
+    ## 57    soil_plant.ini           init   0.316 [kilobytes] 2021-05-28 16:14:17
+    ## 58      om_water.ini           init   0.638 [kilobytes] 2021-05-28 16:14:17
+    ## 59         soils.sol          soils  41.053 [kilobytes] 2021-05-28 16:14:17
+    ## 60     nutrients.sol          soils   0.426 [kilobytes] 2021-05-28 16:14:17
+    ## 61           lum.dtl decision_table  23.015 [kilobytes] 2021-05-28 16:14:17
+    ## 62       res_rel.dtl decision_table 317.488 [kilobytes] 2021-05-28 16:14:17
+    ## 63       scen_lu.dtl decision_table   9.514 [kilobytes] 2021-05-28 16:14:17
+    ## 64       flo_con.dtl decision_table  10.361 [kilobytes] 2021-05-28 16:14:14
+    ## 65       ls_unit.ele        regions   5.063 [kilobytes] 2021-05-28 16:14:16
+    ## 66       ls_unit.def        regions   3.333 [kilobytes] 2021-05-28 16:14:16
+    ## 67   aqu_catunit.ele        regions   5.165 [kilobytes] 2021-05-28 16:14:14
 
 restore the backup that was created after running the previous demo
 script
@@ -168,7 +172,7 @@ odf = rswat_output(loadall=TRUE)
 ```
 
     ## running SWAT+ to generate all output files...
-    ## parsing 108 SWAT+ output files...
+    ## parsing 109 SWAT+ output files...
 
 The helper functions `rswat_copy`, `rswat_cio`, and `rswat_output` are
 described in the previous demo script
@@ -208,13 +212,11 @@ print.prt[, names(print.prt) != 'objects'] = 'n'
 rswat_write(print.prt, preview=F, quiet=TRUE)
 
 # call the SWAT+ executable
-rswat_exec()
+fout = rswat_exec()
 ```
 
     ## 
-    ## >> finished (8.36 seconds runtime)
-
-    ## [1] "basin_crop_yld_yr.txt" "basin_crop_yld_aa.txt"
+    ## >> finished (7.98 seconds runtime)
 
 On my machine the process completes in less than half the time (7-9
 seconds versus 17-20). This time cost reduction may not matter when
@@ -256,7 +258,7 @@ fout = rswat_exec()
 ```
 
     ## 
-    ## >> finished (8.34 seconds runtime)
+    ## >> finished (7.79 seconds runtime)
 
 Note that this new file output seems not to affect runtimes
 
@@ -266,7 +268,7 @@ rswat_output() %>% filter(type=='ohg') %>% select(-path)
 ```
 
     ##            file name type step activated group oid                size            modified
-    ## 1 sdc_1_tot.ohg  tot  ohg  day      TRUE   sdc   1 776.591 [kilobytes] 2021-05-08 16:27:18
+    ## 1 sdc_1_tot.ohg  tot  ohg  day      TRUE   sdc   1 776.591 [kilobytes] 2021-05-28 16:46:48
 
 ``` r
 # open the output 
@@ -353,7 +355,7 @@ If ‘dates’ is a dataframe containing observations (columns names
 starting with ‘flo’ or ‘obs’), `rswat_flo` can optionally be passed an
 (anonymous) error function `errfn(x,y)`. In that case instead of
 returning the discharge simulation values it passes them directly to
-`errfn` (as `x`) along with any observed data (as `y`)
+`errfn` (as `x`) along with the observed data (as `y`)
 
 eg. this code passes the function `my_nse` (defined in
 [helper\_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md))
@@ -395,7 +397,7 @@ A grid search now becomes very simple to program:
 
 ``` r
 # run the objective function for a range of `harg_pet` values
-harg.test = seq(0, 0.01, length=10)
+harg.test = seq(0, 0.005, length=8)
 harg.nse = sapply(harg.test, obj.example)
 
 # identify and print the best one
@@ -405,16 +407,105 @@ harg.opt = harg.test[idx.opt]
 print( paste0( 'NSE is maximized (', round(nse.opt, 3),') at harg_pet=', round(harg.opt, 3)) )
 ```
 
-    ## [1] "NSE is maximized (0.549) at harg_pet=0.001"
+    ## [1] "NSE is maximized (0.559) at harg_pet=0.001"
 
-`obj.example` can be altered to include multiple parameters in `x` (a
+`obj.example` could be altered to include multiple parameters in `x` (a
 vector). In this way an objective function of any number of SWAT+
-parameters can be constructed and passed to an optimizer. However,
-before we can run more sophisticated optimization routines we need to
-define bounds for the parameters.
+parameters can be constructed and passed to an optimizer. The new
+function would do a series of `rswat_open` calls, new parameter
+assignments, then a series of `rswat_write` calls - one for each file
+corresponding to one of the parameters in `x`
 
-Code below is in development
+To simplify this type of code, we have the function `rswat_amod`. It
+returns an anonymous function, customized for quickly modifying a
+selection of model parameters. This provides a shortcut for when we need
+to repeatedly read/write certain parameters, such as when defining an
+objective function like `obj.example`.
+
+To specify the desired selection of parameters, simply pass the output
+of `rswat_find` to `rswat_amod`. This can be done with (`magittr`)
+pipes, if you’re into that sort of thing:
 
 ``` r
-#rswat_open('cal_parms.cal') %>% filter( agrepl('harg', name, max.distance=2))
+# make sure that we get the variable of interest from the `rswat_find` call
+rswat_find('harg_pet')
 ```
+
+    ##       name string   class dim          file table  i  j
+    ## 1 harg_pet   <NA> numeric  50 hydrology.hyd     1 NA 14
+
+``` r
+# pipe it to `rswat_amod` to define the function, which we are calling "harg_pet"
+harg_pet = rswat_find('harg_pet') %>% rswat_amod
+
+# calling the function without arguments produces the current value and some metadata
+harg_pet()
+```
+
+    ##   value     name   class dim          file table  i  j
+    ## 1 0.005 harg_pet numeric  50 hydrology.hyd     1 NA 14
+
+``` r
+# modify the parameter on disk with a one-liner (overwrites "hydrology.hyd"!)
+harg_pet(0.0023)
+```
+
+    ##    value     name   class dim          file table  i  j
+    ## 1 0.0023 harg_pet numeric  50 hydrology.hyd     1 NA 14
+
+This example has one parameter, but any number of parameters (in any
+number of files) can be specified. For example the code below shows how
+to modify all of the (numeric) parameters in “snow.sno”:
+
+``` r
+# define a function for quickly querying/modifying parameters in the file "snow.sno" 
+snow.sno = rswat_find(include='snow.sno') %>% rswat_amod
+
+# print info about the current values 
+snow.sno()
+```
+
+    ##   value      name   class dim     file table i j
+    ## 1   1.0  fall_tmp numeric   1 snow.sno     1 1 2
+    ## 2   0.5  melt_tmp numeric   1 snow.sno     1 1 3
+    ## 3   4.5  melt_max numeric   1 snow.sno     1 1 4
+    ## 4   4.5  melt_min numeric   1 snow.sno     1 1 5
+    ## 5   1.0   tmp_lag numeric   1 snow.sno     1 1 6
+    ## 6   1.0  snow_h2o numeric   1 snow.sno     1 1 7
+    ## 7   0.5     cov50 numeric   1 snow.sno     1 1 8
+    ## 8   0.0 snow_init numeric   1 snow.sno     1 1 9
+
+``` r
+# make a small adjustment and write the change
+snow.newvals = snow.sno()$value + 1e-2 
+snow.sno(snow.newvals)
+```
+
+    ##   value      name   class dim     file table i j
+    ## 1  1.01  fall_tmp numeric   1 snow.sno     1 1 2
+    ## 2  0.51  melt_tmp numeric   1 snow.sno     1 1 3
+    ## 3  4.51  melt_max numeric   1 snow.sno     1 1 4
+    ## 4  4.51  melt_min numeric   1 snow.sno     1 1 5
+    ## 5  1.01   tmp_lag numeric   1 snow.sno     1 1 6
+    ## 6  1.01  snow_h2o numeric   1 snow.sno     1 1 7
+    ## 7  0.51     cov50 numeric   1 snow.sno     1 1 8
+    ## 8  0.01 snow_init numeric   1 snow.sno     1 1 9
+
+``` r
+# restore the old values
+snow.sno(snow.newvals - 1e-2)
+```
+
+    ##   value      name   class dim     file table i j
+    ## 1   1.0  fall_tmp numeric   1 snow.sno     1 1 2
+    ## 2   0.5  melt_tmp numeric   1 snow.sno     1 1 3
+    ## 3   4.5  melt_max numeric   1 snow.sno     1 1 4
+    ## 4   4.5  melt_min numeric   1 snow.sno     1 1 5
+    ## 5   1.0   tmp_lag numeric   1 snow.sno     1 1 6
+    ## 6   1.0  snow_h2o numeric   1 snow.sno     1 1 7
+    ## 7   0.5     cov50 numeric   1 snow.sno     1 1 8
+    ## 8   0.0 snow_init numeric   1 snow.sno     1 1 9
+
+`rswat_amod` becomes very useful when we move beyond these toy examples
+and starting selecting larger subsets of parameters for tuning. This,
+along with parallel processing, is illustrated in the next vignette
