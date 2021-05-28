@@ -36,6 +36,10 @@ for snapping and spacing). ie. it learns the file structures, names, and
 spacing patterns on the fly. This will hopefully make it robust to
 future changes in SWAT+.
 
+See
+[demo\_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_txtinout.md)
+for a demonstration of `rswat_config` on a real project.
+
 ## libraries
 
 [`here`](https://cran.r-project.org/web/packages/here/index.html)
@@ -75,6 +79,10 @@ helper script
 ``` r
 source(here('R/rswat_docs.R'))
 ```
+
+    ## Warning: package 'pdftools' was built under R version 4.0.5
+
+    ## Using poppler version 21.04.0
 
 ## .rswat environment
 

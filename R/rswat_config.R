@@ -31,6 +31,8 @@
 #' snapping and spacing). ie. it learns the file structures, names, and spacing patterns on the
 #' fly. This will hopefully make it robust to future changes in SWAT+.
 #' 
+#' See [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_txtinout.md)
+#' for a demonstration of `rswat_config` on a real project. 
 
 #' 
 #' ## libraries
