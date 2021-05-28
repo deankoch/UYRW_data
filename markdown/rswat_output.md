@@ -13,13 +13,13 @@ See the vignettes
 and
 [demo\_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md)
 for examples of basic usage without parallelization, and
-[demo\_rswat\_parallel](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_rswat_parallel.md)
+[demo\_parallel](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_parallel.md)
 for a demonstration of how to use `rswat_pexec` and related functions.
 
 ## libraries
 
-The following libraries below are only needed if you’re using the
-parallel execution functions `rswat_cluster`, `rswat_pexec`, or
+The following libraries are only needed if you’re using the parallel
+execution functions `rswat_cluster`, `rswat_pexec`, or
 `rswat_rswat_pardevol`:
 
 [`parallel`](https://stat.ethz.ch/R-manual/R-devel/library/parallel/doc/parallel.pdf)
@@ -39,17 +39,18 @@ library(DEoptimR)
 
 ## dependencies
 
-This is an extension of
-[rswat\_config](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_config.md),
+“rswat\_output.R” is an extension of
+“[rswat\_config.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_config.md)”,
 not a standalone library of helper functions (like “rswat\_docs.R”).
 Most of the function definitions below make use of other functions
 defined in “rswat\_config”, so it needs to be sourced for them to work.
 
 ## output readers
 
-functions for opening and cataloguing SWAT+ output files/variables read
-a SWAT+ output file as dataframe, or return a list of files or output
-variables
+functions for opening and cataloguing SWAT+ output files/variables
+
+read a SWAT+ output file as dataframe, or return a list of files or
+output variables
 
 ``` r
 rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE)

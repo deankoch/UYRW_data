@@ -420,6 +420,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
 #' 
 #' ## internal functions
 #' These are used by core functions and not meant to be called by the user
+#' 
 
 #' parse a page from the I/O pdf
 .rswat_pdf_parse = function(pdftext, ragged=FALSE, header=NULL, section=NA)

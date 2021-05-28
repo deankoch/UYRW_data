@@ -11,29 +11,29 @@
 #' 
 #' See the vignettes
 #' [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_txtinout.md) and
-#' [demo_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md) for
-#' examples of basic usage without parallelization, and
-#' [demo_rswat_parallel](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_rswat_parallel.md)
+#' [demo_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md)
+#' for examples of basic usage without parallelization, and
+#' [demo_parallel](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_parallel.md)
 #' for a demonstration of how to use `rswat_pexec` and related functions.
 #' 
 #' ## libraries
 #' 
-#' The following libraries below are only needed if you're using the parallel execution functions
+#' The following libraries  are only needed if you're using the parallel execution functions
 #' `rswat_cluster`, `rswat_pexec`, or `rswat_rswat_pardevol`:
 #'
-#' [`parallel`](https://stat.ethz.ch/R-manual/R-devel/library/parallel/doc/parallel.pdf) is an R core
-#' package that adds support for parallel computing
+#' [`parallel`](https://stat.ethz.ch/R-manual/R-devel/library/parallel/doc/parallel.pdf) is an R
+#' core package that adds support for parallel computing
 library(parallel)
 
-#' [`DEOptimR`](https://cran.r-project.org/web/packages/DEoptimR) is an implementation of differential
-#' evolution algorithms for nonlinear gradient-free optimization problems
+#' [`DEOptimR`](https://cran.r-project.org/web/packages/DEoptimR) is an implementation of
+#' differential evolution algorithms for nonlinear gradient-free optimization problems
 library(DEoptimR)
 
 #'
 #' ## dependencies
 #' 
-#' This is an extension of
-#' [rswat_config](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_config.md),
+#' "rswat_output.R" is an extension of
+#' "[rswat_config.R](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_config.md)",
 #' not a standalone library of helper functions (like "rswat_docs.R"). Most of the function
 #' definitions below make use of other functions defined in "rswat_config", so it needs to
 #' be sourced for them to work.
@@ -41,7 +41,9 @@ library(DEoptimR)
 
 #' 
 #' ## output readers
+#' 
 #' functions for opening and cataloguing SWAT+ output files/variables
+#' 
 
 #' read a SWAT+ output file as dataframe, or return a list of files or output variables
 rswat_output = function(fname=NULL, vname=NULL, makedates=TRUE, showidx=TRUE, loadall=FALSE)
