@@ -11,7 +11,7 @@ Dean Koch
 
 Required libraries are now specified in the categorized helper scripts
 sourced below, with the exception of the `here` package, which is used
-to located those files.
+to locate those files.
 
 [`here`](https://cran.r-project.org/web/packages/here/index.html)
 simplifies paths involving a project working directory
