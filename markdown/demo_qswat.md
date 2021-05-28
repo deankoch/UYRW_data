@@ -1,7 +1,7 @@
 demo\_qswat.R
 ================
 Dean Koch
-2021-05-08
+2021-05-28
 
 **Mitacs UYRW project**
 
@@ -48,7 +48,13 @@ functions.
 source(here('R/helper_main.R'))
 source(here('R/analysis/helper_analysis.R'))
 source(here('R/rswat.R'))
+```
 
+    ## Warning: package 'pdftools' was built under R version 4.0.5
+
+    ## Using poppler version 21.04.0
+
+``` r
 # low-level R graphics control
 library(grid)
 ```
@@ -425,12 +431,12 @@ wsh$hru %>% filter(Channel == id.outlet)
     ## dimension:      XY
     ## bbox:           xmin: 506656.5 ymin: 5015491 xmax: 510255.3 ymax: 5019546
     ## projected CRS:  WGS 84 / UTM zone 12N
-    ##   id Channel LINKNO LSUID Subbasin  Landscape Category Slope    Len1   Csl Wid1 Dep1   Landuse   Soil SlopeBand          long
-    ## 1 11       1     24    12        6    Upslope        2 30.00 3337.02 23.26 2.74 0.21      migs 697292    0-9999 -110.8908 [°]
-    ## 2 12       1     24    11        6 Floodplain        1 22.16  539.03 12.32 0.99 0.11 frse_tems 696034    0-9999 -110.8865 [°]
-    ##            lat         elev            area frac                       geometry
-    ## 1 45.30914 [°] 1677.417 [m] 3512535.9 [m^2] 84.4 MULTIPOLYGON (((508267.9 50...
-    ## 2 45.30847 [°] 1668.767 [m]  647691.4 [m^2] 15.6 MULTIPOLYGON (((508831.9 50...
+    ##   id Channel LINKNO LSUID Subbasin  Landscape Category Slope    Len1   Csl Wid1 Dep1   Landuse   Soil SlopeBand
+    ## 1 11       1     24    12        6    Upslope        2 30.00 3337.02 23.26 2.74 0.21      migs 697292    0-9999
+    ## 2 12       1     24    11        6 Floodplain        1 22.16  539.03 12.32 0.99 0.11 frse_tems 696034    0-9999
+    ##            long          lat         elev            area frac                       geometry
+    ## 1 -110.8908 [°] 45.30914 [°] 1677.417 [m] 3512535.9 [m^2] 84.4 MULTIPOLYGON (((508267.9 50...
+    ## 2 -110.8865 [°] 45.30847 [°] 1668.767 [m]  647691.4 [m^2] 15.6 MULTIPOLYGON (((508831.9 50...
 
 From the first table we see the channel of interest has ID 1 (column
 ‘Channel’), and from the second we see that this channel is associated

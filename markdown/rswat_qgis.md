@@ -32,6 +32,10 @@ that), but they are helpful for visualizing spatial aspects of the
 model. `qswat_read` and `qswat_plot` are utilities for loading and
 viewing these files in R.
 
+See
+[demo\_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md)
+for a demonstration of `rswat_qgis` on a real project.
+
 ## libraries
 
 [`here`](https://cran.r-project.org/web/packages/here/index.html)
