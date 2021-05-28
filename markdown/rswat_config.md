@@ -80,10 +80,6 @@ helper script
 source(here('R/rswat_docs.R'))
 ```
 
-    ## Warning: package 'pdftools' was built under R version 4.0.5
-
-    ## Using poppler version 21.04.0
-
 ## .rswat environment
 
 The environment `.rswat` is initialized here to store various dataframes
