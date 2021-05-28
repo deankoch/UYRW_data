@@ -25,7 +25,7 @@ library(here)
 `rswat` is a set of helper functions for managing
 [SWAT+](https://swat.tamu.edu/software/plus/) configuration files, and
 related tasks. The codebase has gotten very large so it is split into
-several files, each containing a number of helper functions definitions,
+several files, each containing a number of helper function definitions,
 organized by task:
 
   - [`rswat_qgis`](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_qgis.md)
@@ -40,15 +40,14 @@ organized by task:
     `rswat_config`
 
   - [`rswat_docs`](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md)
-    parses the I/O docs so they can be more easily searched (from R\!).
-    This script can be sourced on its own (it doesn’t depend on the
-    others)
+    parses SWAT+ inputs documentation for easier search/access (from
+    R\!). This script doesn’t depend on the others,
 
-We wrote this code to learn/understand the model, get finer control over
-its settings, and to develop our own customized extensions in our
-implementation of SWAT+ on the Upper Yellowstone watershed. If there is
-some interest from the SWAT+ community we will likely turn all of this
-into an R package at some point.
+We wrote this code to better learn/understand the model, get finer
+control over its settings, and to develop our own customized extensions
+in our implementation of SWAT+ on the Upper Yellowstone watershed. If
+there is some interest from the SWAT+ community we will likely turn all
+of this into an R package at some point.
 
 ``` r
 # TODO: make this a package
