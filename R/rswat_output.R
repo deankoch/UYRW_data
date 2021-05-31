@@ -997,7 +997,9 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
   # in which case the existing start date from the file is reused, and the end date is
   # modified accordingly to get the desired number of steps.
   
-  # grab copies of 'time.sim' and 'print.prt' 
+  # grab up-to-date copies of 'time.sim' and 'print.prt' 
+  rswat_open('time.sim', quiet=quiet, reload=TRUE)
+  rswat_open('print.prt', quiet=quiet, reload=TRUE)
   time.sim = rswat_open('time.sim', quiet=quiet)
   print.prt = rswat_open('print.prt', quiet=quiet)
   
@@ -1075,18 +1077,29 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
   
 }
 
+
+#' 
+#' ## OHG files
+
 #' runs simulation to generate/load OHG output, optionally using it as input to an error function
 rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, quiet=FALSE)
 {
+  #
+  # With default settings, this is a helper function for quickly getting discharge values for
+  # the current SWAT+ config settings. Argument `errfn` allows these discharge values to be
+  # passed directly to an error function (eg Nash Sutcliffe Efficiency) to make it easier to
+  # construct anonymous objective functions for your SWAT+ model. `restore=TRUE` prompts the
+  # creation of a backup of all modified config files except the simulation outputs, which
+  # is restored after the simulation has run.
   #
   # ARGUMENTS:
   #
   # 'vname', character, the output variable name to load
   # 'dates': integer, vector, or dataframe containing the dates to simulate (see rswat_time)
   # 'oid': integer, the "object number", an ID code associated with the desired object
-  # 'restore': boolean, indicates to restore a backup of config files modified by the function
-  # 'errfn', anonymous function of one or two (equal-length) numeric vector(s) (see DETAILS)
-  # 'quiet': boolean, indicating to suppress console messages
+  # 'restore': logical, restore a backup of all modified config files when finished 
+  # 'errfn', anonymous function of two equal-length numeric vectors (see DETAILS)
+  # 'quiet': logical, indicating to suppress console messages
   #
   # RETURN:
   #
@@ -1094,252 +1107,66 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
   #
   # DETAILS:
   #
-  # With default settings, this is a helper function for quickly getting discharge values for
-  # the current SWAT+ config settings. Argument `errfn` allows these discharge values to be
-  # passed directly to an error function (eg Nash Sutcliffe Efficiency) to make it easier to
-  # construct anonymous objective functions for your SWAT+ model. `restore=TRUE` prompts the
-  # creation of a backup of all modified config files (except the simulation outputs), which
-  # is restored after the simulation has run.
-  #
   # If `dates` is not supplied, the function uses the return value of `rswat_time()`
   #
-  # There are three modes:
+  # When `errfn` is not supplied the function returns the dataframe of OHG data including
+  # column 'vname'. When `errfn(x, y)` is supplied, it gets passed the OHG data as argument
+  # `x` and the observed data as argument `y`. 
   #
-  # (1) `errfn` not supplied -> returns the dataframe of OHG data including column 'vname'
-  # (2) `errfn(x)` is supplied -> passes output OHG values of 'vname' to errfun and returns result
-  # (3) `errfn(x,y)` is supplied -> errfn evaluated as above with `y=dates$obs` or `y=dates$flo`
+  # The function looks for observed data in column 'obs' in `dates` (or column 'flo', if
+  # 'obs' not found). This column should be numeric and may have units (in which case the
+  # OHG units are converted as needed).
   #
-  # In case (3), if `dates$obs==NULL` the function uses `dates$flo`. ie any column starting
-  # with 'flo' ('flow', 'flo_out', etc) will be selected as the second choice.
-  #
-  # Observed data can thus either be: (1) dealt with elsewhere, (2) baked into the supplied
-  # `errfn`, or (3) passed as a column of `dates`. In case (3) `dates` must be a dataframe,
-  # and the name of the observations column must start with 'obs' or 'flo' (with 'obs'
-  # preferred). This column should be of `numeric` or `units` type. In case (2), any such
-  # column is ignored.
   
-  # initialize observed data vector
-  obs = NULL
-  
-  # check that rswat has been initialized
+  # check that rswat has been initialized and pull the directory from rswat environment
   err.msg = 'Run `rswat_cio` first to load a project'
   if( !exists('.rswat') ) stop(err.msg)
   if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+  textio = dirname(.rswat$ciopath)
   
-  # make a backup of the config stuff modified below
-  if(restore)
-  {
-    # pull the directory from rswat environment
-    textio = dirname(.rswat$ciopath)
-    
-    # create a temporary directory for backups
-    tdir = file.path(textio, paste0('_rswat_backup_', basename(tempfile())))
-    my_dir(tdir)
-    
-    # define files to back up
-    fname = c('file.cio', 'time.sim', 'print.prt', 'object.prt')
-    fname.exists = file.exists( file.path(textio, fname) )
-    fname = fname[fname.exists]
-    
-    # define paths for the original and backup copies
-    restore.path = file.path(textio, fname)
-    backup.path = file.path(tdir, fname)
-    
-    # copy the files in a loop
-    if( !quiet ) cat('backing up files... ')
-    for(ii in seq_along(backup.path)) file.copy(restore.path[ii], backup.path[ii])
-  }
+  # set up the SWAT+ config files for requested dates and spatial ID.
+  ohg.backup = rswat_ohg_setup(dates=dates, oid=oid, quiet=quiet, backup=restore)
+  # ^this variable either a path to backup (if backup==TRUE) or NULL (if backup==FALSE)
   
+  # copy output filename 
+  fout = rswat_open('object.prt', quiet=quiet)$FILENAME[1]
+
   # copy observed data (if supplied) from dataframe input
+  obs = NULL
   if( is.data.frame(dates) )
   {
-    # look first for anything starting with 'obs'
+    # look first for anything starting with 'obs', then 'flo' only if nothing is found 
     obs = dates$obs
-    
-    # look for 'flo' only if nothing is found 
     if( is.null(obs) ) obs = dates$flo
   }
   
-  # write new time period to config files (if necessary), overwrite `dates` in normalized form 
-  dates = rswat_time(dates, quiet=TRUE)
-  
-  # open fifth table of 'print.prt', disable all output files and write the changes
-  print.prt = rswat_open('print.prt')[[5]]
-  print.prt[, names(print.prt) != 'objects'] = 'n'
-  rswat_write(print.prt, preview=F, quiet=TRUE)
-  
-  # activate OHG output
-  fout = rswat_ohg(overwrite=TRUE, oid=oid)
-  
-  # run the executable
+  # run the executable 
   if( !quiet ) cat('running SWAT+... ')
   rswat_exec(quiet=quiet, fout=FALSE)
   
-  # this should restore any config files modified in the above 
-  if(restore)
-  {
-    # delete 'object.prt' and restore backups
-    if( !quiet ) cat('restoring backup... ')
-    unlink( file.path(textio, 'object.prt') )
-    for(ii in seq_along(backup.path)) file.copy(backup.path[ii], restore.path[ii], overwrite=TRUE)
-    if( !quiet ) cat('done\n')
-    unlink(tdir, recursive=TRUE)
-    
-    # refresh cached value of the files that were modified above 
-    rswat_open('time.sim', quiet=TRUE, reload=TRUE)
-    rswat_open('print.prt', quiet=TRUE, reload=TRUE)
-  }
+  # restore config files modified above as needed
+  if( !is.null(ohg.backup) ) rswat_ohg_setup(backup=ohg.backup, quiet=quiet)
   
-  # load the output file and finish if no error function supplied
-  if( is.null(errfn) ) return( rswat_output(fout$FILENAME, vname=vname, showidx=FALSE) )
+  # load the output data and return if no error function supplied
+  ohg.out = rswat_ohg_extract(fout, vname=vname, obs=obs, quiet=quiet)
+  if( is.null(errfn) ) return( ohg.out )
   
-  # otherwise extract the variable of interest and determine its units (if any)
-  sim = rswat_output(fout$FILENAME, vname=vname, showidx=FALSE)[[vname]]
-  sim.hasunits = inherits(sim, 'units')
-  sim.units = ifelse(sim.hasunits,  as.character( units(sim) ), NA) 
-  
-  # handle invalid `errfn` argument
+  # otherwise proceed with matching to observations after checking for invalid `errfn` 
   if( !is.function(errfn) ) { stop('errfn must be a function') } else {
     
-    # count the number of arguments
+    # count the number of arguments and halt if it's not as expected
     errfn.n = length( formalArgs(errfn) )
+    if( errfn.n != 2 ) stop('errfn must have exactly 2 inputs')
     
-    # handle error functions of one variable
-    if( errfn.n == 1 ) return( errfn(sim) )
-    
-    # handle error functions of two variables 
-    if( errfn.n == 2 )
-    {
-      # handle missing second argument 
-      if( is.null(obs) ) stop('dates$obs not found!')
-      
-      # check for units in observed data
-      obs.hasunits = inherits(sim, 'units')
-      
-      # if both vectors are missing units, skip ahead
-      if( obs.hasunits | sim.hasunits ) 
-      {
-        # handle units conversion or...
-        if( obs.hasunits & sim.hasunits ) sim = set_units(sim, sim.units, mode='standard')
-        
-        # assign missing units to observed data or...
-        if( (!obs.hasunits) & sim.hasunits )
-        {
-          warning(paste('assuming dates$obs has units of', sim.units))
-          obs = set_units(obs, sim.units, mode='standard') 
-        }
-        
-        # assign missing units to simulated data
-        if( obs.hasunits & (!sim.hasunits) )
-        {
-          obs.units = as.character( units(obs) )
-          warning(paste('assuming SWAT+ variable', vname, 'has units of', obs.units))
-          sim = set_units(sim, obs.units, mode='standard') 
-        }
-      }
-      
-      # data and simulation should now be in common units - call the error function
-      return( errfn(sim, obs) ) 
-    }
+    # halt on missing observations then evaluate error function and return
+    if( is.null(obs) ) stop('dates$obs not found!')
+    return( errfn( ohg.df[[vname]], ohg.df[['obs']] ) )
   }
-}
-
-
-#' 
-#' ## model execution (internal)
-
-#' request a dummy simulation to generate example cases of available output files
-rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
-{
-  # ARGUMENTS
-  #
-  # `subdir`: character, the subdirectory to store the output files
-  # `nday`: integer > 0, number of days to simulate
-  # `quiet`: logical, suppresses console messages
-  #
-  # RETURN
-  #
-  # character, the full path to the dummy simulation outputs folder 
-  #
-  # DETAILS
-  # 
-  # SWAT+ simulates many different physical variables, grouping them into output text files
-  # according to the the type of watershed feature they belong to and the time interval. Users
-  # may opt to have SWAT+ output all of these files in any given simulation, but this results
-  # in slow execution times, so it is better to select a subset to print (via 'print.prt').
-  #
-  # This function creates a dataset to assist in selecting output files. It runs a simulation
-  # of length `nday` starting in 1901-01-01, generating all available output files and copying
-  # them to `subdir` (where they can't be overwritten by future calls to the SWAT+ executable).
-  # All project files are then restored to their original state.
-  #
-  # The default `nday=1` is enough to generate headers and units for all outputs. It is not 
-  # enough, however, to generate example data rows for all timestep options. eg. a 1-day
-  # simulation will generate 1 data row in the daily files, but the yearly and monthly files
-  # will now have any data rows
-  #
-  
-  # grab project directory from package environment
-  if( exists('.rswat') )
-  {
-    # copy the path from the package environment
-    ciopath = .rswat$ciopath
-    
-    # handle missing ciopath
-    if( is.null(ciopath) ) stop('ciopath not found. Try setting it with `rswat_cio`')
-    
-    textio = dirname(ciopath)
-    
-  } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
-  
-  # define files to back up
-  fname.b = list.files(textio, include.dirs=FALSE)
-  idx.obak = endsWith(fname.b, '.txt') | endsWith(fname.b, '.out')  | endsWith(fname.b, '.ohg')
-  idx.cbak = fname.b %in% c('file.cio', 'time.sim', 'print.prt', 'object.prt')
-  fname = fname.b[ idx.obak | idx.cbak ]
-  
-  # copy the files in a loop, saving to subfolder of `textio`
-  if( !quiet ) cat('backing up files... ')
-  bpath = rswat_copy(fname=fname, overwrite=TRUE, quiet=quiet)
-  bdir = dirname(bpath)[1]
-  
-  # adjust the simulation period
-  rswat_time(nday)
-  
-  # open fifth table of 'print.prt', activate all output files and write the changes
-  print.prt = rswat_open('print.prt')[[5]]
-  print.prt[, names(print.prt) != 'objects'] = 'y'
-  rswat_write(print.prt, preview=F, quiet=TRUE)
-  
-  # TODO: activate OHG files
-  
-  # execute the simulation 
-  if( !quiet ) cat('running SWAT+... ')
-  fout = rswat_exec(quiet=quiet)
-  
-  # fout is not a complete list of outputs! scan for output files (old and new)
-  fname.s = list.files(textio, include.dirs=FALSE)
-  idx.new = endsWith(fname.s, '.txt') | endsWith(fname.s, '.out')  | endsWith(fname.s, '.ohg')
-  fname.new = fname.s[idx.new]
-  
-  # copy the new files to subdirectory and delete the originals
-  odir = file.path(textio, subdir)
-  opath = rswat_copy(to=odir, fname=fname.new, overwrite=TRUE, quiet=quiet)
-  unlink( file.path(textio, fname.new) )
-  
-  # restore backup files and delete backup directory
-  if( !quiet ) cat('restoring backup... ')
-  rpath = rswat_copy(from=bdir, fname=basename(bpath), overwrite=TRUE, quiet=quiet)
-  unlink(bdir, recursive=TRUE)
-  if( !quiet ) cat('done\n')
-  
-  # return the vector of output file paths
-  return( opath )
   
 }
 
 #' create an object hydrograph output specification file, modifying file.cio appropriately
-rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FALSE, quiet=TRUE)
+rswat_ohg_toggle = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FALSE, quiet=TRUE)
 {
   #
   # ARGUMENTS
@@ -1406,7 +1233,7 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FA
   #                 rep('hru', length(nm.hru)),
   #                 rep('sdc', length(nm.sdc)))
   # 
-  # rswat_ohg(overwrite=TRUE, otype=otypes.test, htype=htypes.test)
+  # rswat_ohg_toggle(overwrite=TRUE, otype=otypes.test, htype=htypes.test)
   #
   # -----------------------------------------------------------
   #
@@ -1507,6 +1334,248 @@ rswat_ohg = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', delete=FA
   rswat_open('object.prt', quiet=TRUE, reload=TRUE)
   rswat_open('object.prt', quiet=TRUE)
 }
+
+#' set up SWAT+ for an OHG-only simulation for a specified time period (but don't run it) 
+rswat_ohg_setup = function(dates=NULL, oid=1, quiet=FALSE, backup=TRUE, allout=FALSE)
+{
+  #
+  # ARGUMENTS:
+  #
+  # 'dates': integer, vector, or dataframe containing the dates to simulate (see rswat_time)
+  # 'oid': integer, the "object number", an ID code associated with the desired object
+  # 'quiet': logical, indicating to suppress console messages
+  # 'backup': logical or character string, indicating to make/restore backup (see DETAILS)
+  # 'allout': logical, indicating to configure SWAT+ to produce ALL outputs
+  #
+  # RETURN:
+  #
+  # When `backup=TRUE, the path to the backup folder (character). Otherwise nothing
+  #
+  # DETAILS:
+  #
+  # Modifies the files 'file.cio', 'time.sim', 'print.prt', 'object.prt' in the SWAT+
+  # directory, so that the model produces no outputs except a single OHG file for spatial
+  # ID `oid`, and is set for daily simulations over the time period in `dates`.
+  #
+  # Special flag `allout` enables all output files (including the OHG file).
+  #
+  # When `backup=TRUE`, a backup file is created in a subdirectory of the SWAT+ directory
+  # to store a copy of the files listed above before modification. `backup` can also be a
+  # string pointing to a directory containing these files, in which case they are copied
+  # back to the SWAT+ directory and reloaded
+  # 
+  
+  # check that rswat has been initialized and pull the directory from rswat environment
+  err.msg = 'Run `rswat_cio` first to load a project'
+  if( !exists('.rswat') ) stop(err.msg)
+  if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+  textio = dirname(.rswat$ciopath)
+  
+  # define files to modify and their paths
+  fname = c('file.cio', 'time.sim', 'print.prt', 'object.prt')
+  fpath = file.path(textio, fname)
+  fname.exists = file.exists(fpath)
+  
+  # restore a backup if requested
+  if( !is.logical(backup) ) 
+  {
+    # define console message for error
+    info.msg = paste(paste(fname, collapse=', '), 'not found in directory', backup)
+    
+    # define paths for the backup copies, check they exist
+    bpath = file.path(backup, fname)
+    bpath.exists = file.exists(bpath)
+    if( all(!bpath.exists) ) stop( paste('invalid argument `backup`.', info.msg) )
+    if( !quiet ) cat( paste('restoring', paste(fname[bpath.exists], collapse=', '), '... ') )
+    
+    # remove the current 'object.prt' file, copy over backups, and refresh in memory
+    unlink( file.path(textio, 'object.prt') )
+    rswat_copy(from=backup, fname=fname[bpath.exists], overwrite=TRUE, quiet=quiet)
+    
+    # delete backup directory and finish
+    unlink(backup, recursive=TRUE)
+    return(invisible())
+  }
+  
+  # make a backup if requested
+  backup.create = backup & any(fname.exists)
+  if(backup.create)
+  {
+    # create a directory for backups
+    bdir = file.path(textio, paste0('_rswat_ohg_setup_', basename( tempfile() )))
+    dir.create(bdir)
+
+    # copy the files in a loop
+    if( !quiet ) cat('backing up files... ')
+    bpath = rswat_copy(to=bdir, fname=fname[fname.exists], overwrite=TRUE, quiet=quiet)
+  }
+  
+  # write new time period to config files, overwriting `dates` in normalized form 
+  dates = rswat_time(dates, quiet=quiet)
+  
+  # open fifth table of 'print.prt', toggle output files and write the changes
+  print.prt = rswat_open('print.prt')[[5]]
+  print.prt[, names(print.prt) != 'objects'] = c('n', 'y')[ as.integer(allout) + 1 ]
+  rswat_write(print.prt, preview=F, quiet=TRUE)
+  
+  # activate OHG output
+  fout = rswat_ohg_toggle(overwrite=TRUE, oid=oid)
+  dates.msg = paste('SWAT+ configured for period', paste(dates, collapse=' to '))
+  ohg.msg = paste('with output file', fout$FILENAME, '\n')
+  if( !quiet ) cat( paste(dates.msg, ohg.msg) )
+  
+  # finish, returning backup path if it was created
+  if(backup.create) return(bdir)
+  return( invisible() )
+}
+
+#' read a variable from an OHG file and attempt to match its units with a supplied vector 
+rswat_ohg_extract = function(fname=NULL, vname='flo', obs=NULL, quiet=FALSE)
+{
+  #
+  # ARGUMENTS:
+  #
+  # `fname`: character, an OHG file in the currently loaded SWAT+ directory
+  # 'vname', character, the output variable name to load
+  # `obs`: numeric, possibly with units
+  # `quiet`, logical, suppresses console messages
+  #
+  # RETURN:
+  #
+  # Either: for NULL `obs`, the numeric vector of output values with units, if the file
+  # specifies them; Or, for numeric `obs`, a dataframe with columns `vname` and 'obs'
+  # with matching units.
+  #
+  # DETAILS:
+  #
+  # When `obs` is not supplied, the function reads and returns the requested file data.
+  # When `obs` is supplied, the function merges that data with the OHG data, assigning
+  # and converting units as needed. The units of `obs` are preferred, and if one of the
+  # fields is missing units, it is assumed to have the units of the other.
+  #
+  
+  
+  # set default file if none supplied then open the file
+  if( is.null(fname) ) fname = rswat_open('object.prt')$FILENAME[1]
+  sim = rswat_output(fname, vname=vname, makedates=FALSE, showidx=FALSE)[[vname]]
+  
+  # determine the output units (if any)
+  sim.hasunits = inherits(sim, 'units')
+  sim.units = ifelse(sim.hasunits,  as.character( units(sim) ), NA) 
+
+  # finish if `obs` is not supplied
+  if( is.null(obs) ) return(sim)
+  
+  # check for units in observed data
+  obs.hasunits = inherits(obs, 'units')
+  obs.units = ifelse(obs.hasunits,  as.character( units(obs) ), NA) 
+  
+  # if both vectors are missing units, skip ahead
+  if( obs.hasunits | sim.hasunits ) 
+  {
+    # handle units conversion or...
+    if( obs.hasunits & sim.hasunits ) sim = set_units(sim, obs.units, mode='standard')
+    
+    # assign missing units to observed data or...
+    if( (!obs.hasunits) & sim.hasunits )
+    {
+      if( !quiet ) cat( paste('assuming obs has units of', sim.units, '.\n') )
+      obs = set_units(obs, sim.units, mode='standard') 
+    }
+    
+    # ... assign missing units to simulated data
+    if( obs.hasunits & (!sim.hasunits) )
+    {
+      # set units and print a message
+      obs.units = as.character( units(obs) )
+      obs.msg = paste('assuming SWAT+ variable', vname, 'has units of', obs.units, '.\n')
+      if( !quiet ) cat( obs.msg )
+      sim = set_units(sim, obs.units, mode='standard') 
+    }
+  }
+
+  # return both vectors as a dataframe 
+  return( setNames(data.frame(obs, sim), c('obs', vname)) )
+}
+
+
+#' 
+#' ## model execution (internal)
+
+#' request a dummy simulation to generate example cases of available output files
+rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
+{
+  # ARGUMENTS
+  #
+  # `subdir`: character, the subdirectory to store the output files
+  # `nday`: integer > 0, number of days to simulate
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN
+  #
+  # character, the full path to the dummy simulation outputs folder 
+  #
+  # DETAILS
+  # 
+  # SWAT+ simulates many different physical variables, grouping them into output text files
+  # according to the the type of watershed feature they belong to and the time interval. Users
+  # may opt to have SWAT+ output all of these files in any given simulation, but this results
+  # in slow execution times, so it is better to select a subset to print (via 'print.prt').
+  #
+  # This function creates a dataset to assist in selecting output files. It runs a simulation
+  # of length `nday` generating all available output files and copying them to `subdir` (where
+  # they can't be overwritten by future calls to the SWAT+ executable). All project files are
+  # then restored to their original state.
+  #
+  # The default `nday=1` is enough to generate headers and units for all outputs. It is not 
+  # enough, however, to generate example data rows for all timestep options. eg. a 1-day
+  # simulation will generate 1 data row in the daily files, but the yearly and monthly files
+  # will not have any data rows
+  #
+  
+  # check that rswat has been initialized and pull the directory from rswat environment
+  err.msg = 'Run `rswat_cio` first to load a project'
+  if( !exists('.rswat') ) stop(err.msg)
+  if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+  textio = dirname(.rswat$ciopath)
+  
+  # make a backup of SWAT+ config files then configure for all outputs simulation
+  bdir = rswat_ohg_setup(dates=nday, quiet=quiet, backup=TRUE, allout=TRUE)
+  
+  # define existing output files to back up
+  fname.b = list.files(textio, include.dirs=FALSE)
+  idx.obak = endsWith(fname.b, '.txt') | endsWith(fname.b, '.out')  | endsWith(fname.b, '.ohg')
+  fname = fname.b[idx.obak]
+  
+  # copy the files in a loop, saving to subfolder of `textio`
+  if( !quiet ) cat('backing up output files... ')
+  bpath = rswat_copy(to=bdir, fname=fname, overwrite=TRUE, quiet=quiet)
+
+  # execute the simulation 
+  if( !quiet ) cat('running SWAT+... ')
+  fout = rswat_exec(quiet=quiet)
+  
+  # fout is not a complete list of outputs! scan for output files (old and new)
+  fname.s = list.files(textio, include.dirs=FALSE)
+  idx.new = endsWith(fname.s, '.txt') | endsWith(fname.s, '.out')  | endsWith(fname.s, '.ohg')
+  fname.new = fname.s[idx.new]
+  
+  # copy the new files to subdirectory and delete the originals
+  odir = file.path(textio, subdir)
+  opath = rswat_copy(to=odir, fname=fname.new, overwrite=TRUE, quiet=quiet)
+  unlink( file.path(textio, fname.new) )
+  
+  # restore backup files and delete backup directory
+  if( !quiet ) cat('restoring backup of output files... ')
+  rpath = rswat_copy(from=bdir, fname=basename(bpath), overwrite=TRUE, quiet=quiet)
+  rswat_ohg_setup(backup=bdir)
+  if( !quiet ) cat('done\n')
+  
+  # return the vector of output file paths
+  return( opath )
+}
+
+
 
 # TODO: improve or replace this
 #' returns an objective function whose argument is vector of parameter values, output is NSE
@@ -1636,47 +1705,171 @@ my_objective = function(cal, gage, errfn, quiet=TRUE)
 #' ## multicore model execution 
 
 #' run a batch of simulations in parallel
-rswat_pexec = function(x, amod, wipe=TRUE, ...)
+rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet=FALSE, ...)
 {
-  # ARGUMENTS:
-  #
-  # `x`: n by p numeric matrix of parameters, the columns of which are valid input to `amod`
-  # `amod`: a parameter modification function created via `rswat_amod(...)` (see DETAILS)
-  # `wipe`: whether to stop the cluster workers and erase their data on disk when finished 
-  # `...`: arguments to pass to `rswat_flo`
-  #
-  # RETURN:
-  # 
-  # a dataframe with columns `date`, `out_1`, `out_2`, ... `out_n`, where n = `ncol(x)`,
-  # and `out_j` is the output of `rswat_flo(...)` after running `amod(x[,j])`
-  # 
-  # DETAILS:
   #
   # Typical model fitting routines make a series of parameter modifications, running the model
   # after each change to generate output and score the model performance associated with a
   # given parameter set. When some/all of these modifications are unrelated (ie not depending
-  # on one another) they can be run in parallel. This function allows a batch of parameter sets
+  # on one another) they can be run in parallel. `rswat_pexec` allows a batch of parameter sets
   # to be evaluated in this way with SWAT+ OHG file outputs.
+  #
+  # ARGUMENTS:
+  #
+  # `x`: n by p numeric matrix of parameters, the columns of which are valid input to `amod`
+  # `amod`: a parameter modification function created via `rswat_amod(...)` (see DETAILS)
+  # 'dates': integer, vector, or dataframe containing the dates to simulate (see rswat_time)
+  # 'oid': integer, the "object number", an OHG ID code passed to `rswat_ohg_setup`
+  # 'vname', character, the output variable name in the OHG file to load
+  # `wipe`: whether to stop the cluster workers and erase their data on disk when finished 
+  # `quiet`: logical, suppresses console messages
+  # `...`: arguments to pass to 
+  #
+  # RETURN:
+  # 
+  # a dataframe with columns `date`, `out_1`, `out_2`, ... `out_n`, where `n` is the length of
+  # `x`, and `out_j` is the variable `vname` for OHG object ID `oid` from the SWAT+ simulation
+  # using paramers settings written by `amod(x[,j])`
+  # 
+  # DETAILS:
   #
   # A set of n numeric parameter vectors should be supplied as the (p-dimensional) columns
   # of matrix `x`. The function applies `amod` to these columns to generate the corresponding
   # SWAT+ config files, which are then copied to a temporary SWAT+ project folder, where the
-  # simulation is run by a worker node created by `rswat_cluster()`. 
+  # simulation is run by a worker node created by `rswat_cluster()`.
   #
+  # if `rswat_cluster(...)` has already been called to initialize a cluster (and it hasn't
+  # been shut down), `rswat_pexec` will use the existing one instead of creating a new one. 
+  #
+  # TODO: make backup optional
 
-  # set up OHG output before setting up the cluster
-  # TODO: write a function that just sets up / restores these settings
-  # TODO: write a function that loads and joins OHG data to a gage df
-  # TODO: simplify rswat_flo with these two functions
+  # check that rswat has been initialized and pull the directory from rswat environment
+  err.msg = 'Run `rswat_cio` first to load a project'
+  if( !exists('.rswat') ) stop(err.msg)
+  if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+  textio = dirname(.rswat$ciopath)
   
+  # make a backup of SWAT+ config files and configure for OHG-only simulations
+  bdir = rswat_ohg_setup(dates=dates, oid=oid, quiet=quiet, backup=TRUE, allout=FALSE)
   
-  # copy OHG files to temporary location as they are generated
+  # grab info on parameter files to modify, make a list of all files to backup
+  fmod.df = amod(reload=TRUE)
+  fmod = unique(fmod.df$file)
+  ohg.fn =  rswat_open('object.prt')$FILENAME
+  bname = c(fmod, ohg.fn)
+  bname.exists = file.exists( file.path(textio, bname) )
+
+  # count number of parameters and coerce x to matrix if needed 
+  np = nrow(fmod.df)
+  x = matrix(x, np)
+  nx = ncol(x)
   
+  # copy the files in a loop, saving to backup subfolder
+  if( !quiet ) cat('backing up parameter files... ')
+  bpath = rswat_copy(to=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=quiet)
   
-  # copy the OHG files one at a time to the project folder and open them
+  # initialize the cluster object as needed and find node paths
+  cluster.out = rswat_cluster(quiet=quiet)
+  dir.node = cluster.out$path
+  cl = cluster.out$cl
+  cpath = dirname(dir.node[1])
   
-  # shut down cluster and restore original state of project folder
+  # copy the node process IDs
+  node.pid = unlist( clusterApplyLB(cl, seq_along(cl), function(x) Sys.getpid() ) )
   
+  # build list of tempfiles to carry parameters to each simulation, and their sources
+  path.src = setNames(file.path(textio, fmod), fmod)
+  fmod.pop = lapply(1:nx, function(x) setNames(file.path(cpath, paste0(x, '_', fmod)), fmod))
+  
+  # create temporary config files for each simulation in the population, in a loop
+  if( !quiet ) pb = txtProgressBar(max=nx, style=3)
+  cat(paste('\nwriting', length(fmod)*nx, 'population parameter files to disk...\n'))
+  for(idx.pop in 1:nx)
+  {
+    # write the files in the currently loaded SWAT+ project folder
+    amod(x[,idx.pop], quiet=TRUE, reload=FALSE)
+    
+    # copy them to the staging area and update progress message if necessary
+    file.copy(path.src, fmod.pop[[idx.pop]])
+    if( !quiet ) setTxtProgressBar(pb, idx.pop)
+  }
+  if( !quiet ) close(pb)
+  
+  # anonymous function that copies config file(s) to process node, runs simulation 
+  aexec = function(idx, pid, npath, fpath, fn, odir)
+  {
+    # `idx`: integer, the job index / the prefix of the filenames to copy
+    # `pid`: integer vector of process IDs, one of which must match `Sys.getpid()`
+    # `npath`: character, the path to the SWAT+ directory for each node 
+    # `fpath`: list of character strings, paths to the files to copy for each job 
+    # `fn`: character, the output filename to copy when finished
+    # `odir`; character, the path to the directory to copy the output files
+    #
+    # rruns the simulation with the specified config files and copies the output file
+    # `fn` to `odir`, with filename '<idx>_<fn>'. Returns the path to this file
+    
+    # find current process ID in the ordered list 'pid' and using matching node path
+    pdir = npath[ which( Sys.getpid() == pid ) ]
+    
+    # copy the file(s) to the node directory
+    file.copy( fpath[[idx]], file.path(pdir, names( fpath[[idx]] ) ), overwrite=TRUE)
+    
+    # run the simulation
+    rswat_exec(textio=pdir, quiet=TRUE, fout=FALSE)
+    
+    # copy output file and finish
+    opath = file.path(odir, paste0(idx, '_', fn) )
+    file.copy(file.path(pdir, fn), opath, overwrite=TRUE)
+    return(opath)
+  }
+
+  # execute the jobs in parallel
+  if( !quiet ) cat('\nrunning SWAT+ in parallel...\n')
+  clusterExport(cl, 'rswat_exec')
+  node.output = clusterApplyLB(cl, 1:nx, aexec, 
+                               pid = node.pid, 
+                               npath = dir.node, 
+                               fpath = fmod.pop,
+                               fn = ohg.fn,
+                               odir = cpath)
+
+  # load results into R
+  if( !quiet ) pb = txtProgressBar(max=nx, style=3)
+  cat(paste('\nloading', nx, 'output files...\n'))
+  output.list = setNames(vector(mode='list', length=nx), paste0('out_', 1:nx) )
+  for(idx.output in 1:nx)
+  {
+    # copy output from node to current SWAT+ directory
+    if( !quiet ) setTxtProgressBar(pb, idx.output)
+    file.copy(node.output[[idx.output]], file.path(textio, ohg.fn), overwrite=TRUE)
+    
+    # first output handled differently
+    if(idx.output == 1)
+    {
+      # open using `rswat_output` to get dates column in addition to OHG data
+      output.list[[1]] = rswat_output(ohg.fn, vname=vname, showidx=FALSE) 
+      
+    } else {
+      
+      # otherwise open by faster method that ignores dates
+      output.list[[idx.output]] = rswat_ohg_extract(ohg.fn, vname=vname, quiet=quiet)
+    }
+  }
+  if( !quiet ) close(pb)
+
+  # construct output
+  first.df = setNames(output.list[[1]], c('date', 'out_1'))
+  all.df = cbind(first.df, as.data.frame(output.list[-1]))
+  
+  # restore the original parameters of the currently loaded project
+  if( !quiet ) cat('\nrestoring parameter files backup...')
+  rpath = rswat_copy(from=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=quiet)
+  rswat_ohg_setup(quiet=quiet, backup=bdir)
+  if( !quiet ) cat('done\n')
+  
+  # shut down cluster as needed and finish
+  rswat_cluster(wipe=wipe, quiet=quiet)
+  return(all.df)
 }
 
 #' parallel implementation of adaptive differential evolution algorithm from the DEoptimR package 
