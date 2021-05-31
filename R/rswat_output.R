@@ -1390,7 +1390,7 @@ rswat_ohg_setup = function(dates=NULL, oid=1, quiet=FALSE, backup=TRUE, allout=F
     
     # remove the current 'object.prt' file, copy over backups, and refresh in memory
     unlink( file.path(textio, 'object.prt') )
-    rswat_copy(from=backup, fname=fname[bpath.exists], overwrite=TRUE, quiet=quiet)
+    rswat_copy(from=backup, fname=fname[bpath.exists], overwrite=TRUE, quiet=TRUE)
     
     # delete backup directory and finish
     unlink(backup, recursive=TRUE)
@@ -1402,16 +1402,16 @@ rswat_ohg_setup = function(dates=NULL, oid=1, quiet=FALSE, backup=TRUE, allout=F
   if(backup.create)
   {
     # create a directory for backups
-    bdir = file.path(textio, paste0('_rswat_ohg_setup_', basename( tempfile() )))
+    bdir = file.path(textio, paste0('.rswat_ohg_setup_', basename( tempfile() )))
     dir.create(bdir)
 
     # copy the files in a loop
-    if( !quiet ) cat('backing up files... ')
-    bpath = rswat_copy(to=bdir, fname=fname[fname.exists], overwrite=TRUE, quiet=quiet)
+    if( !quiet ) cat('backing up config files... ')
+    bpath = rswat_copy(to=bdir, fname=fname[fname.exists], overwrite=TRUE, quiet=TRUE)
   }
   
   # write new time period to config files, overwriting `dates` in normalized form 
-  dates = rswat_time(dates, quiet=quiet)
+  dates = rswat_time(dates, quiet=TRUE)
   
   # open fifth table of 'print.prt', toggle output files and write the changes
   print.prt = rswat_open('print.prt')[[5]]
@@ -1503,7 +1503,7 @@ rswat_ohg_extract = function(fname=NULL, vname='flo', obs=NULL, quiet=FALSE)
 #' ## model execution (internal)
 
 #' request a dummy simulation to generate example cases of available output files
-rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
+rswat_odummy = function(subdir='.rswat_odummy', nday=1, quiet=FALSE)
 {
   # ARGUMENTS
   #
@@ -1543,9 +1543,9 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   bdir = rswat_ohg_setup(dates=nday, quiet=quiet, backup=TRUE, allout=TRUE)
   
   # define existing output files to back up
-  fname.b = list.files(textio, include.dirs=FALSE)
-  idx.obak = endsWith(fname.b, '.txt') | endsWith(fname.b, '.out')  | endsWith(fname.b, '.ohg')
-  fname = fname.b[idx.obak]
+  fname.b = list.files(textio, all.files=FALSE)
+  fname.outputs = grepl('\\.txt$|\\.ohg$|\\.out$', fname.b)
+  fname = fname.b[fname.outputs]
   
   # copy the files in a loop, saving to subfolder of `textio`
   if( !quiet ) cat('backing up output files... ')
@@ -1556,8 +1556,8 @@ rswat_odummy = function(subdir='_rswat_odummy', nday=1, quiet=FALSE)
   fout = rswat_exec(quiet=quiet)
   
   # fout is not a complete list of outputs! scan for output files (old and new)
-  fname.s = list.files(textio, include.dirs=FALSE)
-  idx.new = endsWith(fname.s, '.txt') | endsWith(fname.s, '.out')  | endsWith(fname.s, '.ohg')
+  fname.s = list.files(textio, all.files=FALSE)
+  idx.new = grepl('\\.txt$|\\.ohg$|\\.out$', fname.s)
   fname.new = fname.s[idx.new]
   
   # copy the new files to subdirectory and delete the originals
@@ -1705,7 +1705,7 @@ my_objective = function(cal, gage, errfn, quiet=TRUE)
 #' ## multicore model execution 
 
 #' run a batch of simulations in parallel
-rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet=FALSE, ...)
+rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet=FALSE)
 {
   #
   # Typical model fitting routines make a series of parameter modifications, running the model
@@ -1723,7 +1723,6 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   # 'vname', character, the output variable name in the OHG file to load
   # `wipe`: whether to stop the cluster workers and erase their data on disk when finished 
   # `quiet`: logical, suppresses console messages
-  # `...`: arguments to pass to 
   #
   # RETURN:
   # 
@@ -1743,6 +1742,10 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   #
   # TODO: make backup optional
 
+  
+  # start function call timer
+  rtimer.start = Sys.time()
+  
   # check that rswat has been initialized and pull the directory from rswat environment
   err.msg = 'Run `rswat_cio` first to load a project'
   if( !exists('.rswat') ) stop(err.msg)
@@ -1765,15 +1768,18 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   nx = ncol(x)
   
   # copy the files in a loop, saving to backup subfolder
-  if( !quiet ) cat('backing up parameter files... ')
-  bpath = rswat_copy(to=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=quiet)
+  if( !quiet ) cat('backing up parameters... ')
+  bpath = rswat_copy(to=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=TRUE)
   
-  # initialize the cluster object as needed and find node paths
-  cluster.out = rswat_cluster(quiet=quiet)
+  # if an existing cluster is recycled, make sure simulation config is updated
+  cluster.export = c('time.sim', 'print.prt', 'object.prt', 'file.cio')
+  
+  # update/initialize the cluster and copy node paths
+  cluster.out = rswat_cluster(quiet=quiet, export=cluster.export)
   dir.node = cluster.out$path
   cl = cluster.out$cl
   cpath = dirname(dir.node[1])
-  
+
   # copy the node process IDs
   node.pid = unlist( clusterApplyLB(cl, seq_along(cl), function(x) Sys.getpid() ) )
   
@@ -1781,19 +1787,18 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   path.src = setNames(file.path(textio, fmod), fmod)
   fmod.pop = lapply(1:nx, function(x) setNames(file.path(cpath, paste0(x, '_', fmod)), fmod))
   
+  # console output for loop below
+  if( !quiet ) cat(paste('writing', length(fmod)*nx, 'parameter sets to disk...\n')) 
+  
   # create temporary config files for each simulation in the population, in a loop
-  if( !quiet ) pb = txtProgressBar(max=nx, style=3)
-  cat(paste('\nwriting', length(fmod)*nx, 'population parameter files to disk...\n'))
   for(idx.pop in 1:nx)
   {
     # write the files in the currently loaded SWAT+ project folder
     amod(x[,idx.pop], quiet=TRUE, reload=FALSE)
     
-    # copy them to the staging area and update progress message if necessary
+    # copy them to the staging area
     file.copy(path.src, fmod.pop[[idx.pop]])
-    if( !quiet ) setTxtProgressBar(pb, idx.pop)
   }
-  if( !quiet ) close(pb)
   
   # anonymous function that copies config file(s) to process node, runs simulation 
   aexec = function(idx, pid, npath, fpath, fn, odir)
@@ -1822,25 +1827,29 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
     file.copy(file.path(pdir, fn), opath, overwrite=TRUE)
     return(opath)
   }
-
-  # execute the jobs in parallel
-  if( !quiet ) cat('\nrunning SWAT+ in parallel...\n')
+  
+  # start SWAT+ timer and execute the jobs in parallel
+  if( !quiet ) cat('running SWAT+ in parallel...')
   clusterExport(cl, 'rswat_exec')
+  sptimer.start = Sys.time()
   node.output = clusterApplyLB(cl, 1:nx, aexec, 
                                pid = node.pid, 
                                npath = dir.node, 
                                fpath = fmod.pop,
                                fn = ohg.fn,
                                odir = cpath)
+  
+  # stop the SWAT+ timer
+  sptimer.end = Sys.time()
+  
+  # console output for loop below
+  if( !quiet ) cat(paste('loading', nx, 'output files...\n')) 
 
   # load results into R
-  if( !quiet ) pb = txtProgressBar(max=nx, style=3)
-  cat(paste('\nloading', nx, 'output files...\n'))
   output.list = setNames(vector(mode='list', length=nx), paste0('out_', 1:nx) )
   for(idx.output in 1:nx)
   {
     # copy output from node to current SWAT+ directory
-    if( !quiet ) setTxtProgressBar(pb, idx.output)
     file.copy(node.output[[idx.output]], file.path(textio, ohg.fn), overwrite=TRUE)
     
     # first output handled differently
@@ -1855,20 +1864,31 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
       output.list[[idx.output]] = rswat_ohg_extract(ohg.fn, vname=vname, quiet=quiet)
     }
   }
-  if( !quiet ) close(pb)
 
   # construct output
   first.df = setNames(output.list[[1]], c('date', 'out_1'))
   all.df = cbind(first.df, as.data.frame(output.list[-1]))
   
   # restore the original parameters of the currently loaded project
-  if( !quiet ) cat('\nrestoring parameter files backup...')
-  rpath = rswat_copy(from=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=quiet)
+  if( !quiet ) cat('\nrestoring parameters...')
+  rpath = rswat_copy(from=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=TRUE)
   rswat_ohg_setup(quiet=quiet, backup=bdir)
   if( !quiet ) cat('done\n')
   
-  # shut down cluster as needed and finish
+  # shut down cluster as needed and stop the function call timer
   rswat_cluster(wipe=wipe, quiet=quiet)
+  rtimer.end = Sys.time()
+  
+  # print timer outputs
+  if( !quiet )
+  {
+    # prepare execution time messages
+    rsec.msg = round(difftime(rtimer.end, rtimer.start, units='secs')[[1]], 2)
+    spsec.msg = round(difftime(sptimer.end, sptimer.start, units='secs')[[1]], 2)
+    msg = paste0('\n>> ', c('SWAT+','rswat'), ' runtime: ', c(spsec.msg, rsec.msg), ' seconds\n')
+    cat(msg)
+  }
+  
   return(all.df)
 }
 
@@ -1979,13 +1999,15 @@ rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=10
 #' ## multicore model execution (internal)
 
 #' create a cluster of nodes for running SWAT+ simulations (possibly in parallel)
-rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE)
+rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE, export=character(0))
 {
   # ARGUMENTS:
   #
   # `nn`: positive integer, the number of nodes to create
   # `cpath`: character, path to cluster directory, where SWAT+ files for each node are stored
   # `wipe`: logical, indicating to stop the cluster and delete `cpath`
+  # `quiet`: logical, suppresses console messages
+  # `export`: character vector, a list of filenames to copy to the worker nodes (see DETAILS)
   #
   # RETURN:
   # 
@@ -1999,7 +2021,7 @@ rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE)
   #
   # DETAILS:
   #
-  # The function creates and populates a list of `nn` SWAT+ project folders, each containing
+  # The function creates and populates a list of `nc` SWAT+ project folders, each containing
   # copies of all essential config files for running the currently loaded model. The folders
   # are named "node_1", "node_2", etc, and located in the subdirectory ".rswat_cluster" of
   # the current SWAT+ project folder, unless otherwise specified with `npath`.
@@ -2008,6 +2030,16 @@ rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE)
   # erases "cpath" and shuts down all workers. Until this happens, a copy of of the cluster
   # reference object and project paths are stored in `.rswat$cluster`, and subsequent calls to
   # `rswat_cluster(..., wipe=FALSE)` will simply return this list, ignoring `nc` and `cpath`
+  #
+  # Note that changes to config files in the currently loaded project will not propagate
+  # automatically to worker nodes (which get a fixed copy of the SWAT+ files from the time of
+  # the call). To update the workers, either `wipe` and initialize with `rswat_cluster(...)`
+  # again, or copy over the new config files manually to the directories listed in 'path'.
+  #
+  # Argument `export` is a shortcut for updating all worker nodes with a new file from the
+  # currently loaded SWAT+ directory. eg. change the time period on all nodes by calling
+  # `rswat_time(...)`, then `rswat_cluster(export=c('print.prt', 'time.sim'))`. 
+  # 
   
   # check that a SWAT+ project has been loaded
   err.msg = 'Run `rswat_cio` first to load a project'
@@ -2054,8 +2086,10 @@ rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE)
   }
   
   # create SWAT+ project folders for each node if they don't exist already
+  fname.node = NULL
   if( length(.rswat$cluster$path) == 0 )
   {
+    nc = length(.rswat$cluster$cl)
     if( !quiet ) cat(paste('\ncopying SWAT+ files to', nc, 'nodes...\n'))
     
     # set the default folder locations for the nodes, erase any existing ones
@@ -2064,13 +2098,32 @@ rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE)
     unlink(.rswat$cluster$path, recursive=TRUE)
     
     # make a list of files needed for running simulations on nodes (exclude output files)
-    fname.all = list.files(textio, include.dirs=FALSE)
-    fname.sim = fname.all[ !endsWith(fname.all, '.txt') ]
+    fname.all = list.files(textio, all.files=FALSE)
+    fname.outputs = grepl('\\.txt$|\\.ohg$|\\.out$|^_', fname.all)
+    fname.node = fname.all[!fname.outputs]
     
-    # copy these files to each node folder and store the folder paths in memory
-    fname.node = sapply(.rswat$cluster$path , function(nodepath) rswat_copy(to=nodepath,
-                                                                            fname=fname.sim,
-                                                                            quiet=quiet))
+    # copy these files to each node folder
+    sapply(.rswat$cluster$path, function(x) rswat_copy(to=x, 
+                                                       fname=fname.node, 
+                                                       quiet=TRUE,
+                                                       overwrite=TRUE))
+  }
+  
+  # copy any exported files, as needed
+  if( length(export) > 0 )
+  {
+    # list all files and warn if `export` lists nonexistent ones
+    fname.all = list.files(textio, include.dirs=FALSE)
+    export.exists = export %in% fname.all
+    msg.warn = paste( paste(export[!export.exists], collapse=', '), 'not found in', textio)
+    if( !any(export.exists) ) warning(msg.warn)
+    
+    # copy, omitting files that were copied already in the code chunk above
+    idx.out = export.exists & !( export %in% fname.node )
+    if( any(idx.out) ) sapply(.rswat$cluster$path, function(x) rswat_copy(to=x, 
+                                                                          fname=export[idx.out], 
+                                                                          quiet=TRUE,
+                                                                          overwrite=TRUE))
   }
   
   # finished

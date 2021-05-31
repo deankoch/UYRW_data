@@ -106,7 +106,7 @@ fout = rswat_exec()
 
 # activate the object hydrograph for the outlet channel (id number 1)
 id.outlet = 1
-rswat_ohg(overwrite=TRUE, oid=id.outlet)
+rswat_ohg_toggle(overwrite=TRUE, oid=id.outlet)
 
 #' this function modifies "file.cio" and "object.prt" so that SWAT+ generates the plaintext output file
 #' "sdc_1_tot.ohg" in addition to any others specified in "print.prt". The `oid` argument specifies that we
@@ -146,7 +146,54 @@ left_join(prt.out, ohg.out, by=c('date')) %>%
 #' The errors appear to be small enough here to ignore for the purposes of parameter fitting.
 
 # OHG outputs can be switched off for now
-rswat_ohg(overwrite=TRUE, delete=TRUE)
+rswat_ohg_toggle(overwrite=TRUE, delete=TRUE)
+
+
+#######
+# development:
+
+# start a cluster
+rswat_cluster()
+
+# demonstration of rswat_pexec with Hargreaves coefficient
+harg = rswat_find('harg_pet') %>% rswat_amod
+harg.test = 0.0023 * seq(0, 2, length=8)
+harg.out = rswat_pexec(harg.test, harg, dates=gage$date[180:200], wipe=FALSE, quiet=FALSE)
+my_tsplot(harg.out)
+
+
+harg.out
+
+
+
+x = harg.test
+amod = harg
+dates = gage$date[(1:360) + 0]
+oid=1
+vname='flo' 
+wipe=FALSE
+quiet=FALSE
+
+rswat_cluster(export='time.sim')
+
+
+
+
+
+
+
+x = harg.test
+amod = harg
+
+dates = gage$date[1:500]
+
+
+bpath = rswat_ohg_setup()
+backup = rswat_ohg_setup(backup=bpath)
+rswat_flo()
+
+#######
+
 
 #' The helper function `rswat_flo` is for quickly getting the OHG output for a simulation. It handles all
 #' of the required settings adjustments laid out above, and by default will restore all config files to their
