@@ -340,7 +340,7 @@ my_maps = function(db, outcrs=NULL)
 
 
 #' Wrapper for ggplot calls to make hydrographs and other time series plots
-my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
+my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc=NULL, legp=NULL)
 {
   # ARGUMENTS:
   #
@@ -348,11 +348,13 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
   # `colors`: character, palette name (see `hcl.pals()` or ...)
   # `alph`: numeric in [0, 1], transparency of (all) lines
   # `yaxis`: y axis label
-  # 
+  # `legnm`: character, optional title for the legend
+  # `legsc`: numeric, legend scale - values to map to the non-date columns
+  # `legp`: character or length-2 numeric vector, passed as 'legend.position' to `theme`
   #
   # RETURN VALUE:
   #
-  # ggplot grob
+  # The ggplot grob
   #
   # DETAILS: 
   #
@@ -360,6 +362,10 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
   # to the legend title. Cases of inconsistent units are resolved by converting everything
   # to the units of the first `units`-type column. Mixtures of `units` and `numeric` type
   # columns are accepted and plotted unchanged.
+  #
+  # when `legsc` is supplied, it should be a numeric vector with one entry per non-date
+  # column of `dat`. These values are used to construct a continuous legend colorbar that
+  # replaces the default discrete scale
   # 
  
   # identify the date column
@@ -393,7 +399,6 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
     # drop units from df now that everything is matching (non-unit columns not modified!)
     dat = drop_units(dat)
     ysuffix = paste0('(', y.units[1], ')')
-    
   }
   
   # set default colours as needed, checking for palette strings
@@ -402,27 +407,32 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow')
   {
     # assign hcl colour palettes (+ 1 to avoid errors on ny == 1 calls) 
     if( colors %in% hcl.pals() ) { colors = hcl.colors(ny + 1, palette=colors)[-(ny + 1)] }
-    
-    # TODO: add more palette options here
   }
-
-  # set default mappings as needed
-  if( is.null( names(colors) ) ) names(colors) = y.nm
   
   # set up the axis labels
   ggp.axlab = labs(x = names(dat)[idx.date], y = paste(yaxis, ysuffix), color = '')
 
   # create the ggplot line objects
-  ggp.line = lapply(y.nm, function(nm) geom_line(aes_(y=dat[[nm]], color=nm)) )
-  
-  # make the plot grob
+  colmap = y.nm
+  is.continuous = !is.null(legsc)
+  if( is.continuous ) colmap = legsc
+  ggp.line = lapply(seq_along(y.nm), function(x) geom_line(aes_(y=dat[[y.nm[x]]], color=colmap[x])) )
+ 
+  # initialize the plot grob
   ggp.out = ggplot(data=dat, aes(date)) +
     geom_line(aes(y=0), color='grey50') + ggp.line +
-    theme_minimal() + ggp.axlab +
-    scale_color_manual(values=setNames(adjustcolor(colors, alpha.f=alph), y.nm)) +
-    guides(color = guide_legend(override.aes = list(size=1, alpha=1))) + 
-    theme(legend.position='top')
+    theme_minimal() + ggp.axlab  + 
+    theme(legend.position=legp)
   
+  # add discrete color bar
+  if(!is.continuous) ggp.out = ggp.out + 
+    scale_color_manual(legnm, values=setNames(adjustcolor(colors, alpha.f=alph), y.nm)) +
+    guides(color = guide_legend(override.aes = list(size=1, alpha=1)))
+  
+  # add continuous color bar
+  if( is.continuous ) ggp.out = ggp.out + 
+    scale_colour_gradientn(legnm, colors=colors, guide='colourbar') 
+
   return(ggp.out)
 }
 
