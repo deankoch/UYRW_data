@@ -1082,7 +1082,7 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
 #' ## OHG files
 
 #' runs simulation to generate/load OHG output, optionally using it as input to an error function
-rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, quiet=FALSE)
+rswat_flo = function(dates=NULL, vname='flo', oid=1, restore=TRUE, errfn=NULL, quiet=FALSE)
 {
   #
   # With default settings, this is a helper function for quickly getting discharge values for
@@ -1094,8 +1094,8 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
   #
   # ARGUMENTS:
   #
-  # 'vname', character, the output variable name to load
   # 'dates': integer, vector, or dataframe containing the dates to simulate (see rswat_time)
+  # 'vname', character, the output variable name to load
   # 'oid': integer, the "object number", an ID code associated with the desired object
   # 'restore': logical, restore a backup of all modified config files when finished 
   # 'errfn', anonymous function of two equal-length numeric vectors (see DETAILS)
@@ -1148,7 +1148,7 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
   if( !is.null(ohg.backup) ) rswat_ohg_setup(backup=ohg.backup, quiet=quiet)
   
   # load the output data and return if no error function supplied
-  ohg.out = rswat_ohg_extract(fout, vname=vname, obs=obs, quiet=quiet)
+  ohg.out = rswat_output(fout, vname=vname, showidx=FALSE)
   if( is.null(errfn) ) return( ohg.out )
   
   # otherwise proceed with matching to observations after checking for invalid `errfn` 
@@ -1160,7 +1160,7 @@ rswat_flo = function(vname='flo', dates=NULL, oid=1, restore=TRUE, errfn=NULL, q
     
     # halt on missing observations then evaluate error function and return
     if( is.null(obs) ) stop('dates$obs not found!')
-    return( errfn( ohg.df[[vname]], ohg.df[['obs']] ) )
+    return( errfn( ohg.out[[vname]], ohg.out[['obs']] ) )
   }
   
 }
@@ -1705,7 +1705,7 @@ my_objective = function(cal, gage, errfn, quiet=TRUE)
 #' ## multicore model execution 
 
 #' run a batch of simulations in parallel
-rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet=FALSE)
+rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F, dbg=F)
 {
   #
   # Typical model fitting routines make a series of parameter modifications, running the model
@@ -1723,6 +1723,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   # 'vname', character, the output variable name in the OHG file to load
   # `wipe`: whether to stop the cluster workers and erase their data on disk when finished 
   # `quiet`: logical, suppresses console messages
+  # `dbg`: logical, enables a slower debug mode (see DETAILS)
   #
   # RETURN:
   # 
@@ -1738,10 +1739,14 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   # simulation is run by a worker node created by `rswat_cluster()`.
   #
   # if `rswat_cluster(...)` has already been called to initialize a cluster (and it hasn't
-  # been shut down), `rswat_pexec` will use the existing one instead of creating a new one. 
+  # been shut down), `rswat_pexec` will use the existing one instead of creating a new one.
   #
-  # TODO: make backup optional
-
+  # in `dbg=FALSE` mode, the function uses fread to parse the OHG files in parallel,
+  # in `dbg=TRUE` mode, the function copies each OHG file SWAT+ directory for loading
+  # and saves a (numbered) copy in the .rswat_cluster folder to match the parameter files
+  # also stored there. 
+  #
+  
   
   # start function call timer
   rtimer.start = Sys.time()
@@ -1761,7 +1766,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   ohg.fn =  rswat_open('object.prt')$FILENAME
   bname = c(fmod, ohg.fn)
   bname.exists = file.exists( file.path(textio, bname) )
-
+  
   # count number of parameters and coerce x to matrix if needed 
   np = nrow(fmod.df)
   x = matrix(x, np)
@@ -1779,7 +1784,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   dir.node = cluster.out$path
   cl = cluster.out$cl
   cpath = dirname(dir.node[1])
-
+  
   # copy the node process IDs
   node.pid = unlist( clusterApplyLB(cl, seq_along(cl), function(x) Sys.getpid() ) )
   
@@ -1788,7 +1793,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   fmod.pop = lapply(1:nx, function(x) setNames(file.path(cpath, paste0(x, '_', fmod)), fmod))
   
   # console output for loop below
-  if( !quiet ) cat(paste('writing', length(fmod)*nx, 'parameter sets to disk...\n')) 
+  if( !quiet ) cat(paste('writing', nx, 'parameter sets to disk...\n')) 
   
   # create temporary config files for each simulation in the population, in a loop
   for(idx.pop in 1:nx)
@@ -1801,17 +1806,17 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   }
   
   # anonymous function that copies config file(s) to process node, runs simulation 
-  aexec = function(idx, pid, npath, fpath, fn, odir)
+  aexec = function(idx, pid, npath, fpath, fn, target, dbg)
   {
     # `idx`: integer, the job index / the prefix of the filenames to copy
     # `pid`: integer vector of process IDs, one of which must match `Sys.getpid()`
     # `npath`: character, the path to the SWAT+ directory for each node 
     # `fpath`: list of character strings, paths to the files to copy for each job 
-    # `fn`: character, the output filename to copy when finished
-    # `odir`; character, the path to the directory to copy the output files
+    # `fn`: character, the output filename containing the requested data
+    # `target`; character, the variable name to load (or directory for output in debug mode)
+    # `dbg`: logical, enables debug mode - output data is copied to `x`  
     #
-    # rruns the simulation with the specified config files and copies the output file
-    # `fn` to `odir`, with filename '<idx>_<fn>'. Returns the path to this file
+    # when `dbg=FALSE`, 
     
     # find current process ID in the ordered list 'pid' and using matching node path
     pdir = npath[ which( Sys.getpid() == pid ) ]
@@ -1822,52 +1827,89 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
     # run the simulation
     rswat_exec(textio=pdir, quiet=TRUE, fout=FALSE)
     
-    # copy output file and finish
-    opath = file.path(odir, paste0(idx, '_', fn) )
-    file.copy(file.path(pdir, fn), opath, overwrite=TRUE)
-    return(opath)
+    # switch depending on execution mode
+    if( !dbg )
+    { 
+      # normal mode: returns the result of `fread(x)`
+      return( data.table::fread(file.path(pdir, fn))[[target]] ) 
+      
+    } else {
+
+      # debug mode: copies the output file `fn` to directory `x`, with filename
+      # '<idx>_<fn>', returning the path to this file
+
+      # copy output file and finish
+      opath = file.path(target, paste0(idx, '_', fn) )
+      file.copy(file.path(pdir, fn), opath, overwrite=TRUE)
+      return(opath)
+    }
   }
   
   # start SWAT+ timer and execute the jobs in parallel
   if( !quiet ) cat('running SWAT+ in parallel...')
-  clusterExport(cl, 'rswat_exec')
+  clusterExport(cl, c('rswat_exec', 'data.table'))
   sptimer.start = Sys.time()
   node.output = clusterApplyLB(cl, 1:nx, aexec, 
                                pid = node.pid, 
                                npath = dir.node, 
                                fpath = fmod.pop,
                                fn = ohg.fn,
-                               odir = cpath)
+                               target = ifelse(dbg, cpath, vname),
+                               dbg = dbg)
   
   # stop the SWAT+ timer
   sptimer.end = Sys.time()
   
-  # console output for loop below
-  if( !quiet ) cat(paste('loading', nx, 'output files...\n')) 
-
-  # load results into R
-  output.list = setNames(vector(mode='list', length=nx), paste0('out_', 1:nx) )
-  for(idx.output in 1:nx)
+  # data loaded in normal mode lack dates and units
+  if( !dbg )
   {
-    # copy output from node to current SWAT+ directory
-    file.copy(node.output[[idx.output]], file.path(textio, ohg.fn), overwrite=TRUE)
-    
-    # first output handled differently
-    if(idx.output == 1)
-    {
-      # open using `rswat_output` to get dates column in addition to OHG data
-      output.list[[1]] = rswat_output(ohg.fn, vname=vname, showidx=FALSE) 
-      
-    } else {
-      
-      # otherwise open by faster method that ignores dates
-      output.list[[idx.output]] = rswat_ohg_extract(ohg.fn, vname=vname, quiet=quiet)
-    }
-  }
+    # discover dates and units by copying and loading one (representative) output file
+    if( !quiet ) cat('appending dates and units...\n') 
+    rep.src = file.path(dir.node[1], ohg.fn)
+    rep.dest = file.path(textio, ohg.fn)
+    file.copy(rep.src, rep.dest, overwrite=TRUE)
+    rep.o = rswat_output(ohg.fn, vname=vname, showidx=FALSE)
 
-  # construct output
-  first.df = setNames(output.list[[1]], c('date', 'out_1'))
-  all.df = cbind(first.df, as.data.frame(output.list[-1]))
+    # extract units, apply them to loaded output
+    if( inherits(rep.o[[vname]], 'units') )
+    {
+      rep.units = units( rep.o[[vname]] )
+      node.output = lapply(node.output, function(x) set_units(x, rep.units, mode='standard'))
+    }
+    
+    # merge all outputs into one dataframe and name the fields
+    all.nm = c('date', paste0(vname, '_', 1:nx))
+    all.df = setNames( cbind(rep.o$date, as.data.frame(node.output)), all.nm)
+  }
+  
+  # slower loading process in debug mode
+  if( dbg )
+  {
+    # loop over jobs, copying output files and loading them in sequence
+    if( !quiet ) cat(paste('loading', nx, 'output files...\n')) 
+    output.list = setNames(vector(mode='list', length=nx), paste0(vname, '_', 1:nx) )
+    for(idx.output in 1:nx)
+    {
+      # copy output from node to current SWAT+ directory
+      file.copy(node.output[[idx.output]], file.path(textio, ohg.fn), overwrite=TRUE)
+      
+      # first output handled differently
+      if(idx.output == 1)
+      {
+        # open using `rswat_output` to get dates column in addition to OHG data
+        output.list[[1]] = rswat_output(ohg.fn, vname=vname, showidx=FALSE)
+        
+      } else {
+        
+        # otherwise open by faster method that ignores dates
+        output.list[[idx.output]] = rswat_ohg_extract(ohg.fn, vname=vname, quiet=quiet)
+      }
+    }
+    
+    # construct output
+    first.df = setNames(output.list[[1]], c('date', paste0(vname,'_1')))
+    all.df = cbind(first.df, as.data.frame(output.list[-1]))
+  }
   
   # restore the original parameters of the currently loaded project
   if( !quiet ) cat('\nrestoring parameters...')
@@ -1875,7 +1917,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
   rswat_ohg_setup(quiet=quiet, backup=bdir)
   if( !quiet ) cat('done\n')
   
-  # shut down cluster as needed and stop the function call timer
+  # shut down cluster as needed then stop the function call timer
   rswat_cluster(wipe=wipe, quiet=quiet)
   rtimer.end = Sys.time()
   
@@ -1885,7 +1927,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
     # prepare execution time messages
     rsec.msg = round(difftime(rtimer.end, rtimer.start, units='secs')[[1]], 2)
     spsec.msg = round(difftime(sptimer.end, sptimer.start, units='secs')[[1]], 2)
-    msg = paste0('\n>> ', c('SWAT+','rswat'), ' runtime: ', c(spsec.msg, rsec.msg), ' seconds\n')
+    msg = paste(c('SWAT+','rswat'), 'runtime:', c(spsec.msg, rsec.msg), 'seconds\n')
     cat(msg)
   }
   
@@ -1893,15 +1935,28 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=TRUE, quiet
 }
 
 #' parallel implementation of adaptive differential evolution algorithm from the DEoptimR package 
-rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=100, ...)
+rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=100,...)
 {
+  # ARGUMENTS:
+  # 
   # `cal`: dataframe, the SWAT+ parameters to modify
-  # `gage`: dataframe, containing flow and date (see `my_gage_objective`)
-  # `errfn`: an (anonymous) error function `errfn(x,y)` for simulations x given observations y
+  # `gage`: dataframe, a time series with fields 'flow' and 'date'
+  # `errfn`: an (anonymous) error function `errfn(x,y)` to MINIMIZE, with x=sim, y=obs
   # `quiet`: logical, suppresses console messages
   # `NP`: total initial population size
   # `maxiter`: the maximum number of iterations to run the algorithm
   # `...`: other arguments to JDEoptim (besides `NP`, `lower`, `upper`)
+  #
+  # RETURN:
+  #
+  # A list with two entries:
+  #
+  #   'par', numeric matrix, whose columns are the parameter vectors in the generation `maxiter`
+  #   'score', numeric vector, their `errfn` values
+  #
+  # DETAILS:
+  #
+  # 
 
   # check that a SWAT+ project has been loaded
   err.msg = 'Run `rswat_cio` first to load a project'
@@ -1909,90 +1964,88 @@ rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=10
   if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
   textio = dirname(.rswat$ciopath)
   
-  # set the default objective function
-  if( is.null(errfn) ) errfn = function(x, y) { my_nse(x, y, L=2, normalized=TRUE) }
-  
   # TODO: accept multiple initial vectors like cal$ini to define a population
   # copy the bounds
   lower = cal$min
   upper = cal$max
-  ini = cal$ini
+  ini = as.matrix(cal$ini, 1)
   
-  # set default population size then decrement to adjust for appended members later
+  # set the default objective function and population size 
+  if( is.null(errfn) ) errfn = function(x, y) { 1 - my_nse(x, y, L=1, normalized=TRUE) }
   if( is.null(NP) ) NP = ( 10 * length(lower) )
-  NP = NP - 1
   
-  # define a dummy optimization problem (1 iteration) to get initial population from JDEoptim
-  ini_fn = function(x) { return(0) }
-  opt.ini = JDEoptim(lower = lower, 
-                     upper = upper, 
-                     fn = ini_fn,
-                     maxiter = 2,  
-                     add_to_init_pop = ini, 
-                     details = TRUE, 
-                     NP = NP) #, ...)
-  
-  # initialize the cluster
-  cluster.out = rswat_cluster(quiet=quiet)
-  dir.node = cluster.out$path
-  cpath = dirname(dir.node[1]) 
-  
-  # construct a parameter modification function and copy the current values
-  cal.amod = rswat_amod(cal)
-  cal.restore = cal.amod(quiet=quiet, reload=TRUE)
-  
-  # build list of temporary files that will carry parameters to each simulation, and their sources
-  fmod = unique(cal$file)
-  path.src = setNames(file.path(textio, fmod), fmod)
-  fmod.pop = lapply(1:NP, function(x) setNames(file.path(cpath, paste0(x, '_', fmod)), fmod))
-  
-  # while loop starts here
-  # igen = 1
-  # while(igen < maxiter)
-  
-  # create temporary config files for each simulation in the population, in a loop
-  if( !quiet ) pb = txtProgressBar(max=NP, style=3)
-  cat(paste('writing', length(fmod)*NP, 'population parameter files to disk...\n'))
-  for(idx.pop in 1:NP)
-  {
-    # write the files in the currently loaded SWAT+ project folder
-    cal.amod(opt.ini$poppar[,idx.pop], quiet=TRUE, reload=FALSE)
-    
-    # copy them to the staging area and update progress message if necessary
-    file.copy(path.src, fmod.pop[[idx.pop]])
-    if( !quiet ) setTxtProgressBar(pb, idx.pop)
-  }
-  if( !quiet ) close(pb)
-  
-  # restore the original parameters of the currently loaded project
-  cal.amod(cal.restore$value, reload=FALSE)
-  
-  
-  
-  
-  # 
-  
+  # TODO: handle no units case
+  # if(inherits(flow, 'units'))
+  # {
+  #   # copy units string and drop from `flow` to simplify downstream
+  #   flow.units = as.character( units(flow) )
+  #   flow = drop_units(flow)
+  # }
+  # set the time period according to gage and identify the units provided
+  rswat_time(gage)
+  gage.units = as.character( units(gage$flow) )
 
+  # construct a parameter modification function
+  cal.amod = rswat_amod(cal)
   
-  # for each population member, modify parameter files and copy to cluster directory
-  # for(ipop in 1:NP)
-  #
+  # initialize scores to 0, define lookup function mapping parameters -> scores
+  igen = 0
+  pop.score = rep(0, nrow(ini))
+  lu_fn = function(x, lu, score) return( score[which.min(colSums( abs(x - lu) ))] )
   
-  ## run simulations in parallel to get scores for all population members:
-  # first copy the files, then run the executable. Parallelize using clusterApplyLB
-  # 
-  # 
-  # 
-  
-  # define another dummy optimization (1 iteration) to get mutated population
-  
-  
-  
-  
-  
+  # iterate the JDEOptim algorithm 1-step at a time, evaluating scores outside the function
+  while(igen < maxiter)
+  {
+    igen = igen + 1
+    cat( paste0('>> simulating generation ', igen, ' (of ', maxiter, ')...\n') )
+    
+    # run 1 iteration of JDEoptim, suppressing warnings about non-convergence
+    opt.out = suppressWarnings( JDEoptim(lower = lower, 
+                                         upper = upper, 
+                                         fn = lu_fn,
+                                         maxiter = 1,  
+                                         add_to_init_pop = ini, 
+                                         details = TRUE, 
+                                         NP = NP - ncol(ini),
+                                         lu = ini,
+                                         score = pop.score) )
+    
+    # extract new generation of parameter guesses -> this becomes initial data for next iteration
+    ini = opt.out$poppar
+
+    # run SWAT+ for all population members in parallel 
+    pexec.out = rswat_pexec(ini, cal.amod, wipe=TRUE, quiet=quiet, dbg=FALSE)
+    
+    # convert units to match gage
+    pop.list = lapply(1:NP, function(x) set_units(pexec.out[[x+1]], gage.units, mode='standard'))
+    
+    # compute scores of new generation using errfn and identify the nplot best ones
+    nplot = NP
+    pop.score = sapply(pop.list, function(x) errfn(x, gage$flow) )
+    idx.best = order(pop.score, decreasing=FALSE)[1:nplot]
+    
+    # make plot of the nplot best performing population members (color is NSE)
+    df.plot = data.frame(setNames(pop.list[idx.best], paste0('best_', 1:nplot)))
+    df.plot$date = pexec.out$date
+    ggp = my_tsplot(df.plot, legnm='NSE score', legsc=1-pop.score[idx.best])
+    
+    print(cbind(cal, ini))
+    
+    # add observed hydrograph to plot, print plot and best errfn score 
+    cat( paste0('>> best NSE score = ', 1-pop.score[idx.best[1]], '\n') )
+    cat( paste0('>> average NSE score = ', mean(1-pop.score), '\n\n') )
+    ggp = ggp + geom_line(aes_(y=drop_units(gage$flow)))
+    print(ggp)
+    
+    # TODO: track this bug down
+    # reload calibration parameter files
+    cal.amod(reload=TRUE)
+  }
   
   # garbage collection
   rswat_cluster(wipe=TRUE)
+  
+  return( list(par=ini, score=1-pop.score) )
 }
 
 #' 
