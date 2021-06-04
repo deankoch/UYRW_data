@@ -41,7 +41,7 @@ print(nm)
 gage = readRDS(here(qswat.meta['gage', 'file']))
 head(gage)
 
-# copy the directory of the project folder and its backup
+# grab directory of the project folder and its backup
 demo.dir = here( txtinout.meta['txtinout', 'file'] )
 demobak.dir = here( txtinout.meta['txtinout_bak', 'file'] )
 
@@ -63,7 +63,6 @@ fout = rswat_copy(from=demobak.dir, fname='.', overwrite=TRUE, quiet=TRUE)
 # pre-load all output and config files (except decision tables)
 cio = rswat_cio(reload=TRUE, ignore='decision_table', quiet=TRUE)
 odf = rswat_output(loadall=TRUE)
-
   
 #' The helper functions `rswat_copy`, `rswat_cio`, and `rswat_output` are described in the previous
 #' demo script [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md).
@@ -148,53 +147,6 @@ left_join(prt.out, ohg.out, by=c('date')) %>%
 # OHG outputs can be switched off for now
 rswat_ohg_toggle(overwrite=TRUE, delete=TRUE)
 
-
-#######
-# development:
-
-# start a cluster
-rswat_cluster()
-
-# demonstration of rswat_pexec with Hargreaves coefficient
-harg = rswat_find('harg_pet') %>% rswat_amod
-harg.test = 0.0023 * seq(0, 2, length=8)
-harg.out = rswat_pexec(harg.test, harg, dates=gage$date[180:200], wipe=FALSE, quiet=FALSE)
-my_tsplot(harg.out)
-
-
-harg.out
-
-
-
-x = harg.test
-amod = harg
-dates = gage$date[(1:360) + 0]
-oid=1
-vname='flo' 
-wipe=FALSE
-quiet=FALSE
-
-rswat_cluster(export='time.sim')
-
-
-
-
-
-
-
-x = harg.test
-amod = harg
-
-dates = gage$date[1:500]
-
-
-bpath = rswat_ohg_setup()
-backup = rswat_ohg_setup(backup=bpath)
-rswat_flo()
-
-#######
-
-
 #' The helper function `rswat_flo` is for quickly getting the OHG output for a simulation. It handles all
 #' of the required settings adjustments laid out above, and by default will restore all config files to their
 #' original state afterwards). Simply pass it a range of dates and get back the simulated discharge values:
@@ -240,7 +192,15 @@ obj.example = function(x)
 
 # run the objective function for a range of `harg_pet` values
 harg.test = seq(0, 0.005, length=8)
+
+# time the execution to compare with parellelized version below:
+timer.start = Sys.time()
 harg.nse = sapply(harg.test, obj.example)
+timer.end = Sys.time()
+
+# print runtime in seconds
+rsec.msg = round(difftime(timer.end, timer.start, units='secs')[[1]], 2)
+cat( paste(rsec.msg, ' seconds\n') )
 
 # identify and print the best one
 idx.opt = which.max( harg.nse ) 
@@ -293,8 +253,10 @@ snow.sno(snow.newvals)
 snow.sno(snow.newvals - 1e-2)
 
 #' `rswat_amod` becomes very useful when we move beyond these toy examples and starting selecting
-#' larger subsets of parameters for tuning. This, along with parallel processing, is illustrated
-#' in the next vignette 
+#' larger subsets of parameters for tuning. This is introduced along with parallel processing in the
+#' next demo script 
+#' 
+
 
 #+ include=FALSE
 # Development code
