@@ -15,8 +15,32 @@
 #'
 
 #' identify contiguous time series within a longer record
-my_split_series = function(dates, template=NULL)
+my_split_series = function(dates, template=NULL, dmerge=0, name='range')
 {
+  #
+  # ARGUMENTS:
+  # 
+  # `dates`, vector coercible to Dates class
+  # `template`, vector coercible to Dates class to mask the values in `dates`
+  # `dmerge`, integer, the number of missing days tolerated (see DETAILS)
+  # `name`, character, either: 'range', 'first', 'last' (see DETAILS)
+  # 
+  #
+  # RETURN:
+  #
+  # A named list of Date vectors named according to `range`, each a contiguous sequence
+  # of dates found in `dates`
+  #
+  # DETAILS:
+  #
+  # The function identifies all contiguous sequences of dates after (optionally) filling holes
+  # in the time series, where up to `dmerge` consecutive dates may be absent. `dates` is first
+  # masked by `template`, ie if a date is not found in `template`, it is omitted.
+  #
+  # Names of the return value are set either to: (for `name='first'`) the starting year of the
+  # sequence, or (for `name='last'`) the ending year, or (for `name='range'`) the range of years
+  # separated by a hyphen.
+  #  
   
   # handle bad input
   dates = as.Date(dates)
@@ -28,10 +52,27 @@ my_split_series = function(dates, template=NULL)
   dates = dates[ dates %in% template ]
   
   # scan what's left for breaks in the time series
-  breaks = c(0, which(diff(dates) != 1), length(dates))
+  breaks = c(0, which(diff(dates) > dmerge + 1), length(dates))
   dates.break = lapply(seq(length(breaks) - 1), function(b) dates[(breaks[b] + 1):breaks[b+1]] )
-  dates.nm = sapply(dates.break, function(x) paste(format(min(x), '%Y'), format(max(x), '%Y'), sep='-') )  
-  return(setNames(dates.break, dates.nm))
+  
+  # construct names
+  yr.min = sapply(dates.break, function(x) paste(format(min(x), '%Y')) )
+  yr.max = sapply(dates.break, function(x) paste(format(max(x), '%Y')) )
+  if(name=='min') dates.nm = yr.min
+  if(name=='max') dates.nm = yr.max
+  if(name=='range') dates.nm = paste(yr.min, yr.max, sep='-')
+  
+  # fill holes
+  dates.start = sapply(dates.break, function(x) paste(format(min(x), '%Y-%m-%d')))
+  dates.end = sapply(dates.break, function(x) paste(format(max(x), '%Y-%m-%d')))
+  
+  # form new sequences that start with `out.max` and end with `out.median`
+  out.list = mapply(function(x,y) seq.Date(x, y, by='day'), 
+                    x = as.Date(dates.start), 
+                    y = as.Date(dates.end))
+
+  # set names and finish
+  return( setNames(out.list, dates.nm) )
 }
 
 #' run the TauDEM workflow to compute watershed geometry given a DEM
@@ -1286,7 +1327,7 @@ my_find_catchments = function(pts, demnet, subb, areamin=NULL, linklist=NULL)
   return(leaf.result)
 }
 
-#' Estimate effective precipitation  by Turc–Mezentsev formula
+#' estimate effective precipitation  by Turc–Mezentsev formula
 my_effp = function(pet, pcp, n=2)
 {
   # ARGUMENTS:
@@ -1323,6 +1364,89 @@ my_effp = function(pet, pcp, n=2)
   # set units and finish
   pcp.out = set_units(pcp.out, 'mm/day')
   return(pcp.out)
+}
+
+#' estimate northern winter baseflow periods using spline function heuristics (in development)
+my_baseflow = function(obs, rmode='plot', smethod='n', qfmerge=5, bfmerge=110)
+{
+  # TODO: automate the selection of qfmerge and bfmerge
+  #
+  # This is an experimental baseflow separation heuristic based on spline derivatives from
+  # `splinefun`. Baseflow days are identified as those having low flow, or where the first,
+  # second or third derivatives of flow (as approximated by the spline) are low. Baseflow
+  # periods are then identified long, contiguous, seasonal periods of baseflow days.
+  #
+  # ARGUMENTS:
+  # 
+  # `obs`: dataframe, a time series with fields 'flow' and 'date'
+  # `rmode`: character, either 'index' or 'date'
+  # `smethod`: character, splinefun method, one of 'f', 'p', 'n', 'm' (see ?splinefun)
+  # `qfmerge`: integer, threshold number of days separation for merging quickflow blobs
+  # `bfmerge`: integer, threshold number of days separation for merging baseflow blobs
+  #
+  # RETURN:
+  #
+  # rmode='index': a logical vector indicating baseflow periods
+  # rmode='date': a list of Dates class vectors indicating the baseflow period
+  # rmode='plot': a ggplot object showing the baseflow periods against the hydrograph
+  #
+  # DETAILS:
+  #
+  # Baseflow days are assumed to satisfy at least 3 of the following criteria:
+  #
+  #   * flow is below its median
+  #   * first derivative of flow is below its median
+  #   * second derivative of flow is below its median
+  #   * third derivative of flow is below its median
+  # 
+  # where the "median" of a derivative is the median of the points returned in the
+  # discrete approximation by `base::splinefun`.
+  # 
+  # Quickflow (ie non-baseflow) days separated by up to `qfmerge` days are merged so that
+  # short-term low flow events can be disregarded. The same is then done to baseflow periods
+  # with parameter `bfmerge`, and the longest baseflow period (starting) within each year is
+  # selected and the others discarded. 
+  #
+  
+  # make a copy of input `obs` omitting rows with NA flow
+  obs.clean = obs[ !is.na(obs$flow), ]
+  
+  # copy streamflow, drop any units
+  flow = obs.clean$flow
+  flow.x = seq_along(flow)
+  if(inherits(flow, 'units')) flow = drop_units(flow)
+
+  # fit the spline and approximate derivatives
+  sflow.fn = splinefun(flow.x, flow, method=smethod)
+  sflow.d1 = sflow.fn(flow.x, deriv=1)
+  sflow.d2 = sflow.fn(flow.x, deriv=2)
+  sflow.d3 = sflow.fn(flow.x, deriv=3)
+  
+  # evaluate the four criteria
+  idx.d0 = flow < median(flow)
+  idx.d1 = sflow.d1 < median(abs(sflow.d1)) 
+  idx.d2 = sflow.d2 < median(abs(sflow.d2))
+  idx.d3 = sflow.d3 < median(abs(sflow.d3))
+  idx.bf = rowSums(cbind(idx.d0, idx.d1, idx.d2, idx.d3)) > 2
+
+  # merge quickflow periods
+  split.qf = my_split_series(obs.clean$date[!idx.bf], name='min', dmerge=qfmerge)
+  idx.qf = obs.clean$date %in% unlist(split.qf)
+  
+  # merge baseflow periods
+  split.bf = my_split_series(obs.clean$date[!idx.qf], name='min', dmerge=bfmerge)
+  yr.bf = names(split.bf)
+  idx.largest = sapply(split(sapply(split.bf, length), yr.bf), which.max)
+  out.bf = mapply(function(x,y) x[[y]],
+                  x=split(split.bf, yr.bf), 
+                  y=idx.largest,
+                  SIMPLIFY=FALSE)
+                   
+  if( rmode=='date' ) return( out.bf )
+  if (rmode=='index' ) return( obs$date %in% unlist(out.bf) )
+  if( rmode=='plot' ) return( my_tsplot(obs.clean, legp=c(-1,-1)) + 
+                                geom_vline(xintercept=unlist(out.bf), color='red') +
+                                geom_line(aes_(y=drop_units(obs.clean$flow)), color='black') )
 }
 
 
