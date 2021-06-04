@@ -73,7 +73,7 @@ if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() 
 #' 
 #' ## core functions for managing SWAT+ configuration files
 
-#' open 'file.cio' and list its contents
+#' open 'file.cio' and list its contents, initialize rswat storage
 rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=NULL, quiet=FALSE)
 {
   # ARGUMENTS:
@@ -529,11 +529,11 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
 {
   # In development. Currently only supports writing a single dataframe at a time.
   #
-  # TODO: vectorization of list input (named according to file, or unnamed) 
+  # TODO: new mode to return list of character positions to modify to possibly speed up amod
   #
   # ARGUMENTS:
   #
-  # `value`: dataframe (or list?), the SWAT+ table with desired parameter values
+  # `value`: dataframe or list containing the SWAT+ table(s) with modified parameters
   # `fname`: (optional) character, name of file containing the table
   # `tablenum`: (optional) integer, list index for the table within the file
   # `preview`: logical, whether to return dataframe listing the changes, but not write them
@@ -552,10 +552,10 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   nm.head = names(value)
   
   # coerce vector input to dataframe
-  if(is.vector(value) & !is.list(value)) value = data.frame(as.list(value))
+  if( is.vector(value) & !is.list(value) ) value = data.frame(as.list(value))
   
   # handle dataframe (and vector) input
-  if(is.data.frame(value))
+  if( is.data.frame(value) )
   {
     # resolve destination for this data
     value.index = rswat_index(nm.head, fname=fname, tablenum=tablenum)
@@ -565,61 +565,65 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
     tablenum = value.index$tablenum
     
   } else {
-    
-    # UNFINISHED -if input `value` is not a dataframe the function returns nothing
-    # TODO: add support for multiple files, simple individual parameter changes, etc
-    
+  
     # check whether names of list input match filenames
     idx.named = nm.head %in% cio$file
     
-    # case: input is the list of tables for a file
+    # case of one file with multiple tables: unnamed list entries, all dataframes
     if( length(idx.named) == 0 & all(sapply(value, is.data.frame)) )
     {
-      # search for each of the tables individually
-      fname.res = mapply(function(nm, n) rswat_index(nm, tablenum=n)$fname, 
+      # search for each of the tables individually using their table number
+      fname.res = mapply(function(nm, idx) rswat_index(nm, tablenum=idx)$fname, 
                          nm = lapply(value, names), 
-                         n = 1:length(value)) 
-      
-      # this should be all the same name
-      fname = unique(fname.res)
-      if(length(fname) > 1) stop('tables in this list matched multiple files')
-      
-    }
-    
-    # case: `value` names are not all filenames  
-    if( !all(  ) | is.null(nm.head) )
-    {
-      
-      
-      
-      
-    }
-    
-    # multiple files for this input `value`
-    if(length(nm.head) > 1)
-    {
-      print('multiple files case, in development')
-      # recursive call for each file
-    }
-    
-    # we have a valid filename and table number for the data, so recursive call to finish
-    #return(rswat_write(tablenum, fname=, tablenum=value.tablenum, preview=preview))
+                         idx = 1:length(value)) 
 
+      # check that all matches are to the same filename
+      fname = unique(fname.res)
+      if(length(fname) > 1) stop('list entry contained tables matching multiple files')
+ 
+      # recursive call in lapply loop over table numbers
+      write.out = lapply(1:length(value), function(idx) {
+        rswat_write(value[[idx]], fname=fname, tablenum=idx, preview, reload, quiet)
+      })
+      
+      # unlist and rbind the result before returning in preview mode
+      if( preview ) write.out = do.call(rbind, write.out)
+      return( write.out )
+    }
+
+    # list of filenames case
+    if( all(idx.named) )
+    {
+      # recursive call in lapply loop over filenames
+      write.out = lapply(nm.head, function(nm) {
+        rswat_write(value[[nm]], fname=nm, tablenum, preview, reload, quiet)
+      })
+      
+      # DEBUGGING
+      for(nm in nm.head)
+      {
+        print(nm)
+        which(nm == nm.head)
+        x = rswat_write(value[[nm]], fname=nm, tablenum, preview, reload, quiet)
+
+      }
+      
+      # unlist and rbind the result before returning in preview mode
+      if( preview ) write.out = do.call(rbind, write.out)
+      return( write.out )
+    }
     
-    # beyond this point, should have valid assignments to these variables:
-    # fname = 
-    # tablenum = 
-    # ... for all list entries. These can be merged by file and then sent of to a 
-    # recursive call 
-    return()
-    
+    # halt if it's neither of the above two cases
+    stop('rswat_write did not recognize the tables in `values`')
   }
 
-  # grab a copy of the relevant lines descriptions for this file 
+  # grab a copy of the relevant lines descriptions for this file and modify for output 
   linedf = rswat_find(include=fname, trim=FALSE) %>% 
     filter(name %in% nm.head) %>% 
     filter(table == tablenum) %>% 
-    arrange(j,i)
+    arrange(j,i) %>%
+    mutate(current_value = string) %>%
+    mutate(replacement = NA) 
   
   # consistency check for column lengths
   if( !all(nrow(value) == linedf$dim) )
@@ -629,21 +633,38 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
     stop(paste0(info.msg, ' (got ', nrow(value), ')'))
   }
   
-  # copy the table from memory and find index of columns that have been modified
+  # copy the table from memory
   value.old = .rswat$stor$data[[fname]][[tablenum]][, nm.head] 
-  cn.new = sapply(1:ncol(value.old), function(x) !identical(value.old[,x], value[,x]) )
+  
+  # find index of columns that have been modified, handling single entry case separately
+  if( is.data.frame(value.old)  )
+  {
+    # build matrix of changed value indicators
+    cn.new = sapply(1:ncol(value.old), function(x) !identical(value.old[,x], value[,x]) )
+    m.new = matrix(FALSE, nrow(value), ncol(value))
+    m.new[,cn.new] = sapply(which(cn.new), function(cn) ! value.old[,cn] == value[,cn])
+    
+  } else { 
+    
+    # mx1 case messes with sapply so we handle it separately
+    m.new = value.old != value[[1]]
+    cn.new = any(m.new)
+  }
   
   # NOTE: cn.new picks up integer-as-numeric mismatches, which may be ignored later
   # because we will coerce them to the right type.
   
-  # build matrix of changed value indicators
-  m.new = matrix(FALSE, nrow(value), ncol(value))
-  m.new[,cn.new] = sapply(which(cn.new), function(cn) ! value.old[,cn] == value[,cn])
-  
   # handle no-change case
-  if(!any(unlist(m.new)))
+  if( !any(unlist(m.new)) )
   {
-    if(preview) return(linedf[integer(0),])
+    # tidy up columns of 0-row table
+    linedf.new = linedf[integer(0),] %>% 
+      select(file, table, i, j, dim, 
+             line_num, start_col, end_col, 
+             name, current_value, replacement)
+    
+    # return it in preview mode
+    if(preview) return(linedf.new)
     return(invisible())
   }
   
@@ -654,16 +675,30 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   m.new[ isna.old & !isna.new ] = TRUE
   m.new[ !isna.old & isna.new ] = TRUE
   
-  # vectorization magic here relies on the `arrange(j,i)` call above! 
+  # copy the relevant subset of the character info dataframe
   linedf.new = linedf[which(m.new),]
-  value.new = unlist(lapply(which(cn.new), function(cn) as.list(value[m.new[,cn],cn])), recursive=F)
+  if( length(value.old) > 1 )
+  {
+    # vectorization magic here relies on the `arrange(j,i)` call in linedf definition! 
+     value.new = unlist(lapply(which(cn.new), function(cn) {
+       as.list(value[m.new[,cn],cn])
+       }), recursive=F)
+     
+  } else {
+    
+    # 1x1 case messes with sapply so we handle it separately
+    value.new = value[[1]]
+  }
+
+  # convert to character representation with appropriate padding/rounding
   char.new = rswat_2char(value.new, linedf.new)
 
-  # finished preview mode
+  # finished preview mode - append replacement values and tidy up columns
   if(preview) return(linedf.new %>% 
-                      mutate(current_value = string) %>%
-                      mutate(replacement = char.new$string) %>% 
-                      select(file, table, i, j, name, current_value, replacement) )
+                       mutate(replacement = char.new$string) %>%
+                       select(file, table, i, j, dim, 
+                              line_num, start_col, end_col, 
+                              name, current_value, replacement))
   
   # load the raw text and make the changes in a loop
   txt.out = .rswat$stor$txt[[fname]]
@@ -975,6 +1010,96 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   if( !quiet ) cat('done\n')
   return(dest.path)
 }
+
+#' summarize differences between two SWAT+ models
+rswat_compare = function(compare, reference=NULL, ignore='decision_table', quiet=FALSE, trim=TRUE)
+{
+  # ARGUMENTS:
+  # 
+  # 'compare': character, path to directory of the SWAT+ model to compare against
+  # 'reference': character, path to directory of the reference SWAT+ model (will be loaded)
+  # `ignore`: character vector, files or groups to ignore (passed to `rswat_cio`)
+  # `quiet`: logical, suppresses console messages
+  #
+  # RETURN:
+  #
+  # dataframe with rows 'reference', 'compare', fields tabulating all
+  # parameter values that aren't identical. 
+  #
+  # DETAILS:
+  #
+  # default NULL `reference` indicates to use the currently loaded SWAT+ model
+  #
+  
+  # TODO: support comparisons between models with different numbers of HRUs
+  
+  # default reference project is the currently loaded one
+  if( is.null(reference) )
+  {
+    # check that rswat has been initialized and pull the directory from rswat environment
+    err.msg = 'Run `rswat_cio` first to load a project, or specify `reference`'
+    if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
+    reference = dirname(.rswat$ciopath)
+  }
+  
+  # copy the environment list to back up current rswat session
+  b.rswat = .rswat
+  
+  # make a list of files in common between the two directories
+  fname.tocheck = intersect(list.files(reference), list.files(compare))
+  
+  # TODO: use file hashes to quickly check for equality and prune this list
+
+  # load the comparison project and copy relevant parameter data
+  if( !quiet ) cat('loading comparison project...\n')
+  cio.comp = rswat_cio(compare, reload=FALSE, ignore=ignore, quiet=quiet, trim=FALSE)
+  fdata.comp = rswat_open() %>% filter(file %in% fname.tocheck) %>% pull(file) %>% rswat_open
+  
+  # load the reference project copy relevant parameter data
+  if( !quiet ) cat('\nloading reference project...\n')
+  cio.ref = rswat_cio(reference, reload=FALSE, ignore=ignore, quiet=quiet, trim=FALSE)
+  fdata.ref = rswat_open() %>% filter(file %in% names(fdata.comp)) %>% pull(file) %>% rswat_open
+  
+  # prune to elements in common and make sure order matches
+  fn.all = intersect(names(fdata.comp), names(fdata.ref))
+  fdata.comp = fdata.comp[ match(names(fdata.comp), fn.all) ]
+  dim.equal = fdata.ref[ match(names(fdata.ref), fn.all) ]
+  
+  # dimensionality check
+  dim.ref = sapply(fdata.ref, dim)
+  dim.comp = sapply(fdata.comp, dim)
+  dim.equal = mapply(function(x,y) identical(x,y), dim.ref, dim.comp)
+  if( any( !dim.equal ) )
+  {
+    # prepare a message about the mismatched files
+    msg.fn = paste(fn.all[!dim.equal], collapse=', ')
+    msg.dim = paste0('\nThe following have different nrow, and are excluded from results: ', msg.fn)
+    msg.info = ' (This will happend when the models have a different number of HRUs)\n\n'
+    cat( paste0(msg.dim, msg.info) )
+  }
+  
+  # write in preview mode to get dataframe of changes, tidy up
+  write.out = rswat_write(fdata.comp[dim.equal], preview=TRUE) %>%
+    mutate(reference = current_value) %>%
+    mutate(compare = replacement) %>%
+    select(-c(current_value, replacement))
+  
+  # collapse columns with identical values
+  if(trim)
+  {
+    # 
+    write.out %>% group_by(file, name, table)
+    
+    
+    
+  }
+
+  # restore rswat session and finish
+  .rswat = b.rswat
+  return(write.out)
+
+}
+
 
 
 #' 
