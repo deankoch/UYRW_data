@@ -159,8 +159,8 @@ rswat_docs('Hargreaves', descw=0)
 
 #' In this case no exact matches are found so the function reverts to approximate matching
 #' and finds a unique best result ("harg_pet", which turned up first in the last search).
-#' This match is based on character order and length. The other two results from before, "pet"
-#' and "ipet", have little in common with "Hargreaves" in that sense, so they are not matched.
+#' This match is based on character order and length. The other results from before, "pet"
+#' and "ipet" have little in common with "Hargreaves" in that sense, so they are not matched.
 #' 
 #' Description-only searching (`descw=1`) is useful for finding links between tables:
 
@@ -224,7 +224,7 @@ rswat_docs('tile runoff ratio', fuzzy=1)
 # example of setting a fixed number of results (10)
 rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
 
-#' Here, `rswat_docs` returns a dataframe with all 1066 possible matches, and `head(10)` extracts
+#' Here, `rswat_docs` returns a dataframe with all 1080 possible matches, and `head(10)` extracts
 #' the top 10. The dataframe rows are ordered from best to worst, so eg. the first three matches
 #' in this case are the same as what we got with `fuzzy=1`
 
@@ -236,11 +236,12 @@ rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
 #' any interest in an R package based on this code, please let me know and I'll start tidying it up for 
 #' CRAN. 
 #' 
-#' Note that I make no guarantees that this tool will find and parse every table in the PDF correctly.
-#' It relies on what I *assume* are consistent patterns in the formatting of the document (after
-#' rendering by `pdftools::pdf_text`). eg. all-caps variable names, left-justified table entries,
-#' filename headers preceeding the table on a line of their own. This appears to work for all of the
-#' tables that I have so far been interested in, but it's possible I am missing others.
+#' Note: I don't know if this tool finds and parses every table in the PDF correctly. It relies on
+#' what I *assumed* are consistent patterns in the formatting of the document; eg. all-caps variable
+#' names, left-justified table entries, filename headers preceeding the table on a line of their own.
+#' Exceptions can cause the code to only partially read a table, or fail entirely to detect it.
+#' This appears to work for all of the tables that I have so far been interested in, but I don't have
+#' time to go through and manually count table entries to verify this myself.
 #' 
 #' Note also that the PDF itself has some typos and errors. For example the 'channel.cha' table has
 #' names and descriptions offset by one row, and most of the names for 'nutrients.cha' have not been

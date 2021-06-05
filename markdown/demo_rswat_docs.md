@@ -1,7 +1,7 @@
 demo\_rswat\_docs.R
 ================
 Dean Koch
-2021-05-22
+2021-06-05
 
 **Mitacs UYRW project**
 
@@ -123,7 +123,7 @@ rswat_docs() %>% head(25)
     ## 18         hru.con   17     2        51
     ## 19     initial.cha    5     1        53
     ## 20     channel.cha   10     1        54
-    ## 21   hydrology.cha    4     1        55
+    ## 21   hydrology.cha   10     1        55
     ## 22    sediment.cha   13     1        56
     ## 23   nutrients.cha   40    10        57
     ## 24 channel-lte.cha   11     2        67
@@ -240,17 +240,17 @@ rswat_docs('snow.sno', full=TRUE) %>% tibble %>% print
 
     ## 10 result(s) in file(s) snow.sno 
     ## # A tibble: 10 x 4
-    ##    name    file    pstart description                                                                                   
-    ##    <chr>   <chr>    <int> <chr>                                                                                         
-    ##  1 title   snow.s~    176 "The first line is reserved for user comments. This line is not\nprocessed by the model and m~
-    ##  2 name    snow.s~    176 "Name of the snow parameters"                                                                 
-    ##  3 falltmp snow.s~    176 "Snowfall temperature (ºC).\nMean air temperature at which precipitation is equally likely\nt~
-    ##  4 melttmp snow.s~    176 "Snow melt base temperature (ºC).\nThe snow pack will not melt until the snow pack temperatur~
-    ##  5 meltmx  snow.s~    177 "Melt factor for snow on June 21 (mm H2O/ºC-day).\nIf the watershed is in the Northern Hemisp~
-    ##  6 meltmn  snow.s~    178 "Melt factor for snow on December 21 (mm H2O/ºC-day).\nIf the watershed is in the Northern He~
-    ##  7 timp    snow.s~    178 "Snow pack temperature lag factor.\nThe influence of the previous day’s snow pack temperature~
-    ##  8 covmx   snow.s~    178 "Minimum snow water content (mm H20)"                                                         
-    ##  9 cov50   snow.s~    178 "Fraction of COVMX"                                                                           
+    ##    name    file    pstart description                                                                            
+    ##    <chr>   <chr>    <int> <chr>                                                                                  
+    ##  1 title   snow.s~    176 "The first line is reserved for user comments. This line is not\nprocessed by the mode~
+    ##  2 name    snow.s~    176 "Name of the snow parameters"                                                          
+    ##  3 falltmp snow.s~    176 "Snowfall temperature (ºC).\nMean air temperature at which precipitation is equally li~
+    ##  4 melttmp snow.s~    176 "Snow melt base temperature (ºC).\nThe snow pack will not melt until the snow pack tem~
+    ##  5 meltmx  snow.s~    177 "Melt factor for snow on June 21 (mm H2O/ºC-day).\nIf the watershed is in the Northern~
+    ##  6 meltmn  snow.s~    178 "Melt factor for snow on December 21 (mm H2O/ºC-day).\nIf the watershed is in the Nort~
+    ##  7 timp    snow.s~    178 "Snow pack temperature lag factor.\nThe influence of the previous day’s snow pack temp~
+    ##  8 covmx   snow.s~    178 "Minimum snow water content (mm H20)"                                                  
+    ##  9 cov50   snow.s~    178 "Fraction of COVMX"                                                                    
     ## 10 init_mm snow.s~    178 "Initial snow water content at start of simulation"
 
 Since R is printing the literal description strings, which often contain
@@ -362,8 +362,8 @@ rswat_docs('Hargreaves', descw=0)
 In this case no exact matches are found so the function reverts to
 approximate matching and finds a unique best result (“harg\_pet”, which
 turned up first in the last search). This match is based on character
-order and length. The other two results from before, “pet” and “ipet”,
-have little in common with “Hargreaves” in that sense, so they are not
+order and length. The other results from before, “pet” and “ipet” have
+little in common with “Hargreaves” in that sense, so they are not
 matched.
 
 Description-only searching (`descw=1`) is useful for finding links
@@ -504,7 +504,7 @@ everything, and pipe the results to `head(n)`:
 rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
 ```
 
-    ## 1066 approximate result(s) for "tile runoff ratio" in 108 file(s)
+    ## 1080 approximate result(s) for "tile runoff ratio" in 108 file(s)
 
     ##         name              file pstart                                                     description
     ## 1        tfr water_balance.sft    208                        Tile flow ratio – tile flow/total runoff
@@ -518,7 +518,7 @@ rswat_docs('tile runoff ratio', fuzzy=Inf) %>% head(10)
     ## 9   pst_wsol     pesticide.pst    165 Solubility of the chemical in water (mg/L or ppm) The water ...
     ## 10     title      delratio.del    113                              The title of the delratio.del file
 
-Here, `rswat_docs` returns a dataframe with all 1066 possible matches,
+Here, `rswat_docs` returns a dataframe with all 1080 possible matches,
 and `head(10)` extracts the top 10. The dataframe rows are ordered from
 best to worst, so eg. the first three matches in this case are the same
 as what we got with `fuzzy=1`
@@ -531,13 +531,14 @@ Feel free to use it in your own project. If there’s any interest in an R
 package based on this code, please let me know and I’ll start tidying it
 up for CRAN.
 
-Note that I make no guarantees that this tool will find and parse every
-table in the PDF correctly. It relies on what I *assume* are consistent
-patterns in the formatting of the document (after rendering by
-`pdftools::pdf_text`). eg. all-caps variable names, left-justified table
-entries, filename headers preceeding the table on a line of their own.
-This appears to work for all of the tables that I have so far been
-interested in, but it’s possible I am missing others.
+Note: I don’t know if this tool finds and parses every table in the PDF
+correctly. It relies on what I *assumed* are consistent patterns in the
+formatting of the document; eg. all-caps variable names, left-justified
+table entries, filename headers preceeding the table on a line of their
+own. Exceptions can cause the code to only partially read a table, or
+fail entirely to detect it. This appears to work for all of the tables
+that I have so far been interested in, but I don’t have time to go
+through and manually count table entries to verify this myself.
 
 Note also that the PDF itself has some typos and errors. For example the
 ‘channel.cha’ table has names and descriptions offset by one row, and

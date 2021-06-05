@@ -31,13 +31,14 @@ if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() 
 #' 
 #' ## libraries
 #' 
-#' [`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) provides a pleasant
-#' syntax for complicated table operations 
-library(dplyr)
 
 #' [`data.table`](https://cran.r-project.org/web/packages/data.table/index.html) simplifies
 #' and speeds up table operations.
 library(data.table) 
+
+#' [`dplyr`](https://cran.r-project.org/web/packages/dplyr/index.html) provides a pleasant
+#' syntax for complicated table operations 
+library(dplyr)
 
 #' [`pdftools`](https://cran.r-project.org/web/packages/pdftools/index.html) renders
 #' PDF textboxes as character vectors in R
@@ -154,7 +155,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   if( (fname != '*') & !( fname %in% filetable$file ) )
   {
     cat( paste('fname', paste0('\"', fname, '\"'), 'not recognized\n') ) 
-    return( vartable %>% select( name, file, pstart, description ) )
+    return( vartable %>% dplyr::select( name, file, pstart, description ) )
   }
   
   # initialize score vectors
@@ -208,7 +209,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
     {
       # print a message and return empty dataframe
       cat( paste(nomatch.msg, '\n') )
-      return( vartable %>% slice(int.match) %>% select( name, file, pstart, description ) )
+      return( vartable %>% slice(int.match) %>% dplyr::select( name, file, pstart, description ) )
     }
     
     # increment fuzzy until we get a match (fuzzy==1 will always produce a match)
@@ -254,11 +255,11 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
     cat(cat.out)
   }
   
-  # select the requested description (full or trimmed)
+  # dplyr::select the requested description (full or trimmed)
   if( full ) vartable.match = vartable.match %>% mutate( description = description_full )
   
   # remove unneeded columns and omit rownames (to not confuse them with page numbers)
-  vartable.out = vartable.match %>% select( name, file, pstart, description )
+  vartable.out = vartable.match %>% dplyr::select( name, file, pstart, description )
   rownames(vartable.out) = c()
   
   # return the dataframe of matches
@@ -379,7 +380,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     mutate( nm = gsub(',cont.', '', nm)) %>%
     mutate( name = nm[nafill(replace(seq_along(nm), is.na(nm), NA_integer_), 'locf')] ) %>%
     mutate( description = desc ) %>%
-    select( page, line, file, name, description) %>%
+    dplyr::select( page, line, file, name, description) %>%
     
     # concatenate description lines for each variable name and summarize page numbers
     group_by( file, name ) %>%
@@ -393,7 +394,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     mutate( description = gsub('\\s+', ' ', description) ) %>%
     mutate( suffix = c('', '...')[ 1 + as.integer( nchar(description) > desc.maxlen + 1 ) ] ) %>%
     mutate( description = paste0(strtrim(description, desc.maxlen), suffix) ) %>%
-    select( -suffix ) %>%
+    dplyr::select( -suffix ) %>%
     
     # omit entries with empty descriptions, header listings, reorder to match pdf
     filter( nchar(description) > 1 ) %>%
@@ -410,7 +411,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     
     # arrange in same order as pdf
     arrange(startpage) %>% 
-    select(file, ndef, npage, startpage) %>% 
+    dplyr::select(file, ndef, npage, startpage) %>% 
     data.frame
   
   # finish
@@ -467,8 +468,6 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   regex.phead = paste0(regex.l, '|', regex.r)
   
   # regex for section headers (all-caps with period and extension)
-  #regex.section = '^[A-Z]+[-_]*[A-Z]+\\.[A-Z]{2,3}$'
-  
   regex.section = '^[A-Z]+[-_]*[A-Z]*[-_]*[A-Z]+\\.[A-Z]{2,3}$'
   
   # BUGFIX: exceptions nonstandard header formats
@@ -476,7 +475,8 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   regex.section = paste0('(', paste(c(regex.section, regex.exceptions), collapse=')|('), ')')
   
   # regex for variable names (all-caps, assume first character is alphabetical)
-  regex.fname = '([A-Z][A-Z0-9]*_*[A-Z0-9]+)'
+  #regex.fname = '([A-Z][A-Z0-9]*_*[A-Z0-9]+)'
+  regex.fname = '([A-Z][A-Z0-9]*_*[A-Z0-9]*)'
   
   # allow the following suffixes to appear after a variable declaration (eg. for soils.sol)
   nm.suffix = c(', cont\\.', '\\(layer \\#\\)', '\\(top\\slayer\\)')
@@ -492,7 +492,6 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   if( length(pdftext) == 0 ) return(NULL)
   
   # detect and remove page footer line (missing on most pages)
-  is.header = grepl(regex.phead, pdftext[1])
   if( grepl(regex.foot, last(pdftext)) ) pdftext = pdftext[-length(pdftext)]
   if( length(pdftext) == 0 ) return(NULL)
   
@@ -595,7 +594,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     
     # regex for lines that appear to be a name declaration
     regex.ragnm1 = paste0('(^\\s*', regex.fname, '\\s{2,})')
-    regex.ragnm2 = paste0('(^\\s+', regex.fname, ')')
+    regex.ragnm2 = paste0('(^\\s+', regex.fname, ')[^a-z]')
     is.nm = grepl(paste0(regex.ragnm1, '|', regex.ragnm2), pdftext[ln.min:ln.max])
     
     # bail if we can't find any by calling the function again with `ragged=FALSE`
