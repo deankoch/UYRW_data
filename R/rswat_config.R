@@ -358,8 +358,6 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
       setTxtProgressBar(pb, length(fname.toload) + 1 )
       close(pb)
     }
-
-    
   }
 
   # prepare the requested data in a named list, then simplify if requested
@@ -421,7 +419,7 @@ rswat_find = function(pattern='*', fuzzy=-1, trim=TRUE, include=NULL, ignore=NUL
   # results from those files are returned (default is all files). Argument `ignore` has
   # the opposite effect, and supercedes anything in `include`.
   #
-  # `fuzzy = NA` is for exact matches only, `fuzzy = 0` includes substring matches, and
+  # `fuzzy = -1` is for exact matches only, `fuzzy = 0` includes substring matches, and
   # `fuzzy > 0` includes approximate substring matches. See `?my_adist`.
   
   # default string for `ignore` should match nothing
@@ -443,8 +441,9 @@ rswat_find = function(pattern='*', fuzzy=-1, trim=TRUE, include=NULL, ignore=NUL
   if( all(is.ignored) ) stop('all known files are listed in `ignore`')
   
   # copy the names list to search and pass it to string distance function
+  pattern.all = paste(unique(pattern), collapse='|')
   name.all = .rswat$stor$linedf$name[which.include]
-  dist.all = my_adist(pattern, name.all)
+  dist.all = my_adist(pattern.all, name.all)
   
   # initialize results vector to exact matches only
   idx.out = dist.all == 0
@@ -524,12 +523,9 @@ rswat_find = function(pattern='*', fuzzy=-1, trim=TRUE, include=NULL, ignore=NUL
   return(linedf.out)
 }
 
-#' write a dataframe to the corresponding SWAT+ config file
+#' write a dataframe or list of them to the corresponding SWAT+ config file(s)
 rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TRUE, quiet=FALSE)
 {
-  # In development. Currently only supports writing a single dataframe at a time.
-  #
-  # TODO: new mode to return list of character positions to modify to possibly speed up amod
   #
   # ARGUMENTS:
   #
@@ -540,11 +536,27 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   # `reload`: logical, whether to reload the file after writing, to update file data in memory
   # `quiet`: logical, passed to rswat_load if `reload==TRUE` (otherwise ignored)
   #
-  # RETURN VALUE:
+  # RETURN:
   #
   # Returns nothing but writes `value` to the file `fname` on disk when `preview=FALSE`.
   # Otherwise returns a dataframe with information on the line-by-line changes that would be
   # made to the config file(s) in non-preview mode.
+  #
+  # DETAILS:
+  #
+  # `value` is usually the return value from an `rswat_open` call after some modification of
+  # the contents - that is, either dataframe of SWAT+ parameters, or a list of them. These
+  # objects are compared against the known SWAT+ files to determine which files to modify,
+  # ie you can't write a brand new file using this function, only modify existing ones.
+  #
+  # If `value` is a list of tables from the same file (eg. from 'print.prt' or 'weather-wgn.cli'),
+  # then ALL tables from that file should be included, in the same order as they are returned
+  # in an `rswat_open` call, and the list entries should be unnamed. If `values` is a list of
+  # tables from multiple files, its entries should be named after the filename.
+  #
+  # `fname` and `tablenum` are usually not required as `rswat_index` will be called to
+  # identify them automatically based on column names. These arguments are ignored when
+  # `value` is a list. 
   #
   
   # grab a list of all filenames and the input object names
@@ -598,15 +610,6 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
       write.out = lapply(nm.head, function(nm) {
         rswat_write(value[[nm]], fname=nm, tablenum, preview, reload, quiet)
       })
-      
-      # DEBUGGING
-      for(nm in nm.head)
-      {
-        print(nm)
-        which(nm == nm.head)
-        x = rswat_write(value[[nm]], fname=nm, tablenum, preview, reload, quiet)
-
-      }
       
       # unlist and rbind the result before returning in preview mode
       if( preview ) write.out = do.call(rbind, write.out)
@@ -718,152 +721,6 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   {
     rswat_open(fname, reload=TRUE, quiet=quiet) 
   }
-}
-
-#' construct an anonymous function that reads/modifies a selection of SWAT+ parameters
-rswat_amod = function(parm)
-{
-  # 
-  # ARGUMENTS:
-  #
-  # `parm`: dataframe, the SWAT+ parameters to modify (see DETAILS)
-  # `quiet`: logical, indicating to suppress console messages
-  #
-  # RETURN VALUE:
-  #
-  # Returns an anonymous function whose first argument `x`, a numeric vector, specifies
-  # new value(s) to write to the corresponding SWAT+ file(s) (as specified in `parm`).
-  # This function also has arguments `quiet` (for suppressing console messages,
-  # default TRUE), and `reload` (for forcing the function to reload the file instead of
-  # using the current values in memory, default TRUE)
-  #
-  # DETAILS:
-  #
-  # This is a helper function to assist in building anonymous functions that perform
-  # simple read/write operations, where we aren't interested in the entire config file.
-  #
-  # `parm` must contain columns 'i', 'name' and 'file', and these must correspond to
-  # 'numeric' type SWAT+ parameters as they are listed by `rswat_find`. `parm` will usually
-  # be the (row-binded) output of one or several `rswat_find(..., trim=T)` calls.
-  # 
-  # The returned function, when called with default arguments, will return the dataframe `parm`
-  # with the additional column `value` appended, displaying the parameter value(s) as 
-  # currently specified in the SWAT+ config file(s). If the first argument `x` is supplied, its
-  # entries overwrite the value(s) on disk, and the function returns the new value(s) in
-  # the dataframe
-  #
-  # On multirow tables, `i=NA` in `parm` is taken to mean "all rows of this parameter
-  # column". To specify individual rows, either use rswat_find(..., trim=FALSE) or set `i`
-  # manually as needed.
-  #
-  
-  # scan for non-numerics
-  idx.nn = parm$class != 'numeric'
-  if( any(idx.nn) )
-  {
-    # print a warning
-    msg.info = paste(cal$name[idx.nn], collapse=', ')
-    warning(paste('removed non-numeric entries from parm:', msg.info))
-  }
-  
-  # copy `parm`, omitting any non-numeric entries / string column
-  parm.bake = parm[!idx.nn,] 
-  if( 'string' %in% names(parm.bake) ) parm.bake = parm.bake %>% select(-string)
-  
-  # length check
-  if( nrow(parm.bake) == 0 ) stop('no numeric parameters found in parm')
-  
-  # begin definition of return function (`parm.bake` gets baked-in)
-  function(x=NULL, quiet=TRUE, reload=TRUE)
-  {
-    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
-    # order as they appeared in `parm`, when this function was created (via a call to
-    # `rswat_amod`). To view this order, call the function without arguments.
-    #
-    # `quiet` suppresses console messages, and `reload=FALSE` allows the function to
-    # pull parameter values from memory (useful for speeding up objective function
-    # related write calls)
-    
-    # reload the files associated with parameters in `parm`
-    n.parm = nrow(parm.bake)
-    parm.fn = setNames(nm=unique(parm.bake$file))
-    parm.values = lapply(parm.fn, function(fn) {
-      if( reload ) rswat_open(fn, reload=TRUE, quiet=TRUE)
-      rswat_open(fn, quiet=TRUE)
-      })
-    
-    # initialize output dataframe
-    parm.out = parm.bake %>% mutate(value=NA)
-    
-    # if user supplied no parameter values, return the parameter info dataframe
-    if( is.null(x) )
-    {
-      #  fill appended field by looping over filenames
-      for(fn in parm.fn)
-      {
-        # loop over parm.bake entries for this file
-        fn.idx = which( parm.bake$file == fn )
-        for(idx.par in 1:length(fn.idx))
-        {
-          # row index in the `parm.values` table for this parameter
-          i = parm.bake$i[ fn.idx[idx.par] ]
-          
-          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
-          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
-          
-          # extract the values, making list of unique ones in multivariate case
-          if( !is.na(i) ) parm.value = unique(parm.values[[fn]][i,j])
-          if( is.na(i) ) parm.value = unique(parm.values[[fn]][,j])
-          
-          # copy the value if unique (non-uniqueness indicated by NA)
-          if( length(parm.value) == 1 ) parm.out$value[ fn.idx[idx.par] ] = parm.value
-        }
-      }
-    }
-    
-    # handle user supplied parameter value overwrite calls
-    if( !is.null(x) )
-    {
-      # type and length checks before we modify any files
-      msg.fail = paste('first argument must be a length', n.parm, 'numeric vector!')
-      if( !is.numeric(x) | ( length(x) != nrow(parm.bake) ) ) stop(msg.fail)
-
-      # loop over filenames to write them
-      for(fn in parm.fn)
-      {
-        # grab the subset of `parm.bake` and replacement values in `x`
-        fn.idx = which( parm.bake$file == fn )
-        fn.x = x[fn.idx]
-        
-        # loop over `parm.bake` entries for this file
-        for(idx.par in 1:length(fn.idx))
-        {
-          # row index in the `parm.bake` table for this parameter
-          i = parm.bake$i[ fn.idx[idx.par] ]
-          
-          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
-          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
-          
-          # make the replacement of a single entry
-          if( !is.na(i) ) parm.values[[fn]][i,j] = fn.x[idx.par]
-          
-          # make the replacement of an entire column
-          if( is.na(i) ) parm.values[[fn]][,j] = fn.x[idx.par]
-        }
-        
-        # finished with the table, write the changes
-        rswat_write(parm.values[[fn]], fname=fn, preview=FALSE, reload=reload, quiet=quiet)
-        
-      } 
-    
-      # set new values in the output dataframe
-      parm.out$value = x
-    }
-    
-    # tidy up return dataframe
-    return( parm.out %>% select(value, everything()) )
-  }
-  
 }
 
 #' tool for copying SWAT+ config files and making backups
@@ -1012,7 +869,7 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
 }
 
 #' summarize differences between two SWAT+ models
-rswat_compare = function(compare, reference=NULL, ignore='decision_table', quiet=FALSE, trim=TRUE)
+rswat_compare = function(compare, reference=NULL, ignore=NULL, quiet=FALSE)
 {
   # ARGUMENTS:
   # 
@@ -1031,8 +888,6 @@ rswat_compare = function(compare, reference=NULL, ignore='decision_table', quiet
   # default NULL `reference` indicates to use the currently loaded SWAT+ model
   #
   
-  # TODO: support comparisons between models with different numbers of HRUs
-  
   # default reference project is the currently loaded one
   if( is.null(reference) )
   {
@@ -1048,56 +903,279 @@ rswat_compare = function(compare, reference=NULL, ignore='decision_table', quiet
   # make a list of files in common between the two directories
   fname.tocheck = intersect(list.files(reference), list.files(compare))
   
-  # TODO: use file hashes to quickly check for equality and prune this list
+  # load all text data to prune identical files 
+  if( !quiet ) cat('\npruning identical files...')
+  dat.comp  = lapply(file.path(compare, fname.tocheck), readLines)
+  dat.ref = lapply(file.path(reference, fname.tocheck), readLines)
+  idx.identical = mapply(function(x,y) identical(x[-1], y[-1]), dat.comp, dat.ref)
+  fname.tocheck = fname.tocheck[!idx.identical]
+  # checksums would be faster but we want to ignore comment text in comparison
 
   # load the comparison project and copy relevant parameter data
-  if( !quiet ) cat('loading comparison project...\n')
+  if( !quiet ) cat('loading comparison project...\n\n')
   cio.comp = rswat_cio(compare, reload=FALSE, ignore=ignore, quiet=quiet, trim=FALSE)
-  fdata.comp = rswat_open() %>% filter(file %in% fname.tocheck) %>% pull(file) %>% rswat_open
+  fname.comp = rswat_open() %>% filter(file %in% fname.tocheck) %>% pull(file)
+  fdata.comp = rswat_open(fname.comp, quiet=quiet)
   
   # load the reference project copy relevant parameter data
-  if( !quiet ) cat('\nloading reference project...\n')
+  if( !quiet ) cat('loading reference project...\n\n')
   cio.ref = rswat_cio(reference, reload=FALSE, ignore=ignore, quiet=quiet, trim=FALSE)
-  fdata.ref = rswat_open() %>% filter(file %in% names(fdata.comp)) %>% pull(file) %>% rswat_open
+  fname.ref = rswat_open() %>% filter(file %in% names(fdata.comp)) %>% pull(file)
+  fdata.ref = rswat_open(fname.ref, quiet=quiet)
   
   # prune to elements in common and make sure order matches
-  fn.all = intersect(names(fdata.comp), names(fdata.ref))
-  fdata.comp = fdata.comp[ match(names(fdata.comp), fn.all) ]
-  dim.equal = fdata.ref[ match(names(fdata.ref), fn.all) ]
+  fname.both = intersect(names(fdata.comp), names(fdata.ref))
+  fdata.comp = fdata.comp[ match(names(fdata.comp), fname.both) ]
+  fdata.ref = fdata.ref[ match(names(fdata.ref), fname.both) ]
   
-  # dimensionality check
-  dim.ref = sapply(fdata.ref, dim)
-  dim.comp = sapply(fdata.comp, dim)
-  dim.equal = mapply(function(x,y) identical(x,y), dim.ref, dim.comp)
-  if( any( !dim.equal ) )
+  # collapse list entries for files containing multiple tables
+  tnum.both = rep(1, length(fname.both))
+  can.collapse = !sapply(fdata.ref, is.data.frame)
+  if( any( can.collapse ) )
   {
-    # prepare a message about the mismatched files
-    msg.fn = paste(fn.all[!dim.equal], collapse=', ')
-    msg.dim = paste0('\nThe following have different nrow, and are excluded from results: ', msg.fn)
-    msg.info = ' (This will happend when the models have a different number of HRUs)\n\n'
-    cat( paste0(msg.dim, msg.info) )
+    # collect filenames and numbers of tables 
+    nc.ref = sapply(fdata.ref[can.collapse], length)
+    nc.equal = nc.ref == sapply(fdata.comp[can.collapse], length)
+    
+    # omit matched files with different numbers of tables
+    if( !all( nc.equal ) )
+    {
+      # console message
+      fn.omit = fname.both[can.collapse][!nc.equal]
+      msg.omit = paste(fn.omit, collapse=', ')
+      msg.nc = '\nThe following have unmatched table numbers and are excluded from results:\n\n'
+      cat( paste(msg.nc, msg.omit, '\n\n') )
+      
+      # recursive call excluding these files
+      ignore.upd = c(ignore, fn.omit) 
+      return(rswat_compare(compare, reference, ignore=ignore.upd, quiet=quiet, trim=trim))
+    }
+    
+    # strip top-level list (result should be a list of dataframes)
+    collapsed.ref = unlist( fdata.ref[can.collapse], recursive=FALSE)
+    collapsed.comp = unlist( fdata.comp[can.collapse], recursive=FALSE)
+    
+    # make corresponding table number and filename vectors
+    fnew = unlist(lapply( seq_along(nc.ref), function(x) rep(names(nc.ref)[x], each=nc.ref[x]) ))
+    tnew = unlist(lapply( seq_along(nc.ref), function(x) 1:nc.ref[x] ))
+    
+    # update master lists
+    fname.both = c( fname.both[ !can.collapse ], fnew )
+    tnum.both = c( tnum.both[ !can.collapse ], tnew )
+    fdata.ref = c(fdata.ref[ !can.collapse ], collapsed.ref)
+    fdata.comp = c(fdata.comp[ !can.collapse ], collapsed.comp)
   }
   
-  # write in preview mode to get dataframe of changes, tidy up
-  write.out = rswat_write(fdata.comp[dim.equal], preview=TRUE) %>%
+  # sanity check for dimensions
+  dim.ref = lapply(fdata.ref, dim)
+  dim.comp = lapply(fdata.comp, dim)
+  dim.equal = mapply(function(x,y) identical(x,y), dim.ref, dim.comp)
+  ncol.equal = unlist(mapply(function(ref, comp) ref[2] == comp[2], dim.ref, dim.comp))
+  nrow.equal = unlist(mapply(function(ref, comp) ref[1] == comp[1], dim.ref, dim.comp))
+  
+  # ignore (but warn of) pairs of tables having different numbers of columns
+  if( any( !ncol.equal ) )
+  {
+    # prepare a message about the mismatched columns
+    msg.fn = paste(fname.both[!ncol.equal], collapse=', ')
+    msg.dim = '\nThe following have unmatched columns and are excluded from results:\n\n'
+    cat( paste(msg.dim, msg.fn, '\n\n') )
+  }
+  
+  # tables with different nrow likely come from models with different numbers of HRUs
+  if( any( !nrow.equal ) )
+  {
+    # prepare a message about the mismatched rows
+    msg.fn = paste(fname.both[!nrow.equal], collapse=', ')
+    msg.dim = '\nThe following have unmatched rows'
+    msg.info = '(likely due to different numbers of HRUs):\n\n'
+    cat( paste(msg.dim, msg.info, msg.fn, '\n\n') )
+    
+    # coerce to correct nrow by adding dummy rows or subsetting
+    fdata.comp[ !nrow.equal ] = lapply( which(!nrow.equal), function(idx) {
+      
+      # copy dataframes for the two files
+      comp = fdata.comp[[idx]]
+      ref = fdata.ref[[idx]]
+      nr = nrow(ref)
+      nc = nrow(comp)
+      
+      # modify, return new dataframe for fdata.comp
+      if(nr < nc) return( comp[1:nr,] )
+      if(nr > nc) return( rbind(comp, ref[, nr + ( 1:(nr-nc) ) ]) )
+    })
+  }
+  
+  # call rswat_write in preview mode to get dataframe of changes (without writing anything)
+  write.list = lapply(which(ncol.equal), function(x) rswat_write(fdata.comp[[x]],
+                                                                 fname=fname.both[x],
+                                                                 tablenum=tnum.both[x], 
+                                                                 preview=TRUE) )
+  
+  # merge into one dataframe and tidy up 
+  write.out = do.call(rbind, write.list) %>%
     mutate(reference = current_value) %>%
     mutate(compare = replacement) %>%
     select(-c(current_value, replacement))
-  
-  # collapse columns with identical values
-  if(trim)
-  {
-    # 
-    write.out %>% group_by(file, name, table)
-    
-    
-    
-  }
 
   # restore rswat session and finish
   .rswat = b.rswat
   return(write.out)
+}
 
+#' construct an anonymous function that reads/modifies a selection of SWAT+ parameters
+rswat_amod = function(parm)
+{
+  # 
+  # ARGUMENTS:
+  #
+  # `parm`: dataframe, the SWAT+ parameters to modify (see DETAILS)
+  #
+  # RETURN VALUE:
+  #
+  # Returns an anonymous function whose first argument `x`, a numeric vector, specifies
+  # new numeric value(s) to write to the corresponding SWAT+ file(s) (as specified in `parm`).
+  # This function also has arguments `quiet` (for suppressing console messages,
+  # default TRUE), and `reload` (for forcing the function to reload the file instead of
+  # using the current values in memory, default TRUE)
+  #
+  # DETAILS:
+  #
+  # This is a helper function to assist in building anonymous functions that perform
+  # simple read/write operations, where we aren't interested in the entire config file.
+  #
+  # `parm` must contain fields 'name' and 'file', and these must correspond to numeric
+  # SWAT+ parameters. Optionally, the field 'i' (row number) can be supplied to specify
+  # particular HRUs/LSUs etc. `i=NA` is taken to mean "all rows of this parameter column",
+  # and negative integers specify all EXCEPT a particular row. The outputs from `rswat_find`
+  # and/or `rswat_compare` calls are valid input to `parm`.  
+  # 
+  # The returned function, when called with default arguments, will return a dataframe
+  # of the form returned by `rswat_find` with the additional column `value` appended,
+  # displaying the parameter value(s) as currently specified in the SWAT+ config file(s).
+  # If the first argument `x` is supplied, its entries overwrite the value(s) on disk, and
+  # the function returns the new value(s) in the dataframe
+  #
+  
+  # find each requested parameter to check its class and dimension
+  parm.fname = sapply(split(parm, parm$file), function(x) x$name, simplify=FALSE)
+  parm.list = lapply(names(parm.fname), function(nm) rswat_find(parm.fname[[nm]], include=nm) )
+  parm.new = do.call(rbind, parm.list) %>% select(-string)
+  
+  # append the supplied row numbers
+  if( 'i' %in% names(parm) ) parm.new = parm.new %>% select(-i) %>% 
+    right_join(parm[,c('name', 'file', 'i')], by=c('name', 'file')) 
+  
+  # overwrite input parm
+  parm = parm.new
+  
+  # scan for non-numerics
+  idx.nn = parm$class != 'numeric'
+  if( any(idx.nn) )
+  {
+    # print a warning
+    msg.info = paste(cal$name[idx.nn], collapse=', ')
+    warning(paste('removed non-numeric entries from parm:', msg.info))
+  }
+  
+  # copy `parm`, omitting any non-numeric entries / string column
+  parm.bake = parm[!idx.nn,] 
+  if( 'string' %in% names(parm.bake) ) parm.bake = parm.bake %>% select(-string)
+  
+  # length check
+  if( nrow(parm.bake) == 0 ) stop('no numeric parameters found in parm')
+  
+  # begin definition of return function (`parm.bake` gets baked-in)
+  function(x=NULL, quiet=TRUE, reload=TRUE)
+  {
+    # `x` is the vector of (numeric) SWAT+ parameters. They should be given in the same
+    # order as they appeared in `parm`, when this function was created (via a call to
+    # `rswat_amod`). To view this order, call the function without arguments.
+    #
+    # `quiet` suppresses console messages, and `reload=FALSE` allows the function to
+    # pull parameter values from memory (useful for speeding up objective function
+    # related write calls)
+    
+    # reload the files associated with parameters in `parm`
+    n.parm = nrow(parm.bake)
+    parm.fn = setNames(nm=unique(parm.bake$file))
+    parm.values = lapply(parm.fn, function(fn) {
+      if( reload ) rswat_open(fn, reload=TRUE, quiet=TRUE)
+      rswat_open(fn, quiet=TRUE)
+    })
+    
+    # initialize output dataframe
+    parm.out = parm.bake %>% mutate(value=NA)
+    
+    # if user supplied no parameter values, return the parameter info dataframe
+    if( is.null(x) )
+    {
+      #  fill appended field by looping over filenames
+      for(fn in parm.fn)
+      {
+        # loop over parm.bake entries for this file
+        fn.idx = which( parm.bake$file == fn )
+        for(idx.par in 1:length(fn.idx))
+        {
+          # row index in the `parm.values` table for this parameter
+          i = parm.bake$i[ fn.idx[idx.par] ]
+          
+          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
+          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
+          
+          # extract the values, making list of unique ones in multivariate case
+          if( !is.na(i) ) parm.value = unique(parm.values[[fn]][i,j])
+          if( is.na(i) ) parm.value = unique(parm.values[[fn]][,j])
+          
+          # copy the value if unique (non-uniqueness indicated by NA)
+          if( length(parm.value) == 1 ) parm.out$value[ fn.idx[idx.par] ] = parm.value
+        }
+      }
+    }
+    
+    # handle parameter overwrite calls
+    if( !is.null(x) )
+    {
+      # type and length checks before we modify any files
+      msg.fail = paste('first argument must be a length', n.parm, 'numeric vector!')
+      if( !is.numeric(x) | ( length(x) != nrow(parm.bake) ) ) stop(msg.fail)
+      
+      # loop over filenames to write them
+      for(fn in parm.fn)
+      {
+        # grab the subset of `parm.bake` and replacement values in `x`
+        fn.idx = which( parm.bake$file == fn )
+        fn.x = x[fn.idx]
+        
+        # loop over `parm.bake` entries for this file
+        for(idx.par in 1:length(fn.idx))
+        {
+          # row index in the `parm.bake` table for this parameter
+          i = parm.bake$i[ fn.idx[idx.par] ]
+          
+          # find column index the hard way, in case 'parm.bake$j' wasn't supplied
+          j = which( names( parm.values[[fn]] ) == parm.bake$name[ fn.idx[idx.par] ] )
+          
+          # make the replacement of a single entry
+          if( !is.na(i) ) parm.values[[fn]][i,j] = fn.x[idx.par]
+          
+          # make the replacement of an entire column
+          if( is.na(i) ) parm.values[[fn]][,j] = fn.x[idx.par]
+        }
+        
+        # finished with the table, write the changes
+        rswat_write(parm.values[[fn]], fname=fn, preview=FALSE, reload=reload, quiet=quiet)
+        
+      } 
+      
+      # set new values in the output dataframe
+      parm.out$value = x
+    }
+    
+    # tidy up return dataframe
+    return( parm.out %>% select(value, everything()) )
+  }
+  
 }
 
 
