@@ -340,7 +340,9 @@ my_maps = function(db, outcrs=NULL)
 
 
 #' Wrapper for ggplot calls to make hydrographs and other time series plots
-my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc=NULL, legp=NULL)
+my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', 
+                     legnm=NULL, legsc=NULL, legp=NULL,
+                     yunit=NULL, ysqrt=FALSE)
 {
   # ARGUMENTS:
   #
@@ -351,6 +353,9 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc
   # `legnm`: character, optional title for the legend
   # `legsc`: numeric, legend scale - values to map to the non-date columns
   # `legp`: character or length-2 numeric vector, passed as 'legend.position' to `theme`
+  #
+  # `yunit`: units to use for y-axis
+  # `ysqrt`: indicating to plot y-values on square root scale
   #
   # RETURN VALUE:
   #
@@ -380,27 +385,39 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc
   y.nm = names(dat)[idx.nondate]
   y.hasunits = sapply(y.nm, function(x) inherits(dat[[x]], 'units'))
   
-  # assign default units string (empty), then handle columns with units as needed
+  # handle unit conversions as needed and add units to y axis label
   ysuffix = ''
   if( sum(y.hasunits) > 0 )
   {
-    # extract units as strings and covert to first type as needed
+    # extract units as strings
     y.units = sapply(y.nm[y.hasunits], function(x) as.character( units(dat[[x]]) ) )
-    idx.match = y.units == y.units[1]
+    
+    # match to user-supplied units (or first unit in dataframe)
+    plot.units = ifelse( is.null(yunit), y.units[1], yunit ) 
+    idx.match = y.units == plot.units
     if( !all(idx.match) )
     {
       # unit conversion of mismatches
       for( nm in names(idx.match)[!idx.match] )
       {
-        dat[[nm]] = set_units(dat[[nm]], y.units[1], mode='standard')
+        dat[[nm]] = set_units(dat[[nm]], plot.units, mode='standard')
       }
     }
     
     # drop units from df now that everything is matching (non-unit columns not modified!)
     dat = drop_units(dat)
-    ysuffix = paste0('(', y.units[1], ')')
+    ysuffix = paste0('(', plot.units, ')')
   }
   
+  #transform data for square-root y-axis transform requests
+  yprefix = ''
+  if( ysqrt ) 
+  {
+    # take roots and modify y axis label
+    dat[,idx.nondate] = sqrt(dat[,idx.nondate])
+    yprefix = 'square-root of'
+  }
+
   # set default colours as needed, checking for palette strings
   if( is.null(colors) ) colors = 'Temps'
   if( length(colors) == 1 )
@@ -410,13 +427,15 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc
   }
   
   # set up the axis labels
-  ggp.axlab = labs(x = names(dat)[idx.date], y = paste(yaxis, ysuffix), color = '')
+  ggp.axlab = labs(x = names(dat)[idx.date], y = paste(yprefix, yaxis, ysuffix), color = '')
 
   # create the ggplot line objects
   colmap = y.nm
   is.continuous = !is.null(legsc)
   if( is.continuous ) colmap = legsc
-  ggp.line = lapply(seq_along(y.nm), function(x) geom_line(aes_(y=dat[[y.nm[x]]], color=colmap[x])) )
+  ggp.line = lapply(seq_along(y.nm), function(x) {
+    geom_line(aes_(y=dat[[y.nm[x]]], color=colmap[x]), alpha=alph) 
+    })
  
   # initialize the plot grob
   ggp.out = ggplot(data=dat, aes(date)) +
@@ -426,12 +445,12 @@ my_tsplot = function(dat, colors=NULL, alph=0.8, yaxis='flow', legnm=NULL, legsc
   
   # add discrete color bar
   if(!is.continuous) ggp.out = ggp.out + 
-    scale_color_manual(legnm, values=setNames(adjustcolor(colors, alpha.f=alph), y.nm)) +
+    scale_color_manual(legnm, values=setNames(colors, y.nm)) +
     guides(color = guide_legend(override.aes = list(size=1, alpha=1)))
   
   # add continuous color bar
   if( is.continuous ) ggp.out = ggp.out + 
-    scale_colour_gradientn(legnm, colors=colors, guide='colourbar') 
+    scale_colour_gradientn(legnm, colors=colors, guide='colourbar')
 
   return(ggp.out)
 }
