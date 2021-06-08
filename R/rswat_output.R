@@ -998,10 +998,8 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
   # modified accordingly to get the desired number of steps.
   
   # grab up-to-date copies of 'time.sim' and 'print.prt' 
-  rswat_open('time.sim', quiet=quiet, reload=TRUE)
-  rswat_open('print.prt', quiet=quiet, reload=TRUE)
-  time.sim = rswat_open('time.sim', quiet=quiet)
-  print.prt = rswat_open('print.prt', quiet=quiet)
+  time.sim = rswat_open('time.sim', quiet=quiet, reload=TRUE)
+  print.prt = rswat_open('print.prt', quiet=quiet, reload=TRUE)
   
   # extract currently assigned start/end dates
   date.start = as.Date(paste(time.sim[,c('yrc_start', 'day_start')], collapse='-'), '%Y-%j')
@@ -1332,7 +1330,6 @@ rswat_ohg_toggle = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', de
   # load new file, or, in delete mode, return nothing 
   if(delete) return(NULL)
   rswat_open('object.prt', quiet=TRUE, reload=TRUE)
-  rswat_open('object.prt', quiet=TRUE)
 }
 
 #' set up SWAT+ for an OHG-only simulation for a specified time period (but don't run it) 

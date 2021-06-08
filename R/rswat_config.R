@@ -282,18 +282,18 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   #
   # RETURN VALUE:
   #
-  # With default `reload==FALSE`, the function returns a named list containing all the tabular
-  # data associated with `fname`. Each list entry is named after a source file, and consists
-  # of either a dataframe (if the file has a single table) or a list of dataframes (if the file
-  # has multiple tables). Toggling `simplify==FALSE` will wrap the single-table case(s) in a
-  # list, for consistency with the other cases.
+  # Returns a named list containing all the tabular data associated with `fname`. Each list
+  # entry is named after a source file, and consists of either a dataframe (if the file has
+  # a single table) or a list of dataframes (if the file has multiple tables). Toggling
+  # `simplify==FALSE` will wrap the single-table case(s) in a list, for consistency with the
+  # other cases.
   # 
   # If `fname` is empty (the default) the function returns the result of `rswat_cio()`
   # (a list of files in the TxtInOut directory).
   #
-  # If `reload==TRUE`, the function call returns nothing but loads and parses all requested
-  # files into memory, overwriting anything already there. This is useful if you need to reload
-  # project data after it's been modified on disk by external programs.
+  # If `reload==TRUE`, the function call loads and parses all requested files into memory,
+  # overwriting anything already there. This is useful if you need to reload project data after
+  # it's been modified on disk by external programs.
   
   # parse the `fname` argument, assigning all existing files by default
   cio = rswat_cio(trim=FALSE) %>% filter(exists) 
@@ -372,27 +372,18 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
     if(length(values.out) == 1) values.out = values.out[[1]]
   }
   
-  # prepare the requested data in a named list
-  if( !reload )
+  # pull a copy of the requested dataframes
+  values.out = .rswat$stor$data[cio.match$file]
+  
+  # simplify as needed before returning the list
+  if( simplify )
   {
-    # pull a copy of the requested dataframes
-    values.out = .rswat$stor$data[cio.match$file]
-    
-    # simplify as needed before returning the list
-    if( simplify )
-    {
-      # collapse redundant within-file lists, then collapse any single-file lists
-      idx.singles = sapply(values.out, length) == 1
-      values.out[idx.singles] = lapply(values.out[idx.singles], function(x) x[[1]])
-      if(length(values.out) == 1) values.out = values.out[[1]]
-    }
-    return(values.out)
-    
-  } else {
-    
-    # reload mode returns nothing
-    return(invisible())
+    # collapse redundant within-file lists, then collapse any single-file lists
+    idx.singles = sapply(values.out, length) == 1
+    values.out[idx.singles] = lapply(values.out[idx.singles], function(x) x[[1]])
+    if(length(values.out) == 1) values.out = values.out[[1]]
   }
+  return(values.out)
 }
 
 # TODO: combine this with rswat_ofind
@@ -717,10 +708,7 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   writeLines(txt.out, cio %>% filter(file==fname) %>% pull(path))
   
   # refresh the data in memory if requested
-  if(reload)
-  {
-    rswat_open(fname, reload=TRUE, quiet=quiet) 
-  }
+  if(reload) invisible( rswat_open(fname, reload=TRUE, quiet=quiet) )
 }
 
 #' tool for copying SWAT+ config files and making backups
@@ -1099,10 +1087,7 @@ rswat_amod = function(parm)
     # reload the files associated with parameters in `parm`
     n.parm = nrow(parm.bake)
     parm.fn = setNames(nm=unique(parm.bake$file))
-    parm.values = lapply(parm.fn, function(fn) {
-      if( reload ) rswat_open(fn, reload=TRUE, quiet=TRUE)
-      rswat_open(fn, quiet=TRUE)
-    })
+    parm.values = lapply(parm.fn, function(fn) rswat_open(fn, reload=reload, quiet=TRUE) )
     
     # initialize output dataframe
     parm.out = parm.bake %>% mutate(value=NA)
