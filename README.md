@@ -120,3 +120,4 @@ src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/dem.pn
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_upslope_areas.png" width="100%"> </img>
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_catchment.png" width="100%"> </img>
 <img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/my_baseflow_hrus.png" width="100%"> </img>
+<img src="https://raw.githubusercontent.com/deankoch/UYRW_data/master/graphics/demo_baseflow/alpha_bf_big_c_nr_emigrant.png" width="100%"> </img>
