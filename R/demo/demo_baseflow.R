@@ -1,0 +1,902 @@
+#' ---
+#' title: "demo_baseflow.R"
+#' author: "Dean Koch"
+#' date: "`r format(Sys.Date())`"
+#' output: github_document
+#' ---
+#'
+#' **Mitacs UYRW project**
+#' 
+#' **demo_baseflow.R**: (in development) the SWAT+ process model for baseflow
+#' 
+#' This includes a description of the relevant parameters for groundwater movement and,
+#' and notes on calibrating `aquifer.aqu` and related files in SWAT+
+#' 
+#' This script uses for demonstration the SWAT+ model generated in
+#' [demo_qswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md)
+#' (and modified by
+#' [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_qswat.md),
+#' where most of the `rswat_*` functions are introduced). It also makes extensive use of the
+#' [`rswat_docs`](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md)
+#' function, which parses the SWAT+ inputs documentation for easier searching
+#' 
+#'
+#' ## libraries
+#' [helper_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md) and
+#' [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md)
+#' load required libraries, global variables, and some helper functions.
+
+library(here)
+source(here('R/helper_main.R'))
+#source(here('R/analysis/helper_analysis.R'))
+source(here('R/rswat.R'))
+
+#'
+#' ## project data
+
+#' load the SWAT+ project info and gage data from previous scripts
+
+# load some info about the SWAT+ model
+qswat.meta = my_metadata('demo_qswat', data.dir=demo.subdir)
+txtinout.meta = my_metadata('demo_txtinout', data.dir=demo.subdir)
+nm = qswat.meta['example_name', 'file']
+print(nm)
+
+# load the gage data for this catchment 
+gage = readRDS(here(qswat.meta['gage', 'file']))
+head(gage)
+
+# grab directory of the project folder and its backup
+demo.dir = here( txtinout.meta['txtinout', 'file'] )
+demobak.dir = here( txtinout.meta['txtinout_bak', 'file'] )
+
+#' ## load the SWAT+ project
+#' 
+#' Start by loading a SWAT+ project folder
+
+# point `rswat` to the demo "TxtInOut" directory used earlier 
+demo.dir = here( txtinout.meta['txtinout', 'file'] )
+print(demo.dir)
+rswat_cio(demo.dir)
+
+#' restore the backup that was created after running the previous demo script
+
+# restore model backup, which has Hargreaves-Samani PET method activated
+print(demobak.dir)
+fout = rswat_copy(from=demobak.dir, fname='.', overwrite=TRUE, quiet=TRUE)
+
+# set up dates for the first 1300 days, to show three complete winter baseflow periods
+dates.demo = seq.Date(min(gage$date), min(gage$date) + 1300, by='day')
+usgs.demo = gage %>% filter(date %in% dates.demo) %>% pull(flow)
+rswat_time(dates.demo)
+
+# save a simulation hydrograph to compare against later
+flo.orig = rswat_flo(gage %>% filter(date %in% dates.demo), restore=FALSE)
+
+# set up a cluster to run simulations in parallel (copies SWAT+ folder)
+rswat_cluster()
+
+#'
+#' ## the SWAT+ process model for baseflow
+#' 
+#' The pathway for baseflow in this model starts with precipitation - either rain or
+#' melting snow - entering the soil. This water moves downward towards the
+#' aquifer one soil layer at a time, charging each layer with moisture before continuing
+#' its descent.
+#' 
+#' This creates a delay, as soil layers become drainable in SWAT+ only when they reach
+#' a threshold water content. Excess water is then allowed to percolate to the next
+#' layer. The threshold is controlled by scaling parameter 'perco' (unitless, in [0,1]):
+rswat_docs('perco', fname='hydrology.hyd')
+
+#' The model behind 'perco' involves three parameters from the STATSGO/SSURGO database,
+#' characterizing soil water storage (see Section 2:3.1 SWAT Theory guide):
+rswat_docs('awc|bd|clay', fname='soils.sol', descw=0)
+
+#' Note that percolation only occurs when a soil layer is thawed, and much of the water
+#' moving through soil layers is diverted to either evaporation, root uptake, or lateral
+#' flow. Influential parameters for these processes include: 'esco', a shape parameter for
+#' a nonlinear soil evaporation curve (a function of depth and PET); and the hydraulic
+#' conductivity in the soil, 'k':
+rswat_docs('esco', descw=0)
+rswat_docs('k', fname='soils.sol', fuzzy=-1, descw=0)
+
+
+#' The aquifer sits between the bottom soil layer and an impervious layer below, whose
+#' depth is set by the parameter 'dep_bot' (m). For catchments with aquifers, the deepest soil
+#' depth should be our minimum depth for this impervious layer parameter and their difference
+#' defines the volume of the aquifer and overlying vadose zone.
+rswat_docs('dep_bot', fname='aquifer.aqu')
+
+# find the minimum aquifer depth based on the soil profile depth
+aqudep.min = rswat_open('soils.sol', quiet=TRUE) %>% pull(dp_tot) %>% max(na.rm=TRUE) %>% set_units(mm)
+
+#' If we set 'dep_bot' higher than `aqudep.min`, we get the SWAT+ representation of a
+#' perched aquifer; ie. 'dep_bot' replaces 'DEP_IMP' in previous versions of SWAT (see p235
+#' of the SWAT2012 IO docs and section 2:3.4 of SWAT theory guide). 
+#' 
+#' 'dep_bot' is currently set to 10 metres for all but the last row (the deep aquifer)
+rswat_open('aquifer.aqu', quiet=TRUE) %>% pull(dep_bot) %>% unique
+rswat_open('aquifer.aqu') %>% tail
+n.aqu = rswat_open('aquifer.aqu') %>% nrow
+n.aqu
+
+#' There are 50 HRUs in this example, with one aquifer defined for each. The deep aquifer
+#' is represented by the 51st row in `aquifer.aqu`. A model for the deep aquifer is
+#' described in the SWAT2012 theory guide, however it does not appear to be supported
+#' by SWAT+ at this time, so we can leave the deep aquifer fields at their defaults.
+#'
+#' Percolation exiting the deepest soil profile layer can drain into the aquifer very
+#' slowly. It feeds into a daily recharge equation (2:4.2.2) in which a portion is always
+#' reserved for the next time step. This introduces a delay, controlled by parameter
+#' `alpha_bf` (1/d), the reciprocal of the "drainage time" (in days) of the aquifer, as
+#' described in Sangrey, Harrop-Williams, & Klaiber
+#' ([1984, J Geot Eng](https://ascelibrary.org/doi/abs/10.1061/(ASCE)0733-9410(1984)110:7(957))) 
+rswat_docs('alpha_bf', fname='aquifer.aqu')
+
+#'
+#' ## demonstration of aquifer parameter ranges in SWAT+
+#' 
+
+#' The section includes many examples of parameter modifications. We have a shortcut
+#' function `rswat_amod` for making such changes on disk, and for querying the current
+#' parameter value. eg. below, we define the R function `dep_bot` to read/write the SWAT+
+#' parameter 'dep_bot' for all HRUs (but not the deep aquifer):
+
+# query the 'dep_bot' parameter via a shortcut function
+dep_bot = rswat_find('dep_bot') %>% mutate(i=-n.aqu) %>% rswat_amod
+dep_bot()
+
+#' The function returned by `rswat_amod` can be passed to `rswat_pexec` to compare the simulations
+#' for a range of parameter values. eg. we can test a sequence of different values of 'alpha_bf' ranging
+#' from a day (the default) to a year, like this:
+
+# define the shortcut function and test values
+alpha_bf = rswat_find('alpha_bf') %>% mutate(i=-51) %>% rswat_amod
+alpha_bf.x = 1 / seq(1, 365, length=36)
+print(alpha_bf.x)
+
+# run SWAT+ simulations for each test value (in parallel, wipe=FALSE keeps cluster files)
+alpha_bf.out = rswat_pexec(alpha_bf.x, alpha_bf, dates=dates.demo, wipe=FALSE) 
+
+# plot the result on square root scale and overlay the USGS gage data
+alpha_bf.legnm = paste('SWAT+ simulations of 1/alpha_bf', 'aquifer drain time (days)', sep='\n')
+my_tsplot(alpha_bf.out, alph=0.5, ysqrt=TRUE, legsc=1/alpha_bf.x, legnm=alpha_bf.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#' The delay parameter has the effect of shifting the spring runoff peak forward in time - by
+#' approximately 1/'alpha_bf' days - and smoothing it out over a longer period of slower
+#' groundwater flow. The spring discharge becomes less flashy, except in the early days where
+#' (I think) frozen soil is preventing recharge.
+#' 
+#' Note that the SWAT theory guide describes this delay model using parameter "delta_gw"
+#' (greek letter delta), and this notation is also used in the SWAT2012 IO docs description
+#' of parameter "GW_DELAY". In SWAT+, it has been replaced by (the reciprocal) 'alpha_bf'. For
+#' some reason the SWAT2012 IO document lists both "GW_DELAY" and "ALPHA_BF", though from the
+#' descriptions they appear to be the same parameter with different units.
+#' 
+#' For demonstration purposes we will set this much lower than the default (longer delay) while
+#' tweaking other aquifer parameters. This will exaggerate their effects so they can be seen more
+#' clearly. Note that in many cases a parameter will appear to have no effect until it is
+#' activated by another.
+
+# set 'alpha_bf' to a delay of 100 days for demonstration purposes
+alpha_bf(1/100)
+
+#'
+#' ## initial values
+#' 
+#' When a long time series is available to warm up (ie equilibrate) the model, the initial data
+#' for the aquifer is not particularly important. See this note from the SWAT+ developers in the
+#' 'aquifer.aqu' file:
+rswat_docs('flo', descw=0, fuzzy=-1, fname='aquifer.aqu')
+
+#' However, when learning the model, initial value parameters are quite handy because they can
+#' be used to set the aquifer to known state that is easily reproduced. Note that the part of the
+#' documentation queried above ("flo") is wrong - The initial value for shallow aquifer depth is
+#' called 'dep_wt' in SWAT+. This is the initial depth to the water table (m)
+
+# print the docs entry for this parameter
+rswat_docs('dep_wt')
+
+# set up a demonstration over its range (making sure units match!)
+dep_bot.current = set_units(dep_bot()$value, m)
+dep_wt.x = seq(aqudep.min, dep_bot.current, length=36) %>% set_units(m) %>% drop_units()
+dep_wt = rswat_find('dep_wt') %>% mutate(i=-51) %>% rswat_amod
+
+#' We set the maximum here to be equal to the aquifer depth. Maximum 'dep_wt' (10m, in this
+#' example) corresponds to no water in the aquifer. The minimum (~1.5m) is set to the bottom
+#' of the soil profile, corresponding to maximal water storage.  
+
+# run the simulations and plot the results
+dep_wt.out = rswat_pexec(dep_wt.x, dep_wt, dates=dates.demo, wipe=FALSE) 
+dep_wt.legnm = paste('SWAT+ simulations of dep_wt', 'depth to the water table (m)', sep='\n')
+my_tsplot(dep_wt.out, alph=0.5, ysqrt=TRUE, legsc=dep_wt.x, legnm=dep_wt.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#' The outputs respond as expected - more water initially produces higher groundwater flow at a
+#' delay of 1/'alpha_bf'. As the simulation progresses, this initial data has a diminishing
+#' impact, because the system is equilibrating to its natural recharge/discharge cycle.
+#' 
+#' We will start the simulations below with a full aquifer, to emphasize groundwater
+#' contributions to discharge:
+
+# set 'dep_wt' to the bottom of the soil profile to initialize a full aquifer 
+aqudep.min %>% set_units(m) %>% drop_units %>% dep_wt
+
+#' The other major initial data parameter for the aquifer is 'gw_flow' (mm/day), the initial
+#' groundwater flow from the shallow aquifer. This is not listed in the documentation, although
+#' it's there in the 'aquifer.aqu' file where "flo" should be (see above). We can guess its
+#' definition from a similarly-named parameter in the "lite" version of SWAT+, with the
+#' following query:
+
+# look for clues about a undefined parameter 'gw_flo':
+rswat_docs('gw_flo')
+
+#' The parameters for SWAT+ lite are stored in the file 'hru-lte.hru'. This file isn't
+#' used by the (non-"lite") SWAT+ executable, but I'm finding its parameter definitions are
+#' more up-to-date at this time, and therefore helpful for resolving documentation gaps.
+#'
+#' We will increase 'gw_flo' from its default (1mm) to 10mm, to emphasize initial groundwater
+#' contributions to discharge
+gw_flo = rswat_find('gw_flo') %>% mutate(i=-51) %>% rswat_amod
+gw_flo()
+gw_flo(5)
+
+#' ## baseflow/recharge rate parameters
+#' 
+#' Note that 'gw_flo' has no effect on the model unless 'dep_wt' (initial water table) is
+#' high enough to permit groundwater flow on the initial day. In SWAT+, groundwater flows
+#' into channels only when the aquifer water storage is above a certain threshold, set by
+#' parameter 'flo_min' (m):
+rswat_docs('flo_min')
+
+#' From the description, one might get the impression that 'flow_min' is the depth from the
+#' bottom of the aquifer to the water table. However I think it's actually the depth from the
+#' mid-slope surface to the water table (ie. the water table depth), based on the following:  
+
+# Vary threshold water storage (m) in the shallow aquifer to allow return flow:
+flo_min = rswat_find('flo_min') %>% mutate(i=-51) %>% rswat_amod
+flo_min.x = seq(0, drop_units(dep_bot.current), length=36)
+flo_min.out = rswat_pexec(flo_min.x, flo_min, dates=dates.demo, wipe=FALSE) 
+flo_min.legnm = paste('SWAT+ simulations of flow_min', 'return flow threshold (m)', sep='\n')
+my_tsplot(flo_min.out, alph=0.5, ysqrt=TRUE, legsc=flo_min.x, legnm=flo_min.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#' Recall that the simulation is initialized with a full aquifer and a fairly high
+#' groundwater flow rate. This high baseflow continues until the aquifer is drained to its
+#' threshold storage level 'flow_min', at which point the flow rate rapidly drops off.
+#' This happens at different times during the winter of 1974 for different HRUs, so the
+#' drop-off is staggered.
+#' 
+#' We can see that the first curves to drop off are the ones with the lowest 'flow_min'
+#' values, meaning low 'flow_min' actually corresponds to a high aquifer storage threshold.
+#' This is reasonable if we interpret 'flow_min' as a depth to the water table.
+#' 
+#' To ensure that we get baseflow, we should therefore set 'flo_min' near to (or above)
+#' its physical maximum of 'dep_bot'. We do this now to encourage baseflow happens wherever
+#' possible for the rest of the demonstration
+#' 
+
+# set 'flo_min' so that baseflow happens whenever the aquifer is not dry
+flo_min(dep_bot.current)
+
+#'
+#' The deep aquifer percolation fraction, 'rchg_dp' (fraction from 0 to 1) controls the
+#' proportion of percolation that drains to the deep aquifer. This water is effectively
+#' lost from the model, as SWAT+ does not currently model any processes that can
+#' return this flow to channels (or overlying layers). Here it simply serves to scale
+#' down our estimates of aquifer storage: 
+rswat_docs('rchg_dp')
+
+# a demonstration of its range
+rchg_dp = rswat_find('rchg_dp') %>% mutate(i=-51) %>% rswat_amod
+rchg_dp.x = seq(0, 1, length=36)
+rchg_dp.out = rswat_pexec(rchg_dp.x, rchg_dp, dates=dates.demo, wipe=FALSE) 
+rchg_dp.legnm = paste('SWAT+ simulations of rchg_dp', 'deep aquifer recharge fraction', sep='\n')
+my_tsplot(rchg_dp.out, alph=0.5, ysqrt=TRUE, legsc=rchg_dp.x, legnm=rchg_dp.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#' Some of the water that would otherwise drain to the aquifer and become baseflow ends up
+#' getting pulled back upwards through the unsaturated zone via evaporation or root uptake, a
+#' process called "revap" in the SWAT+ model. This happens at a rate equal to the product of the
+#' potential evapotranspiration (PET) for the day and the revap coefficient, parameter 'revap'
+#' (a fraction between 0 and 1):
+
+# look up the documentation
+rswat_docs('revap', fname='aquifer.aqu', fuzzy=-1, descw=0)
+
+# make a shortcut modification function and check current value
+revap = rswat_find('revap') %>% mutate(i=-51) %>% rswat_amod
+revap()
+
+#' This is currently set very low but if we simulate through its range the effect on baseflow
+#' becomes clear
+revap = rswat_find('revap') %>% mutate(i=-51) %>% rswat_amod
+revap.x = seq(0, 1, length=36)
+revap.out = rswat_pexec(revap.x, revap, dates=dates.demo, wipe=FALSE) 
+revap.legnm = paste('SWAT+ simulations of revap', 'percolation fraction', sep='\n')
+my_tsplot(revap.out, alph=0.5, ysqrt=TRUE, legsc=revap.x, legnm=revap.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#' We increase it here to exaggerate the effect of the next parameter
+revap(0.25)
+
+#' Like baseflow, revap only occurs when the aquifer storage lies above a threshold. This 
+#' is set by the 'revap_min' parameter, the maximum water table depth (m) required for revap:
+rswat_docs('revap_min')
+
+#' Note the "to the deep aquifer" part must be a typo (unless I'm misunderstanding something),
+#' as are the units reported in the documentation (mm). Like the other parameters so far defined,
+#' this one should be given in metres; and like 'flo_min', it refers to depth to the water table:
+
+# a demonstration of the range of 'revap_min'
+revap_min = rswat_find('revap_min') %>% mutate(i=-51) %>% rswat_amod
+revap_min.x = seq(0, drop_units(dep_bot.current), length=36)
+revap_min.out = rswat_pexec(revap_min.x, revap_min, dates=dates.demo, wipe=FALSE) 
+revap_min.legnm = paste('SWAT+ simulations of revap_min', 'revap threshold (m)', sep='\n')
+my_tsplot(revap_min.out, alph=0.5, ysqrt=TRUE, legsc=revap_min.x, legnm=revap_min.legnm, yunit='m^3/s') +
+  geom_line(aes_(y=sqrt(drop_units(usgs.demo))), alpha=0.8)
+
+#'
+#' ## wrapping up
+
+#' We're finished with simulations so we can shut down the cluster and delete its files
+rswat_cluster(wipe=T)
+
+#' The following parameters in 'aquifer.aqu' also relate to baseflow rates, but they appear
+#' to be inactive. They should therefore be omitted from fitting routines so as not to
+#' impede/confuse the optimizer:
+
+# a baseflow rate parameter (to fine-tune rate of groundwater flow into channels?)
+rswat_docs('bf_max')
+
+# a mean distance to channel parameter (to moderate lateral flow?)
+rswat_docs('flo_dist')
+
+# specific yield of the shallow aquifer (to determine groundwater height?)
+rswat_docs('spec_yld')
+
+#' Finally, note that we have ignored several sediment-related variables ('sol_p', 'carbon',
+#' etc) for simplicity. For now we are only concerned with hydrograph matching of discharge
+#' rates, but we will revisit sediment later on.
+#' 
+#' ## conclusions
+#' 
+#' To summarize, baseflow in SWAT+ is controlled by the 'aquifer.aqu' config file, and is
+#' sensitive to the following parameters:
+#' 
+#' * 'dep_bot' (m), the depth to the aquifer bottom
+#' * 'flo_min' (m), the water table depth above which groundwater flow occurs 
+#' * 'revap_min' (m), the water table depth above which revap occurs 
+#' * 'revap' (fraction), scaling constant for revap rate
+#' * 'rchg_dp' (fraction), the proportion of percolation flow lost to the deep aquifer
+#' * 'alpha_bf' (1/days), the aquifer drainage time
+#' 
+#' where 'flo_min' and 'revap_min' should lie between 'dep_bot' and the bottom of the deepest 
+#' soil profile layer. Values closer to 'dep_bot' cause the aquifer to drain more often.
+#' 
+#' Initial data are supplied by:
+#' 
+#' * 'dep_wt' (m), the initial water table depth
+#' * 'gw_flo' (mm), the initial groundwater flow rate
+#' 
+#' And the parameters 'bf_max', 'flo_dist', 'spec_yld' can be left at their default value 
+#' until they are activated by the SWAT+ developers.
+
+
+#+ include=FALSE
+# TODO: look into whether anything in this older code worth saving
+if(0)
+{
+
+  
+  # xx = rswat_compare('D:/big_creek_fitted')
+  # xx %>% filter(file=='aquifer.aqu', i==1)
+  # 
+  #  
+  
+  # gage.orig = gage %>% rename(USGS=flow) %>% mutate('SWAT (default)'=flo.orig$flo)
+  # my_tsplot(gage.orig, legnm = 'Big Creek')
+  
+  
+  
+  
+  # ohg = rswat_output() %>% filter(type=='ohg')
+  # 
+  # for(idx in 1:nrow(ohg))
+  # {
+  #   cat('--------')
+  #   cat(ohg$file[idx])
+  #   cat(' : ')
+  #   cat(names(rswat_output(ohg$file[idx])))
+  #   cat('\n')
+  #   
+  # }
+  # 
+  # 
+  # 
+  # 
+  # rswat_ohg_toggle(overwrite=TRUE, otype='out', htype='tot')
+  # rswat_exec()
+  # 
+  # 
+  # wsh
+  # 
+  # 
+  # head()
+  # head(rswat_output('ohg_hru_1_tot.ohg'))
+  # n.sec = 60 * 60 * 24
+  # 
+  # flow.chan = rswat_output('channel_sd_day.txt') %>% filter(gis_id == 1) %>% select(date, flo_in, flo_out)
+  # flow.ohg = rswat_output('ohg_sdc_1_tot.ohg') %>% select(flo)
+  # 
+  # #flow.ohg = rswat_output('ohg_hru_1_tot.ohg') 
+  # flow = cbind(flow.chan, flow.ohg)
+  # my_tsplot(flow)
+  # 
+  # (flow[['flo']] / n.sec)  drop_units(flow[['flo_out']])
+  # 
+  # rswat_fout()
+  # 
+  # rswat_open('print.prt')
+  # 
+  # 
+  # dean = c(1275, 241, 98)
+  # tess = c(227, 37, 46, 133)
+  # 
+  # ( sum(dean) + sum(tess) ) / 2
+  
+  
+  
+  ## DEVELOPMENT: OHG file handling
+  
+  # set up a short 25-day run
+  rswat_time('1995-01-05')
+  rswat_time(25)
+  
+  # test some combinations
+  rswat_ohg_toggle(otype=c('hru'), htype=c('sur'), overwrite=T)
+  rswat_exec()
+  
+  
+  rswat_oscan()
+  .rswat$stor$output$fname 
+  
+  
+  odf %>% filter(step=='day') %>% filter( grepl('flo', name) )
+  
+  odf[grepl('flo', odf$name),]
+  
+  
+  # To run a simulation, pass the observed gage data (or just the dates) to `rswat_daily`
+  daily.default = rswat_daily(gage.subset)
+  
+  
+  # To run a simulation, pass the observed gage data (or just the dates) to `rswat_daily`
+  gage.subset = gage #%>% filter(date < as.Date('1976-01-01'))
+  daily.default = rswat_daily(gage.subset, quiet=TRUE)
+  str(daily.default)
+  
+  # plot the simulated discharge at the outlet of the catchment and to compare with USGS observations
+  flow.default = cbind(gage.subset, daily.default$flo_out)
+  names(flow.default) = c('date', 'USGS_main_outlet', 'SWAT_main_outlet')
+  my_tsplot(flow.default)
+  
+  #' SWAT+ outputs many different physical variables and groups them into output text files according
+  #' to the the type of watershed feature they belong to. The function `rswat_output` can be used to
+  #' access these files directly
+  
+  # When called without arguments, `rswat_output` prints the available output files:
+  print(rswat_output())
+  
+  #' "channel_sd_day.txt" and "channel_sdmorph_day.txt" are particularly important, as they contain the
+  #' daily streamflow simulations that we need for model fitting. The latter is loaded by default in calls
+  #' to `rswat_daily`, which return the discharge values from the main outlet channel after running a
+  #' simulation. To access the data for other channels, or other physical variables associated with channel
+  #' flow, we can use `rswat_output`
+  
+  # print a summary of the data in the default output file
+  chan.default = rswat_output('channel_sdmorph_day')
+  str(chan.default)
+  
+  # extract flow for a different channel (id #10) and plot the time series
+  upstream.default = chan.default %>% filter(gis_id==10) %>% select(flo_in)
+  flow.default2 = cbind(flow.default, setNames(upstream.default, 'SWAT_upstream_channel'))
+  my_tsplot(flow.default2)
+  
+  #' A more detailed set of variables, including water temperature and a sediment budget can be found in
+  #' the second channel output file, "channel_sd_day":
+  
+  names(rswat_output('channel_sd_day'))
+  
+  
+  #'  
+  rswat_cio(wipe=T)
+  rswat_ohg_toggle(overwrite=TRUE)
+  rswat_open('object.prt')
+  
+  daily.default = rswat_daily(gage.subset, quiet=F)
+  
+  
+  
+  overwrite=FALSE
+  otype='sdc'
+  oid=1
+  htype='tot'
+  fname=NULL 
+  ciopath=NULL
+  
+  
+  rswat_cio(.rswat$ciopath)
+  
+  # only load 'print.prt' as needed
+  print.prt = rswat_open('print.prt', quiet=TRUE)
+  
+  # grab the full list of valid object names
+  object.all = print.prt[[5]]$objects
+  
+  # reset all values to no-print, then toggle requested files
+  print.prt[[5]][] = 'n'
+  
+  
+  # write the changes to print.prt
+  rswat_write(print.prt[[5]], preview=F, quiet=TRUE)
+  
+  
+  # run the simulation and return output data as R dataframe
+  
+  rswat_exec(quiet=FALSE)
+  
+  
+  
+  chan.default = rswat_output('channel_sdmorph_aa')
+  rswat_output('basin_nb_aa.txt')
+  rswat_output('flow_test')
+  fname='flow_test' 
+  
+  
+  str( rswat_output('channel_sdmorph_aa') )
+  rswat_output('channel_sdmorph_day')
+  rswat_output('channel_sdmorph_day', vname=c('flo_in', 'flo_out'))
+  
+  fname = 'basin_nb_aa.txt'
+  fname = 'channel_sdmorph_day'
+  vname='flo_in'
+  vname=c('flo_in', 'flo_out')
+  vname=NULL
+  add_units=TRUE
+  add_dates=TRUE
+  
+  
+  #' By default  `rswat_daily` only requests "channel_sdmorph_day.txt". As we are interested in baseflow, we should
+  #' toggle the option to print "aquifer_day.txt", which contains simulations of geologic storage under
+  #' soil, channels and reservoirs
+  #' 
+  
+  
+  
+  # # try changing some of the parameters to values fitted earlier
+  # bpath = 'H:/UYRW_data/data/analysis/big_creek_fitted'
+  # fname = c('snow.sno', 'parameters.bsn', 'aquifer.aqu')
+  # rswat_backup(bpath, fname, bmode='restore')
+  # 
+  # 
+  
+  
+  
+  # hydro$esco = 0.5
+  # hydro$harg_pet = 0.0010
+  # rswat_write(hydro, preview=FALSE)
+  # 
+  # sim.calib = rswat_daily(gage.subset, quiet=TRUE)
+  # df.plot = data.frame(gage.subset, SWAT_default=sim.default$flo_out, SWAT_calib=sim.calib$flo_out)
+  # my_tsplot(df.plot)
+  
+  
+##################
+
+# change the simulation time to match overlap of weather and gage time series
+range(usgs.eg$dat[[1]]$date)
+plot(flow~date, data=usgs.eg$dat[[1]])
+range(meteo.eg$dates)
+
+# # this gage has two observation periods, separated by decades. There's a helper function for this
+# dates.all = my_split_series(usgs.eg$dat[[1]]$date, meteo.eg$dates)
+# print(sapply(dates.all, length))
+# idx.dates = which.max( sapply(dates.all, length) )
+# dates = dates.all[[idx.dates]]
+# range(dates)
+# 
+# # pull a copy of a subset of gage data to focus on
+# dates.crop = dates[dates > as.Date('1974-01-01')]
+# gage = usgs.eg$dat[[1]] %>% filter(date %in% dates.crop)
+
+# run a simulation
+textio = dirname(.rswat$ciopath)
+my_gage_objective(gage, textio)
+
+## plot the simulation streamflow output
+
+# find the weather data associated with this catchment
+idx.dates = meteo.eg$dates %in% dates.crop
+nm.grid = gsub('.pcp', '', gsub('pcp_', '', rswat_open('weather-sta.cli')$pcp))
+wdat = meteo.eg$tables$pcp[idx.dates, nm.grid]
+
+
+
+# load the simulation output and merge with observed flow, mean precip
+object = c(channel_sd='daily')
+fname = paste0(names(object), '_day')
+vname = 'flo_out'
+sim = rswat_output(fname, vname) %>% 
+  filter( gis_id == 1 ) %>%
+  mutate( obs = gage$flow[match(date, gage$date)] ) %>%
+  mutate( pcp = rowMeans(wdat)[match(date, dates.crop)] ) %>%
+  mutate( pcp_plot = -scales::rescale(pcp, c(0, max(obs)/10)) )
+
+# set up colours 
+colors = c('USGS record'='firebrick', 'SWAT+ simulation'='navy', 'precipitation (scaled)'='lightblue')
+
+# plot the calibrated version
+nse.text = paste('Nash-Sutcliffe coefficient:', round(my_nse(sim$flo_out, sim$obs, L=2), 2))
+
+ggp.flow.cal = ggplot(data=sim, aes(date)) +
+  geom_line(aes(y=0),  col='orange') +
+  geom_line(aes(y=drop_units(flo_out), color='SWAT+ simulation'), alpha=0.5) + 
+  geom_line(aes(y=drop_units(obs), color='USGS record')) +
+  geom_line(aes(y=pcp_plot, color='precipitation (scaled)')) +
+  theme_minimal() +
+  labs(x = 'date', y='flow (m3/sec)', color='') +
+  ggtitle(paste(gsub('_', ' ', nm), paste0('(', nse.text, ')'))) +
+  scale_color_manual(values=setNames(adjustcolor(colors, alpha.f=0.8), names(colors))) +
+  theme(legend.position = c(8,9)/10, legend.key.width = unit(2, 'cm')) +
+  guides(color = guide_legend(override.aes = list(size=1, alpha=1)))
+
+ggp.flow.cal
+ggp.flow.new = ggp.flow.cal
+
+## add to this plot by varying parameters and rerunning simulations
+rswat_open('aquifer.aqu', reload=TRUE)
+rswat_open('aquifer.aqu')
+
+#rswat_open(reload=TRUE)
+
+# change CN calculation method
+# codes.bsn = rswat_open('codes.bsn')
+# codes.bsn$cn = 1
+# rswat_write(codes.bsn, preview=F)
+
+# define the parameters to calibrate in a dataframe (based on Grusson et al 2015)
+cal.snow = rswat_find(include='snow.sno') %>% filter(name != 'snow_init')
+cal.misc = rswat_find('esco|can_max|surq_lag')
+cal.gw = rswat_find('gw|revap|revap_min|alpha_bf|rchg_dp|dep_bot|bf_max|dep_wt|flo_dist')
+
+# we will calibrate the deep aquifer separately 
+idx.deep = grepl('deep', rswat_open('aquifer.aqu')$name)
+cal.gw.shal = cal.gw %>% mutate( i = -which(idx.deep) )
+
+# rbind everything and send to objective function maker
+cal = rbind(cal.misc, cal.gw.shal, cal.snow)
+obj = my_objective(cal, gage, dirname(.rswat$ciopath))
+
+
+obj(refresh=TRUE)
+vals = obj()$value
+vals[which( obj()$name == 'adj_cn' )] = 1 # inactive?
+vals[which( obj()$name == 'bf_max' )] = 25  # inactive?
+vals[which( obj()$name == 'flo_dist' )] = 1  # inactive?
+vals[which( obj()$name == 'dep_bot' )] = 6
+vals[which( obj()$name == 'dep_wt' )] = 1
+vals[which( obj()$name == 'rchg_dp' )] = 0.5 # important for setting level of baseflow
+vals[which( obj()$name == 'revap_min' )] = 0.001 # alpha_bf only becomes sensitive when this is low
+vals[which( obj()$name == 'alpha_bf' )] = 0.003
+vals[which( obj()$name == 'can_max' )] = 1
+vals[which( obj()$name == 'esco' )] = 0.5
+vals[obj()$name == 'surq_lag'] = 0.025 # important for end of melt season
+vals[obj()$name == 'melt_tmp'] = 2
+
+obj(vals)
+
+sim.new = rswat_output(fname, vname) %>% filter( gis_id == 1 ) 
+ggp.flow.new = ggp.flow.new + geom_line(aes(color='SWAT+ simulation'), y=drop_units(sim.new$flo_out), alpha=0.5)
+ggp.flow.new
+
+
+
+ggp.flow.new = ggp.flow.cal
+
+
+  # TODO: Water budget
+  #' This script also demonstrates some of the core functionality of the `rswat` helper functions,
+  #' including: building a SWAT+ model; accessing/changing its parameters; running simulations;
+  #' loading outputs; and fitting parameters to observed data.
+  
+  #' [`Evapotranspiration`](https://cran.r-project.org/web/packages/Evapotranspiration/index.html) package
+  #' implements several methods to estimate PET
+  library('Evapotranspiration')
+  
+  #' The [`airGR`](https://cran.r-project.org/web/packages/airGR/index.html) is a collection of methods
+  #' from INRAE-Antony (HYCAR Research Unit, France), including the
+  #' [Oudin et al. (2005)](https://doi.org/10.1016/j.jhydrol.2004.08.026) PET estimator
+  library(airGR)
+  # TODO: check out the CemaNeige model for snow accumulation and melt (also from this package)
+  
+  #' The [`baseflow`](https://cran.r-project.org/web/packages/baseflow/index.html) R package is an
+  #' implementation of the method of
+  #' [Pelletier and Andréassian (2020)](https://hess.copernicus.org/articles/24/1171/2020/)
+  #' for estimating baseflow (and quickflow) from hydrographs of daily streamflow and precipitation totals.
+  library(baseflow)
+  
+  # numeric optimization for model fitting
+  library(dfoptim)
+  
+  # low-level R graphics control
+  library(grid)
+  
+  
+  #' calls to `my_metadata` will now load the file info from disk (here and in other R sessions).
+  #' eg. the following code accesses the file info from previous scripts 
+  #' [get_basins](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_basins.md),
+  #' [get_streamgages](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_streamgages.md),
+  #' [get_meteo](https://github.com/deankoch/UYRW_data/blob/master/markdown/get_meteo.md), and
+  #' [make_subwatersheds](https://github.com/deankoch/UYRW_data/blob/master/markdown/make_subwatersheds.md)
+  basins.meta = my_metadata('get_basins')
+  streamgages.meta = my_metadata('get_streamgages')
+  meteo.meta = my_metadata('get_meteo')
+  subwatersheds.meta = my_metadata('make_subwatersheds')
+  
+  # load PNWNAmet analysis to get weather inputs, USGS data for observed response
+  meteo = readRDS(here(meteo.meta['pnwnamet_uyrw', 'file']))
+  usgs.all = readRDS(here(streamgages.meta['USGS_data', 'file']))
+  
+  # load some geographical features for plotting
+  uyrw = readRDS(here(basins.meta['boundary', 'file']))
+  lakes = readRDS(here(basins.meta['waterbody', 'file']))
+  
+  # load the USGS data for the catchment 
+  usgs.w = readRDS(here(subwatersheds.meta['usgs_catchments', 'file']))
+  idx = usgs.w$boundary %>% filter(catchment_name == nm) %>% pull(catchment_id)
+  
+  # extract outlet locations, catchement boundary, channel network
+  pts = usgs.w$pts[usgs.w$pts$catchment_id==idx,] %>% na.omit
+  boundary = usgs.w$boundary[usgs.w$boundary$catchment_id==idx,] %>% na.omit
+  demnet = usgs.w$demnet[usgs.w$demnet$catchment_id==idx,] %>% na.omit
+  
+  
+  
+  #' ## meteorological forcing
+  
+  # get daily total precipitation estimate from average of within-catchment gridpoints  
+  meteo.nm = meteo$coords_sf$name[ st_intersects(meteo$coords_sf, boundary, sparse=F) ]
+  pcp.mat = as.matrix(meteo$tables$pcp[match(dates, meteo$dates), meteo.nm])
+  pcp.avg = rowMeans(pcp.mat) %>% set_units('mm/day')
+  
+  # (average) daily wind speed at 2m
+  wnd.mat = as.matrix(meteo$tables$wnd[match(dates, meteo$dates), meteo.nm])
+  wnd.avg = rowMeans(wnd.mat) %>% set_units('m/s')
+  
+  # (average) catchment-wide daily temperature min/max, and their daily averages
+  tmin.mat = as.matrix(meteo$tables$tmin[match(dates, meteo$dates), meteo.nm])
+  tmax.mat = as.matrix(meteo$tables$tmax[match(dates, meteo$dates), meteo.nm])
+  tmin.avg = rowMeans(tmin.mat) %>% set_units('degC')
+  tmax.avg = rowMeans(tmax.mat) %>% set_units('degC')
+  tavg.avg = (tmin.avg + tmax.avg) / 2
+  
+  # catchment-wide elevation and latitude (averages) for PET calculations
+  elev.avg = mean(meteo$elevation[meteo.nm])
+  lat.avg = mean(meteo$coords[meteo.nm, 'lat']) %>% set_units('degrees')
+  
+  #' compute PET using Oudin's formula in `airGR` package
+  pet.oudin = PE_Oudin(JD = as.integer(format(gage$date, '%j')),
+                       Temp = drop_units(tavg.avg),
+                       Lat = drop_units(lat.avg),
+                       LatUnit = 'deg') %>% set_units('mm/day')
+  
+  #' Prepare inputs to methods from the `Evapotranspiration` package
+  
+  # model constants: elevation, latent heat of vaporisation, latitude in radians, solar constant
+  ET.const = list(Elev = drop_units(elev.avg), 
+                  lambda = drop_units(set_units(2.45, 'MJ / kg')), 
+                  lat_rad = drop_units(set_units(lat.avg, 'radians')), 
+                  Gsc = drop_units(set_units(0.082, 'MJ / min / m^2')))
+  
+  # convert input data to `zoo` format
+  ET.inputs = ReadInputs(varnames = c('Tmin','Tmax','u2'), 
+                         stopmissing = rep(99,3),
+                         climatedata = data.frame(Year = format(gage$date, '%y'),
+                                                  Month = format(gage$date, '%m'),
+                                                  Day = format(gage$date, '%d'),
+                                                  Tmin = drop_units(tmin.avg),
+                                                  Tmax = drop_units(tmax.avg),
+                                                  u2 = drop_units(wnd.avg)))
+  
+  #' For comparison, compute PET by two older methods:
+  #' [Hargreaves-Samani (1985)](https://elibrary.asabe.org/abstract.asp?aid=26773)
+  #' and [McGuinness-Bordne (1972)](https://agris.fao.org/agris-search/search.do?recordID=US201300408590)
+  pet.hs = ET.HargreavesSamani(ET.inputs, ET.const)$ET.Daily %>% as.numeric %>% set_units('mm/day')
+  pet.mb = ET.McGuinnessBordne(ET.inputs, ET.const)$ET.Daily %>% as.numeric %>% set_units('mm/day')
+  
+  #' 
+  
+  my_tsplot(data.frame(date=gage$date,
+                       precip=pcp.avg,
+                       Oudin=my_effp(pet.oudin, pcp.avg), 
+                       Hargreaves=my_effp(pet.hs, pcp.avg), 
+                       McGuiness_Bordne=my_effp(pet.mb, pcp.avg))[1000 + c(1:100),])
+  
+  
+  #' ## baseflow separation
+  
+  #' The Pelletier and Andréassian (2020) model uses a simple ordinary differential equation to
+  #' relate baseflow to a conceptual reservoir that continually fills and drains. The reservoir does not
+  #' represent the aquifer, but rather attempts to mimic its empirical behaviour via easy-to-simulate
+  #' dynamical systems that exhibit the same smoothing and memory effects seen in real aquifers.
+  #' 
+  #' Its two model parameters are fitted by maximizing the correlation coefficient of baseflow with a
+  #' lagged sum of (catchment-wide) precipitation levels.
+  
+  #' `baseflow` inputs are daily PET, precip and discharge
+  
+  # approximate catchment-wide runoff (in mm/day) from streamflow at outlet (in m^3/s)
+  loss = set_units(gage$flow / boundary$area, 'mm/day')
+  
+  # the package defines its own basin data objects
+  bd = BasinData(Name = 'test',
+                 startDate = as.POSIXct( as.character(min(gage$date)), tz='UTC'), 
+                 endDate = as.POSIXct( as.character(max(gage$date)), tz='UTC' ), 
+                 P = drop_units( my_effp(pet.oudin, pcp.avg) ),
+                 PET = drop_units( pet.hs ),
+                 Qobs = drop_units( loss ))
+  
+  #' Note: I have experimented with various levels of PET (see below), and it appears to have no effect
+  #' on the output of baseflow. eg. setting it to zero produces no change in estimated parameters or
+  #' baseflow levels. However we need to supply this input for the basin data function call to work.
+  #' 
+  #' Next we fit the model parameters by a simple grid search to optimize the lagged correlation.
+  
+  # this controls the effective reservoir capacity - set roughly the same range as described in the paper
+  alphas = seq(from=2, to=2e6, length.out=1e3)
+  
+  # this parameter controls transit lag times - grid search will cover entire range of testable delays
+  taus = 2:min(1*365, length(loss))
+  #' Note: the recommended range for this parameter (following eq.8 in the paper) is unclear - the
+  #' authors use [5,(5*365)] (days) but mention that typical values are in the 3-12 month range.
+  #' However, their dataset is much longer ()
+  #' 
+  #' I have found that the objective function favours longer delays
+  
+  # ~1.8M parameter combinations, but it takes only a few seconds to evaluate and pick the optimum
+  print( length(alphas) * length(taus) )
+  gsearch = corr_crit_vect(bd, alphas, taus, updateFunction='quadr')
+  gsearch.opt = gsearch[which.max(gsearch$crit), ]
+  print(gsearch.opt)
+  
+  #' The vectorized objective function is implemented in Rust and is very fast, making a grid search a 
+  #' good option. However I find the optimization is very sensitive to boundary conditions (optima
+  #' often lie on parameter space boundary), which could be a problem for automation.
+  
+  # convert these results to raster for easy plotting
+  gsearch.tif = flip(raster(matrix(gsearch$crit, length(alphas))), 'y')
+  plot(gsearch.tif)
+  
+  #' The fitted model predicts a baseflow index of 47% (a bit high?) with a max-correlation delay
+  #' of 1741 days.
+  #' 
+  
+  #' 
+  #' 
+  
+  # run the filter with this optimal alpha value
+  bd.filter = BaseflowFilter(bd, gsearch.opt$alpha, updateFunction='quadr')
+  which(bd.filter@update)
+  
+  # TODO: Try another method: Nathon And McMahon (1990)
+  
+}
+
+#+ include=FALSE
+# Development code
+#library(here)
+#source(here('R/helper_main.R'))
+#my_markdown('demo_baseflow', 'R/demo')
