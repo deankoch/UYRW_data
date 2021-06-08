@@ -48,7 +48,7 @@ library(pdftools)
 #' ## core functions
 
 #' case-insensitive search of SWAT+ IO documentation PDF from within R
-rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
+rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, quiet=FALSE)
 {
   # ARGUMENTS:
   # 
@@ -57,6 +57,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   # `fuzzy`, numeric, the fuzziness level to use in matching (see DETAILS)
   # `descw`, numeric in [0,1], the weight given to description (versus name) matches 
   # `full`, logical, whether to include full descriptions instead of abbreviated ones
+  # `quiet`, logical, suppresses progress bar (passed to `rswat_pdf_open`)
   #
   # RETURN:
   #
@@ -90,7 +91,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE)
   
   # make sure weighting factor lies in the correct range and the PDF has been loaded
   descw = max(min(descw, 1), 0)
-  if( is.null(.rswat$docs$filetable) ) rswat_pdf_open()
+  if( is.null(.rswat$docs$filetable) ) rswat_pdf_open(quiet=quiet)
   
   # default return value is the files summary table
   if( is.null(pattern) & is.null(fname) ) return( .rswat$docs$filetable )

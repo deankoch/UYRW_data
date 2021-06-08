@@ -1386,7 +1386,7 @@ rswat_ohg_setup = function(dates=NULL, oid=1, quiet=FALSE, backup=TRUE, allout=F
     bpath = file.path(backup, fname)
     bpath.exists = file.exists(bpath)
     if( all(!bpath.exists) ) stop( paste('invalid argument `backup`.', info.msg) )
-    if( !quiet ) cat( paste('restoring', paste(fname[bpath.exists], collapse=', '), '... ') )
+    if( !quiet ) cat( paste('restoring', paste(fname[bpath.exists], collapse=', '), '...\n') )
     
     # remove the current 'object.prt' file, copy over backups, and refresh in memory
     unlink( file.path(textio, 'object.prt') )
@@ -1802,7 +1802,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
     amod(x[,idx.pop], quiet=TRUE, reload=FALSE)
     
     # copy them to the staging area
-    file.copy(path.src, fmod.pop[[idx.pop]])
+    file.copy(path.src, fmod.pop[[idx.pop]], overwrite=TRUE)
   }
   
   # anonymous function that copies config file(s) to process node, runs simulation 
@@ -1912,10 +1912,9 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   }
   
   # restore the original parameters of the currently loaded project
-  if( !quiet ) cat('\nrestoring parameters...')
+  if( !quiet ) cat('restoring parameters...')
   rpath = rswat_copy(from=bdir, fname=bname[bname.exists], overwrite=TRUE, quiet=TRUE)
   rswat_ohg_setup(quiet=quiet, backup=bdir)
-  if( !quiet ) cat('done\n')
   
   # shut down cluster as needed then stop the function call timer
   rswat_cluster(wipe=wipe, quiet=quiet)
@@ -1927,8 +1926,9 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
     # prepare execution time messages
     rsec.msg = round(difftime(rtimer.end, rtimer.start, units='secs')[[1]], 2)
     spsec.msg = round(difftime(sptimer.end, sptimer.start, units='secs')[[1]], 2)
-    msg = paste(c('SWAT+','rswat'), 'runtime:', c(spsec.msg, rsec.msg), 'seconds\n')
-    cat(msg)
+    msg = paste(c('SWAT+','rswat'), 'runtime:', c(spsec.msg, rsec.msg), 'seconds')
+    cat(paste(msg, collapse='\n'))
+    cat('\n')
   }
   
   return(all.df)
