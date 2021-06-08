@@ -147,7 +147,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   entry.default = c(name='metadata', 
                     file=csv.relpath, 
                     type='CSV', 
-                    description=paste0('list files of files written by ', script.name, '.R'))
+                    description=paste0('list of files written by ', script.name, '.R'))
   
   # parse `entries.list` to check for wrong syntax or NA input
   if(!is.list(entries.list))
