@@ -1045,7 +1045,7 @@ rswat_amod = function(parm)
   # the function returns the new value(s) in the dataframe
   #
   
-  # find each requested parameter to check its class and dimension
+  # rswat_find each requested parameter to get its class and dimension
   parm.fname = sapply(split(parm, parm$file), function(x) x$name, simplify=FALSE)
   parm.list = lapply(names(parm.fname), function(nm) rswat_find(parm.fname[[nm]], include=nm) )
   parm.new = do.call(rbind, parm.list) %>% select(-string)
@@ -1054,8 +1054,8 @@ rswat_amod = function(parm)
   if( 'i' %in% names(parm) ) parm.new = parm.new %>% select(-i) %>% 
     right_join(parm[,c('name', 'file', 'i')], by=c('name', 'file')) 
   
-  # overwrite input parm
-  parm = parm.new
+  # reorder to match input parm and overwrite it
+  parm = parm.new[match(parm$name, parm.new$name),]
   
   # scan for non-numerics
   idx.nn = parm$class != 'numeric'
