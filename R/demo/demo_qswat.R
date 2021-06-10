@@ -102,7 +102,7 @@ nmo = paste0('demo_', nm)
 
 #' write this filename metadata to disk using a function from
 #' [helper_main](https://github.com/deankoch/UYRW_data/blob/master/markdown/helper_main.md])
-baseflow.meta = my_metadata('demo_qswat', files.towrite, overwrite=TRUE, data.dir=demo.subdir)
+qswat.metadata = my_metadata('demo_qswat', files.towrite, overwrite=TRUE, data.dir=demo.subdir)
 
 #' calls to `my_metadata` will now load the file info from disk (here and in other R sessions).
 #' In the same way, we locate some required output files created in earlier scripts, 
@@ -152,7 +152,7 @@ dates = dates.src[[1]]
 gage = usgs$dat[[1]] %>% filter(date %in% dates)
 
 # save a copy for easy loading later
-gage.path = here(baseflow.meta['gage', 'file'])
+gage.path = here(qswat.metadata['gage', 'file'])
 saveRDS(gage, gage.path)
 
 #' ## overview plot
@@ -164,7 +164,7 @@ saveRDS(gage, gage.path)
 #' 
 
 # skip if the file exists already
-catchment.png = here(baseflow.meta['img_catchment', 'file'])
+catchment.png = here(qswat.metadata['img_catchment', 'file'])
 if( !file.exists(catchment.png) )
 {
   # plot grob for the 1970s gage data
@@ -235,7 +235,7 @@ if( !file.exists(catchment.png) )
 #' functions from [rswat](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat.md) 
 
 # pick a QSWAT+ project directory root where `qswat_setup` can write project files
-dir.qswat = baseflow.meta['dir_qswat', 'file']
+dir.qswat = qswat.metadata['dir_qswat', 'file']
 
 # set drop levels high for this demo to get a simple (fast) model
 config = list(skip_editor = FALSE, 
@@ -299,7 +299,7 @@ wsh$hru %>% filter(Channel == id.outlet)
 #' 
 
 # skip if the file exists already
-wsh.png = here(baseflow.meta['img_hrus', 'file'])
+wsh.png = here(qswat.metadata['img_hrus', 'file'])
 if( !file.exists(wsh.png) )
 {
   # modify the title but use default settings for everything else
@@ -319,7 +319,7 @@ if( !file.exists(wsh.png) )
 # set up filenames and directories
 dir.txtinout = wsh$sta$paths[['txtio']]
 fname.txtinout = list.files(dir.txtinout)
-zip.path = here(baseflow.meta['txtinout', 'file'])
+zip.path = here(qswat.metadata['txtinout', 'file'])
 
 # zip all files in TxtInOut (j = junk paths, 9 = compress better, X = drop extended attribuets)
 zip(zip.path, files=file.path(wsh$sta$paths[['txtio']], fname.txtinout), flags='-j9X')
