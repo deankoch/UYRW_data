@@ -1932,13 +1932,14 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
 }
 
 #' parallel implementation of adaptive differential evolution algorithm from the DEoptimR package 
-rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=100,...)
+rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxiter=100,...)
 {
   # ARGUMENTS:
   # 
   # `cal`: dataframe, the SWAT+ parameters to modify
   # `gage`: dataframe, a time series with fields 'flow' and 'date'
   # `errfn`: an (anonymous) error function `errfn(x,y)` to MINIMIZE, with x=sim, y=obs
+  # `bf`: numeric, in same units as `gage$flow`, a constant to add to simulation flow 
   # `quiet`: logical, suppresses console messages
   # `NP`: total initial population size
   # `maxiter`: the maximum number of iterations to run the algorithm
@@ -1946,10 +1947,11 @@ rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=10
   #
   # RETURN:
   #
-  # A list with two entries:
+  # A list with two or three entries:
   #
   #   'par', numeric matrix, whose columns are the parameter vectors in the generation `maxiter`
   #   'score', numeric vector, their `errfn` values
+  #   'intcp', numeric, the fitted intercept for each population member
   #
   # DETAILS:
   #
@@ -2013,26 +2015,42 @@ rswat_pardevol = function(cal, gage, errfn=NULL, quiet=TRUE, NP=NULL, maxiter=10
     # run SWAT+ for all population members in parallel 
     pexec.out = rswat_pexec(ini, cal.amod, wipe=TRUE, quiet=quiet, dbg=FALSE)
     
-    # convert units to match gage
-    pop.list = lapply(1:NP, function(x) set_units(pexec.out[[x+1]], gage.units, mode='standard'))
+    # convert units to match gage and add baseflow adjustment
+    pop.list = lapply(1:NP, function(x) {
+      set_units(bf + pexec.out[[x+1]], gage.units, mode='standard')
+      })
     
     # compute scores of new generation using errfn and identify the nplot best ones
-    nplot = NP
     pop.score = sapply(pop.list, function(x) errfn(x, gage$flow) )
-    idx.best = order(pop.score, decreasing=FALSE)[1:nplot]
+    idx.best = order(pop.score, decreasing=TRUE)
     
-    # make plot of the nplot best performing population members (color is NSE)
-    df.plot = data.frame(setNames(pop.list[idx.best], paste0('best_', 1:nplot)))
-    df.plot$date = pexec.out$date
-    ggp = my_tsplot(df.plot, legnm='NSE score', legsc=1-pop.score[idx.best])
-    
-    print(cbind(cal, ini))
-    
+    #print(cbind(cal, ini))
+
     # add observed hydrograph to plot, print plot and best errfn score 
-    cat( paste0('>> best NSE score = ', 1-pop.score[idx.best[1]], '\n') )
+    cat( paste0('>> best NSE score = ', 1-pop.score[idx.best[length(idx.best)]], '\n') )
     cat( paste0('>> average NSE score = ', mean(1-pop.score), '\n\n') )
-    ggp = ggp + geom_line(aes_(y=drop_units(gage$flow)))
-    print(ggp)
+    
+    # make plot of all population members (color is NSE)
+    dat = tryCatch(
+      
+      expr = {
+        
+        df.plot = data.frame(pop.list[idx.best])
+        df.plot$date = pexec.out$date
+        ggp = my_tsplot(df.plot, legnm='NSE score', legsc=1-pop.score[idx.best])
+        ggp = ggp + geom_line(aes_(y=drop_units(gage$flow))) 
+        ggp = ggp + geom_line(aes_(y=drop_units(df.plot[[1 + idx.best[length(idx.best)] ]])), 
+                              color='red')
+        print(ggp)
+        
+      },
+      # redirect function call to data.table::fread on errors
+      error = function(err) {
+        
+        cat('plotting error...\n')
+      }
+    )
+    # end of trycatch
     
     # TODO: track this bug down
     # reload calibration parameter files
