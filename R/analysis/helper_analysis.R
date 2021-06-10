@@ -51,6 +51,9 @@ my_split_series = function(dates, template=NULL, dmerge=0, name='range')
   # crop to time periods of overlap
   dates = dates[ dates %in% template ]
   
+  # handle empty intersection
+  if( length(dates) == 0 ) return(list())
+  
   # scan what's left for breaks in the time series
   breaks = c(0, which(diff(dates) > dmerge + 1), length(dates))
   dates.break = lapply(seq(length(breaks) - 1), function(b) dates[(breaks[b] + 1):breaks[b+1]] )
@@ -62,14 +65,15 @@ my_split_series = function(dates, template=NULL, dmerge=0, name='range')
   if(name=='max') dates.nm = yr.max
   if(name=='range') dates.nm = paste(yr.min, yr.max, sep='-')
   
-  # fill holes
+  # define start and end dates
   dates.start = sapply(dates.break, function(x) paste(format(min(x), '%Y-%m-%d')))
   dates.end = sapply(dates.break, function(x) paste(format(max(x), '%Y-%m-%d')))
   
-  # form new sequences that start with `out.max` and end with `out.median`
+  # form new sequences from these start/end datse
   out.list = mapply(function(x,y) seq.Date(x, y, by='day'), 
                     x = as.Date(dates.start), 
-                    y = as.Date(dates.end))
+                    y = as.Date(dates.end),
+                    SIMPLIFY = FALSE)
 
   # set names and finish
   return( setNames(out.list, dates.nm) )
