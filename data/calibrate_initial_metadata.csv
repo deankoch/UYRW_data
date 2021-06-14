@@ -1,0 +1,7 @@
+"","file","type","description"
+"main_at_yellowstone_lk_outlet","data/analysis/subwatersheds/main_at_yellowstone_lk_outlet/initial","directory","SWAT+ folder for initial calibration main_at_yellowstone_lk_outlet"
+"soda_butte_c_at_cooke_city","data/analysis/subwatersheds/soda_butte_c_at_cooke_city/initial","directory","SWAT+ folder for initial calibration soda_butte_c_at_cooke_city"
+"blacktail_deer_c_nr_mammoth","data/analysis/subwatersheds/blacktail_deer_c_nr_mammoth/initial","directory","SWAT+ folder for initial calibration blacktail_deer_c_nr_mammoth"
+"big_c_nr_emigrant","data/analysis/subwatersheds/big_c_nr_emigrant/initial","directory","SWAT+ folder for initial calibration big_c_nr_emigrant"
+"mill_c_nr_pray","data/analysis/subwatersheds/mill_c_nr_pray/initial","directory","SWAT+ folder for initial calibration mill_c_nr_pray"
+"metadata","data/calibrate_initial_metadata.csv","CSV","expected location of this CSV"
