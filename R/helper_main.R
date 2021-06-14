@@ -98,7 +98,8 @@ lapply(here(c(data.dir, src.subdir, out.subdir, graphics.dir, markdown.dir)), my
 #' of the contents. This function handles the construction of the table. To call up the table for
 #' a specific script, simply use `my_metadata(script.name)`.
 #' 
-my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=TRUE, data.dir='data', v=TRUE)
+my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, 
+                       use.file=TRUE, data.dir='data', v=TRUE)
 {
   # creates and/or adds to a data frame of metadata documenting a given script, and (optionally)
   # writes it to disk as a CSV file 
@@ -147,7 +148,7 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE, use.file=T
   entry.default = c(name='metadata', 
                     file=csv.relpath, 
                     type='CSV', 
-                    description=paste0('list of files written by ', script.name, '.R'))
+                    description='expected location of this CSV')
   
   # parse `entries.list` to check for wrong syntax or NA input
   if(!is.list(entries.list))
