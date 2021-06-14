@@ -130,16 +130,19 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
   subwatersheds.meta = my_metadata('make_subwatersheds')
   taudem.meta = my_metadata('taudem', data.dir=subwatersheds.meta['taudem', 'file'])
   
+  # name the project after the USGS station name
+  projnm = boundary$catchment_name
+  
   # set default project directory
   if( is.null(projdir) ) 
   {
     # default name from USGS gage site name, default location from parent of dem raster file
-    projnm = boundary$catchment_name
+    #projnm = boundary$catchment_name
     projdir = here(file.path(dirname(dem.path), projnm))
   } 
   
   # project name is always the project directory name
-  projnm = basename(projdir)
+  #projnm = basename(projdir)
   
   # handle overwrite calls and create the directory if necessary
   if(wipe & file.exists(projdir)) unlink(projdir, recursive=TRUE)
@@ -163,7 +166,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
       c(name='boundary',
         file=file.path(datadir, 'boundary.geojson'), 
         type='GeoJSON',
-        description='polygon delineating subwatershed for the SWAT+ model'),
+        description='polygon delineating subwatershed for the QSWAT+ model'),
       
       # DEM raster ('swat_dem' from 'get_dem.R', cropped to AOI)  
       c(name='dem',
@@ -175,19 +178,19 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
       c(name='landuse',
         file=file.path(datadir, 'landuse_in.tif'), 
         type='GeoTIFF',
-        description='SWAT+ land use classification'),
+        description='QSWAT+ land use classification'),
       
       # soils raster for the UYRW ('swat_tif' from 'get_soils.R', cropped to AOI)
       c(name='soils',
         file=file.path(datadir, 'soil_in.tif'), 
         type='GeoTIFF',
-        description='SWAT soils classification, maps to soil table in SWAT+ database'),
+        description='QSWAT+ soils classification, maps to soil table in SWAT+ database'),
       
       # lookup table for 'landuse' ('swat_landuse_lookup' from 'get_landuse.R')
       c(name='landuse_lookup',
         file=file.path(datadir, 'landuse_lookup_in.csv'), 
         type='CSV',
-        description='integer code for landuse, maps to `plants_plt` table in SWAT+ database'), 
+        description='integer code for land use, maps to `plants_plt` table in QSWAT+ database'), 
       
       # outlets shapefile (for now based on 'USGS_sites' from 'get_streamgages.R')
       c(name='outlets',
@@ -205,7 +208,7 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
       c(name='wdat',
         file=file.path(datadir, wname),
         type='directory',
-        description='directory for writing SWAT weather input text files'),
+        description='directory for writing SWAT+ weather input text files'),
       
       # JSON containing metadata and parameters for QSWAT+ workflow in PyQGIS
       c(name='config',
@@ -387,11 +390,11 @@ qswat_setup = function(cid, catchments, projdir=NULL, wipe=FALSE, config=NULL, q
 #' external python module (not included in this repo)
 qswat_run = function(qswat, quiet=FALSE)
 {
+  # `qswat`: dataframe, the return value of `qswat_setup`
   # `quiet`: logical, suppresses console messages
-  # 'qswat': dataframe, the return value of `qswat_setup`
   #
   # DETAILS: alternative input for `qswat`: (character), the path to the JSON config
-  # file created by `my_prepare_qswatplus`
+  # file created by `qswat_setup`
   
   # handle dataframe input and extract json config file path
   jsonpath = qswat
