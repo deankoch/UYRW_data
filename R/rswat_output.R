@@ -1572,8 +1572,6 @@ rswat_odummy = function(subdir='.rswat_odummy', nday=1, quiet=FALSE)
   return( opath )
 }
 
-
-
 # TODO: improve or replace this
 #' returns an objective function whose argument is vector of parameter values, output is NSE
 my_objective = function(cal, gage, errfn, quiet=TRUE)
@@ -1701,6 +1699,7 @@ my_objective = function(cal, gage, errfn, quiet=TRUE)
 #' 
 #' ## multicore model execution 
 
+# TODO: run dummy simulation to get OHG file units (if not already in memory)
 #' run a batch of simulations in parallel
 rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F, dbg=F)
 {
@@ -1955,7 +1954,7 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
   #
   # DETAILS:
   #
-  # 
+  # any column starting with 'ini' is treated as an initial population parameter vector 
 
   # check that a SWAT+ project has been loaded
   err.msg = 'Run `rswat_cio` first to load a project'
@@ -1963,12 +1962,13 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
   if( !exists('ciopath', envir=.rswat) ) stop(err.msg)
   textio = dirname(.rswat$ciopath)
   
-  # TODO: accept multiple initial vectors like cal$ini to define a population
   # copy the bounds
   lower = cal$min
   upper = cal$max
-  ini = as.matrix(cal$ini, 1)
   
+  # define the initial population from fields named 'ini*' in `cal`
+  ini = cal %>% select( which(startsWith(names(cal), 'ini')) ) %>% as.matrix
+
   # set the default objective function and population size 
   if( is.null(errfn) ) errfn = function(x, y) { 1 - my_nse(x, y, L=1, normalized=TRUE) }
   if( is.null(NP) ) NP = ( 10 * length(lower) )
@@ -1989,7 +1989,7 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
   
   # initialize scores to 0, define lookup function mapping parameters -> scores
   igen = 0
-  pop.score = rep(0, nrow(ini))
+  pop.score = rep(0, ncol(ini))
   lu_fn = function(x, lu, score) return( score[which.min(colSums( abs(x - lu) ))] )
   
   # iterate the JDEOptim algorithm 1-step at a time, evaluating scores outside the function
@@ -2013,7 +2013,7 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
     ini = opt.out$poppar
 
     # run SWAT+ for all population members in parallel 
-    pexec.out = rswat_pexec(ini, cal.amod, wipe=TRUE, quiet=quiet, dbg=FALSE)
+    pexec.out = rswat_pexec(ini, cal.amod, wipe=FALSE, quiet=quiet, dbg=FALSE)
     
     # convert units to match gage and add baseflow adjustment
     pop.list = lapply(1:NP, function(x) {
@@ -2023,7 +2023,7 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
     # compute scores of new generation using errfn and identify the nplot best ones
     pop.score = sapply(pop.list, function(x) errfn(x, gage$flow) )
     idx.best = order(pop.score, decreasing=TRUE)
-    
+
     #print(cbind(cal, ini))
 
     # add observed hydrograph to plot, print plot and best errfn score 
@@ -2035,12 +2035,12 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
       
       expr = {
         
+        pop.best = drop_units(pop.list[[idx.best[length(idx.best)]]])
         df.plot = data.frame(pop.list[idx.best])
         df.plot$date = pexec.out$date
-        ggp = my_tsplot(df.plot, legnm='NSE score', legsc=1-pop.score[idx.best])
-        ggp = ggp + geom_line(aes_(y=drop_units(gage$flow))) 
-        ggp = ggp + geom_line(aes_(y=drop_units(df.plot[[1 + idx.best[length(idx.best)] ]])), 
-                              color='red')
+        ggp = my_tsplot(df.plot, legnm='NSE score', legsc=1-pop.score[idx.best], ysqrt=TRUE)
+        ggp = ggp + geom_line(aes_(y=sqrt(pop.best)), color='red')
+        ggp = ggp + geom_line(aes_(y=sqrt(drop_units(gage$flow))))
         print(ggp)
         
       },
@@ -2056,10 +2056,6 @@ rswat_pardevol = function(cal, gage, errfn=NULL, bf=0, quiet=TRUE, NP=NULL, maxi
     # reload calibration parameter files
     cal.amod(reload=TRUE)
   }
-  
-  # garbage collection
-  rswat_cluster(wipe=TRUE)
-  
   return( list(par=ini, score=1-pop.score) )
 }
 
