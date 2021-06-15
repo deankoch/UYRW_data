@@ -207,8 +207,9 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       mutate(file = string) %>%
       mutate(path = file.path(dirname(ciopath), file))
     
-    # fix paths for '*_path' group
-    cio$path[ endsWith(cio$group, '_path') ] = cio$string[ endsWith(cio$group, '_path') ]
+    # fix path and file fields for '*_path' group
+    idx.pathgroup = endsWith(cio$group, '_path')
+    cio$path[ idx.pathgroup ] = cio$string[ idx.pathgroup ]
     
     # get file information from OS and initialize some flags
     cio = cio %>% 
@@ -1633,6 +1634,10 @@ rswat_rcio = function()
   # write results to package storage 
   .rswat$stor$linedf = rbind(.rswat$stor$linedf, linedf.out)
   .rswat$stor$data[['file.cio']] = list(tmake.result$values)
+  
+  # update the cio dataframe in memory (maintaining ignored files list)
+  ignore = rswat_cio(trim=F) %>% filter(ignored) %>% pull(file)
+  rswat_cio(.rswat$ciopath, ignore=ignore, quiet=TRUE)
 
   # tidy and quit
   .rswat$stor$temp[['file.cio']] = list()
