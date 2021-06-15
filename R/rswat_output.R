@@ -1303,29 +1303,10 @@ rswat_ohg_toggle = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', de
   if( delete & prt.exists ) unlink(prtpath)
   if( !delete ) writeLines(out.lines, prtpath)
   
-  # open file.cio and identify the line number and character position to modify
-  rswat_rlines(ciopath) 
-  linedf.cio = .rswat$stor$temp[['file.cio']]$linedf
-  lnmod = linedf.cio %>% filter(string=='simulation') %>% pull(line_num)
-  cposmod = linedf.cio %>% filter(line_num==lnmod, field_num==4) %>% pull(start_pos)
-  cendmod = linedf.cio %>% filter(line_num==lnmod, field_num==4) %>% pull(end_pos)
-  clen = cendmod - cposmod
-  
-  # modify the line and write the changes to file.cio
-  newval = ifelse(delete, 'null', ofile)
-  newval.n = nchar(newval)
-  pad.n = clen - nchar(newval.n)
-  if( pad.n > 0 ) newval = paste0(newval, paste(rep(' ', pad.n), collapse=''))
-  substr(.rswat$stor$txt[['file.cio']][lnmod], cposmod, cposmod + nchar(newval)) = newval
-  writeLines(.rswat$stor$txt[['file.cio']], ciopath)
-  
-  # remove the 'file.cio' data from package environment 
-  .rswat$stor$txt = .rswat$stor$txt[names(.rswat$stor$txt) != 'file.cio']
-  .rswat$stor$temp = .rswat$stor$temp[names(.rswat$stor$temp) != 'file.cio']
-  
-  # refresh files list (maintaining ignored files list)
-  ignore = rswat_cio(trim=F) %>% filter(ignored) %>% pull(file)
-  rswat_cio(ciopath, ignore=ignore, quiet=quiet)
+  # open file.cio, modify the appropriate field and write the changes 
+  file.cio = rswat_open('file.cio') 
+  file.cio$col_3[file.cio$group=='simulation'] = 'object.prt'
+  rswat_write(file.cio, preview=FALSE, quiet=quiet)
   
   # load new file, or, in delete mode, return nothing 
   if(delete) return(NULL)
