@@ -1371,7 +1371,7 @@ my_effp = function(pet, pcp, n=2)
 }
 
 #' estimate northern winter baseflow periods using spline function heuristics (in development)
-my_baseflow = function(obs, rmode='plot', smethod='n', qfmerge=5, bfmerge=110)
+my_baseflow = function(obs, rmode='plot', smethod='n', qfmerge=5, bfmerge=60)
 {
   # TODO: automate the selection of qfmerge and bfmerge
   #
