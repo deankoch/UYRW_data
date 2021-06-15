@@ -137,7 +137,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     } else {
 
       # message in case the function hasn't been run, or something else goes wrong
-      stop('file.cio not found. Initialize it with `rswat_cio(ciopath)`')
+      stop('file.cio not found. Supply its path with `rswat_cio(ciopath)`')
       
     }
     
@@ -186,29 +186,39 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     
     # read the text (writes to `.rswat$stor$txt` and `.rswat$stor$temp`) and print comment
     rswat_rlines(ciopath)
-    if( !quiet ) cat(paste(.rswat$stor$txt[[basename(ciopath)]][[1]], '\n'))
-    
-    # read in group names from first column 
-    out.nm = .rswat$stor$temp[[basename(ciopath)]]$linedf %>% 
+    if( !quiet ) cat(paste(.rswat$stor$txt[['file.cio']][[1]], '\n'))
+
+    # read in group names from first field (column)
+    out.nm = .rswat$stor$temp[['file.cio']]$linedf %>% 
       group_by(line_num) %>% 
       filter(field_num==1) %>% 
       pull(string)
     
-    # create output table, filtering nulls
-    cio = .rswat$stor$temp[[basename(ciopath)]]$linedf %>% 
+    # initialize output table of filenames, filtering nulls
+    cio = .rswat$stor$temp[['file.cio']]$linedf %>% 
       group_by(line_num) %>% 
       mutate(group = out.nm[line_num-1]) %>% 
       mutate(field_num = field_num - 1) %>%
-      filter(field_num > 0, string != 'null') %>% 
+      filter(field_num > 0, string != 'null') 
+  
+    # append "file.cio" itself (in group 'cio'), and set paths
+    cio = data.frame(string='file.cio', group='cio') %>%
+      full_join(cio, by=c('string', 'group')) %>%
       mutate(file = string) %>%
-      mutate(path = file.path(dirname(ciopath), file)) %>%
+      mutate(path = file.path(dirname(ciopath), file))
+    
+    # fix paths for '*_path' group
+    cio$path[ endsWith(cio$group, '_path') ] = cio$string[ endsWith(cio$group, '_path') ]
+    
+    # get file information from OS and initialize some flags
+    cio = cio %>% 
       mutate(exists = file.exists(path)) %>%
       mutate(size = set_units(set_units(file.info(path)$size, bytes), kilobytes)) %>%
       mutate(modified = file.info(path)$mtime) %>%
       mutate(ignored = FALSE )  %>%
-      mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>% 
-      as.data.frame() 
-    
+      mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>%
+      as.data.frame()
+
     # update exclusion list if necessary
     if( !is.null(ignore) )
     {
@@ -216,7 +226,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
     }
     
     # tidy up and initialize project metadata objects in the package environment
-    .rswat$stor$temp = .rswat$stor$temp[-which(names(.rswat$stor$temp) == basename(ciopath))]
+    .rswat$stor$temp = .rswat$stor$temp[-which(names(.rswat$stor$temp) == 'file.cio')]
     assign('ciopath', ciopath, envir=.rswat, inherits=FALSE)
     assign('cio', cio, envir=.rswat, inherits=FALSE)
     
@@ -241,7 +251,7 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       group_by(file) %>% 
       summarize(.groups='drop_last',
         ntab=length(unique(table[!is.na(table)])), 
-        nvar=n(),
+        nvar=sum(!is.na(string) & name != 'name', na.rm=TRUE),
         nline=length(unique(line_num))-1,
         nskip=list(length(unique(line_num[skipped])))) %>%
       as.data.frame
@@ -295,8 +305,8 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # overwriting anything already there. This is useful if you need to reload project data after
   # it's been modified on disk by external programs.
   
-  # parse the `fname` argument, assigning all existing files by default
-  cio = rswat_cio(trim=FALSE) %>% filter(exists) 
+  # parse the `fname` argument, assigning all existing, non-weather files by default
+  cio = rswat_cio(trim=FALSE) %>% filter(exists) %>% filter(file!=path) 
   listmode = length(fname) == 0
   if(listmode) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
@@ -698,9 +708,20 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   txt.out = .rswat$stor$txt[[fname]]
   for(idx in 1:nrow(linedf.new))
   {
+    # find line number and start/end character positions
     idx.ln = linedf.new$line_num[idx]
     idx.start = linedf.new$start_col[idx]
     idx.end = linedf.new$end_col[idx]
+    
+    # widen the string if necessary
+    len.current = nchar(txt.out[idx.ln])
+    if(len.current < idx.end)
+    {
+      pad = paste(rep(' ', idx.end - len.current), collapse='')
+      txt.out[idx.ln] = paste0(txt.out[idx.ln], pad)
+    }
+  
+    # make the substitution
     substr(txt.out[idx.ln], idx.start, idx.end) = char.new$string_padded[idx]
   }
   
@@ -999,6 +1020,19 @@ rswat_compare = function(compare, reference=NULL, ignore=NULL, quiet=FALSE)
                                                                  fname=fname.both[x],
                                                                  tablenum=tnum.both[x], 
                                                                  preview=TRUE) )
+  
+  # DEBUGGING
+  # for(x in which(ncol.equal))
+  # {
+  #   
+  #   print(x)
+  #   print(names(ncol.equal)[x])
+  #   rswat_write(fdata.comp[[x]],
+  #               fname=fname.both[x],
+  #               tablenum=tnum.both[x], 
+  #               preview=TRUE) 
+  #   
+  # }
   
   # merge into one dataframe and tidy up 
   write.out = do.call(rbind, write.list) %>%
@@ -1409,6 +1443,9 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
     if(any(idx.existing)) .rswat$stor$linedf = .rswat$stor$linedf[!idx.existing,]
   }
 
+  # "file.cio" isn't tabular, so we handle it in different function
+  if(fname == 'file.cio') return( rswat_rcio() )
+    
   # table number for recursive calls
   table_num = length(.rswat$stor$data[[fname]]) + 1
   
@@ -1475,7 +1512,7 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
       # fill missing values by creating new headers and/or fields in temp `linedf` and `values`
       rswat_tfix(fname, ln=ln.tofix, ref=ln.head[1], yn=yn)
       
-      # scan a second time, but include only rows before the next header
+      # scan a second time but include only rows before the next header
       rswat_tfind(fname, idx = .rswat$stor$temp[[fname]]$linedf$line_num < ln.nexthead)
       
     }
@@ -1511,13 +1548,105 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
   return(invisible())
 }
 
+#' parse a "file.cio" file
+rswat_rcio = function()
+{
+  # "file.cio" isn't really a table - it's a named list of character strings (file or
+  # directory names) of varying length. The plaintext is laid out like a table, but
+  # different rows from the same column are unrelated. This function loads it as a 
+  # table (see DETAILS) for compatibility with other rswat_* functions
+  #
+  # RETURN:
+  #
+  # Returns nothing, but writes dataframe of contents of "file.cio" to:
+  
+  #   .rswat$stor$data[['file.cio']]
+  #
+  # and appends line information to:
+  #
+  #   .rswat$stor$linedf
+  #
+  # DETAILS:
+  #
+  # The normal file parsing code handles ragged arrays by scanning ahead and attempting
+  # to detect the next header line. This won't work in "file.cio", where everything
+  # looks like a header line but there actually aren't any.
+  #
+  # The function creates a dataframe with columns 'group', 'cio_1', 'cio_2', 'cio_N',
+  # where N is the largest number of fields on a line, 'group' is the first field of each
+  # line and 'cio_n' contains the nth field (or an NA if there isn't one). This object
+  # can be handled like any other rswat_open return value.
+  #
+  # Note: rswat_rlines and rswat_rtext must be called first or the function will fail.
+  # This is intended as a helper function for `rswat_rfile`, where that stuff happens
+  # automatically
+  #
+  
+  # wipe any existing entries for the file(s) in memory
+  .rswat$stor$data[['file.cio']] = list()
+  idx.existing = .rswat$stor$linedf$file == 'file.cio'
+  if(any(idx.existing)) .rswat$stor$linedf = .rswat$stor$linedf[!idx.existing,]
+  
+  # grab copies of the line info dataframe and parsed values from memory
+  linedf.temp = .rswat$stor$temp[['file.cio']]$linedf
+  values.temp = .rswat$stor$temp[['file.cio']]$values
+  
+  # find the max number of fields and initialize column headers
+  idx.maxf = which.max(linedf.temp$field_num)
+  ln.maxf = linedf.temp$line_num[idx.maxf]
+  n.maxf = linedf.temp$field_num[idx.maxf] - 1
+  nm.cio = c('group', paste0('col_', 1:n.maxf))
+  
+  # create dummy entries to serve as headers in linedf, based on line with the most fields
+  ln.ref = 1
+  linedf.dummy = linedf.temp[linedf.temp$line_num == ln.maxf,] %>%
+    mutate( end_pos = start_pos + nchar(nm.cio) ) %>%
+    mutate( line_num = ln.ref) %>%
+    mutate( string = nm.cio)
+
+  # join with the dataframe and list in memory
+  .rswat$stor$temp[['file.cio']]$linedf = rbind(linedf.dummy, linedf.temp)
+  .rswat$stor$temp[['file.cio']]$values = c(as.list(nm.cio), values.temp)
+  
+  # initialize headers info, then run table fixer to fill in "empty" fields
+  rswat_tfind('file.cio')
+  rswat_tfix('file.cio', ln=unique(linedf.temp$line_num), ref=ln.ref)
+  
+  # Note the `ln` argument to `rswat_tfix` (above) would run only until the next likely
+  # header line in the normal workflow - there are many false positives for this in "file.cio",
+  # which is why we need the hack below (set `ln` to all lines) to get it to load properly 
+  
+  # run tfind a second time, to set alignment info and flags, then parse results as a table
+  rswat_tfind('file.cio')
+  tmake.result = rswat_tmake('file.cio')
+  linedf.out = tmake.result$linedf %>% mutate(table=1, file='file.cio')
+  
+  # identify "*_path" group entries, which only have 1 field
+  idx.path = which(endsWith(linedf.out$string, '_path')) 
+  ln.path = linedf.out$line_num[idx.path]
+  idx.ln = linedf.out$line_num %in% ln.path
+  idx.first = idx.ln & ( linedf.out$field_num == 2 )
+  
+  # extend max end-character position for first (non-name) field of the path groups
+  linedf.out$end_col[idx.first] = max(linedf.out$end_pos, na.rm=TRUE)
+
+  # write results to package storage 
+  .rswat$stor$linedf = rbind(.rswat$stor$linedf, linedf.out)
+  .rswat$stor$data[['file.cio']] = list(tmake.result$values)
+
+  # tidy and quit
+  .rswat$stor$temp[['file.cio']] = list()
+  return(invisible())
+  
+}
+
 #' make a table from a parsed SWAT+ file text 
 rswat_tmake = function(fname, idx=NULL)
 {
   # ARGUMENTS:
   #
   # `fname`: (character) the name of the SWAT+ config file
-  # `idx`: integer vector, indexing a subset of the lists in `.rswat$stor$temp`
+  # `idx`: integer vector, indexing a subset of linedf rows to process
   #
   # RETURN VALUE:
   #
