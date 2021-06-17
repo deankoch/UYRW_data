@@ -69,6 +69,18 @@ source(here('R/rswat_docs.R'))
 # define (internal) environment to store the SWAT+ project file data
 if( !exists('.rswat', mode='environment') ) .rswat = new.env( parent=emptyenv() )
 
+# list of global variables assumed immutable in the code below (don't change them during session!)
+.rswat$gv = list(
+  
+  # lookup table for weather input units
+  weather.unit = c(pcp='mm/d', tmp='degC', slr='MJ/m^2', hmd='1', wnd='m/s'),
+  
+  # starting line number of weather input data rows 
+  weather.ln = 4
+  
+  )
+
+
 
 #' 
 #' ## core functions for managing SWAT+ configuration files
@@ -171,6 +183,9 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       wipe = ifelse(normalizePath(.rswat$ciopath) != normalizePath(ciopath), TRUE, wipe)
     } 
     
+    # current SWAT+ directory
+    textio = dirname(ciopath)
+    
     # initialize master storage list as needed
     is.initial = ( ! 'stor' %in% ls(.rswat) )
     if( is.initial | wipe )
@@ -181,71 +196,92 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
       .rswat$stor$txt = list()
       .rswat$stor$data = list()
       .rswat$stor$temp = list()
-      
     }
     
     # read the text (writes to `.rswat$stor$txt` and `.rswat$stor$temp`) and print comment
     rswat_rlines(ciopath)
     if( !quiet ) cat(paste(.rswat$stor$txt[['file.cio']][[1]], '\n'))
 
-    # read in group names from first field (column)
-    out.nm = .rswat$stor$temp[['file.cio']]$linedf %>% 
-      group_by(line_num) %>% 
-      filter(field_num==1) %>% 
-      pull(string)
+    # read in group names from first column
+    out.nm = .rswat$stor$temp[['file.cio']]$linedf %>% group_by( line_num ) %>% 
+      filter( field_num == 1 ) %>% pull( string )
     
-    # initialize output table of filenames, filtering nulls
+    # initialize output table of filenames, count field numbers as starting on second column
     cio = .rswat$stor$temp[['file.cio']]$linedf %>% 
-      group_by(line_num) %>% 
-      mutate(group = out.nm[line_num-1]) %>% 
-      mutate(field_num = field_num - 1) %>%
-      filter(field_num > 0, string != 'null') 
+      mutate( group = out.nm[line_num - 1] ) %>% 
+      mutate( field_num = field_num - 1 ) %>% 
+      filter( field_num > 0 ) %>%
+      filter( (string != 'null') | endsWith(group, '_path') )
   
-    # append "file.cio" itself (in group 'cio'), and set paths
-    cio = data.frame(string='file.cio', group='cio') %>%
-      full_join(cio, by=c('string', 'group')) %>%
-      mutate(file = string) %>%
-      mutate(path = file.path(dirname(ciopath), file))
+    # append "file.cio" itself, in group 'cio', then append flags for special path entries
+    cio = data.frame( string='file.cio', group='cio' ) %>%
+      full_join( cio, by=c('string', 'group') ) %>%
+      mutate( ispath = endsWith(group, '_path') ) %>%
+      mutate( intp = ispath & (string == 'null') ) %>%
+      mutate( extp = ispath & (string != 'null') )
     
-    # fix path and file fields for '*_path' group
-    idx.pathgroup = endsWith(cio$group, '_path')
-    cio$path[ idx.pathgroup ] = cio$string[ idx.pathgroup ]
+    # save the names associated with the weather data directories
+    wdir.nm = cio %>% filter(ispath) %>% pull(group)
     
-    # get file information from OS and initialize some flags
-    cio = cio %>% 
-      mutate(exists = file.exists(path)) %>%
-      mutate(size = set_units(set_units(file.info(path)$size, bytes), kilobytes)) %>%
-      mutate(modified = file.info(path)$mtime) %>%
-      mutate(ignored = FALSE )  %>%
-      mutate(msg=NA, ntab=NA, nvar=NA, nskip=NA, nline=NA) %>%
-      as.data.frame()
-
-    # update exclusion list if necessary
-    if( !is.null(ignore) )
-    {
-      cio = cio %>% mutate(ignored = (group %in% ignore) | (file %in% ignore) )
-    }
+    # clean up double-backslash style path strings and add defaults
+    cio$string[ cio$extp ] = normalizePath(cio$string[ cio$extp ], winslash='/', mustWork=FALSE)
     
+    # append paths, set shorthand '/.', update exclusion list and append flags
+    cio = cio %>%
+      mutate( file = case_when( ispath  ~ '', TRUE ~ string )) %>%
+      mutate( parent = case_when( extp ~ string, TRUE ~ textio ) ) %>%
+      mutate( path = file.path(parent, file)) %>%
+      mutate( file = case_when( intp ~ '/.', TRUE ~ string ) ) %>%
+      mutate( ignored = (group %in% ignore) | (file %in% ignore) ) %>%
+      mutate( exists = file.exists(path) ) %>%
+      select( -c(ispath, intp, extp, parent) )  %>%
+      mutate( msg=NA, ntab=NA_integer_, nvar=NA_integer_, nskip=NA_integer_, nline=NA_integer_ )
+      
     # tidy up and initialize project metadata objects in the package environment
-    .rswat$stor$temp = .rswat$stor$temp[-which(names(.rswat$stor$temp) == 'file.cio')]
+    .rswat$stor$temp['file.cio'] = NULL
     assign('ciopath', ciopath, envir=.rswat, inherits=FALSE)
-    assign('cio', cio, envir=.rswat, inherits=FALSE)
+    assign('cio', cio, envir=.rswat, inherits=FALSE) 
     
-    # differentiate between initial and subsequent calls
+    # locate weather input data files from paths and filenames supplied in "file.cio" 
+    w.path = cio$path[ match(wdir.nm, cio$group) ]
+    w.toc = paste0(names(.rswat$gv$weather.unit), '.cli')
+    
+    # build a list of weather input dataframes by opening the table of contents ("*.cli") files
+    w.list = lapply( which(w.toc %in% cio$file), function(idx) {
+      
+      data.frame( file = rswat_open(w.toc[idx], quiet=TRUE, reload=TRUE)$file ) %>%
+        mutate( group = names(.rswat$gv$weather.unit)[idx] ) %>% 
+        mutate( path = file.path(w.path[idx], file) ) %>%
+        mutate( ignored = (group %in% ignore) | (file %in% ignore) ) %>%
+        mutate( exists = file.exists(path) )
+      
+    })
+    
+    # join with the rest, grabbing some file info stats from OS and overwriting in memory
+    .rswat$cio = cio %>% 
+      full_join( do.call(rbind, w.list), by=c('group', 'file', 'path', 'ignored', 'exists')) %>%
+      mutate( exists = file.exists(path) ) %>%
+      mutate( size = set_units(set_units(file.info(path)$size, bytes), kilobytes) ) %>%
+      mutate( modified = file.info(path)$mtime )
+    
+    # prune internal storage of entries no longer found in 'file.cio'
     if( ! (is.initial | wipe) )
     {
-      # prune storage for entries no longer found in 'file.cio'
-      .rswat$stor$txt = .rswat$stor$txt[names(.rswat$stor$txt) %in% cio$file]
-      .rswat$stor$data = .rswat$stor$data[names(.rswat$stor$data) %in% cio$file]
-      if( nrow(.rswat$stor$linedf) > 0 )
-      {
-        .rswat$stor$linedf = .rswat$stor$linedf %>% filter(file %in% cio$file)
-      }
+      # indices of non-redundant entries
+      idx.txt = names(.rswat$stor$txt) %in% .rswat$cio$file
+      idx.data = names(.rswat$stor$data) %in% .rswat$cio$file
+      idx.linedf = .rswat$stor$linedf$file %in% .rswat$cio$file
+      
+      # update values as needed
+      if( length(idx.txt) > 0 ) .rswat$stor$txt = .rswat$stor$txt[idx.txt]
+      if( length(idx.data) > 0 ) .rswat$stor$data = .rswat$stor$data[idx.data]
+      if( length(idx.linedf) > 0 ) .rswat$stor$linedf = .rswat$stor$linedf[idx.linedf,]
     }
   }
-  
+
+  # TODO: make this a function
   # append metadata from any loaded files
-  if( nrow(.rswat$stor$linedf) > 0 )
+  if( length(.rswat$stor$linedf) > 0 )
   {
     # compute stats by file
     linedf.stats = .rswat$stor$linedf %>% 
@@ -254,16 +290,30 @@ rswat_cio = function(ciopath=NULL, trim=TRUE, wipe=FALSE, reload=FALSE, ignore=N
         ntab=length(unique(table[!is.na(table)])), 
         nvar=sum(!is.na(string) & name != 'name', na.rm=TRUE),
         nline=length(unique(line_num))-1,
-        nskip=list(length(unique(line_num[skipped])))) %>%
+        nskip=length(unique(line_num[skipped]))) %>%
       as.data.frame
     
-    # add them to the return dataframe, and overwrite in storage
+    # update these fields in storage
     nm.stats = c('nline', 'nskip', 'ntab', 'nvar')
-    cio[match(linedf.stats$file, cio$file), nm.stats] = linedf.stats[nm.stats]
-    .rswat$cio = cio
+    .rswat$cio[match(linedf.stats$file, .rswat$cio$file), nm.stats] = linedf.stats[nm.stats]
+    
+    # create folder-wise weather file summary
+    wdat.stats = .rswat$cio %>% 
+      filter(group %in% names(.rswat$gv$weather.unit)) %>%
+      group_by(group) %>% 
+      summarize(.groups='drop_last',
+                ntab = n(),
+                nvar = sum(nvar),
+                nline = sum(nline),
+                nskip = sum(unlist(nskip)))
+    
+    # update the fields in storage - only groups of form '*_path' are modified
+    fname.wdat = paste0(wdat.stats$group, '_path')
+    .rswat$cio[match(fname.wdat, .rswat$cio$group), nm.stats] = wdat.stats[nm.stats]
   }
   
-  # trim, if requested, and finish 
+  # grab a fresh copy of the files dataframe and tidy it, if requested 
+  cio = .rswat$cio
   if(trim) cio = cio %>% 
     filter(exists) %>% 
     select(file, group, size, modified, nline, nskip, ntab, nvar) %>%
@@ -291,7 +341,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # `reload`: (logical) indicating to load the data into memory, but not return it
   # `quiet`: (logical) suppresses console messages
   #
-  # RETURN VALUE:
+  # RETURN:
   #
   # Returns a named list containing all the tabular data associated with `fname`. Each list
   # entry is named after a source file, and consists of either a dataframe (if the file has
@@ -305,9 +355,17 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
   # If `reload==TRUE`, the function call loads and parses all requested files into memory,
   # overwriting anything already there. This is useful if you need to reload project data after
   # it's been modified on disk by external programs.
+  #
+  # DETAILS:
+  #
+  # Once a file is loaded, the data are cached in memory for the next call (unless `reload`
+  # is TRUE). Weather input files (.pcp, .tmp, etc) can be loaded by this function, but only
+  # the first 3 lines are read (a comment and a small table including elevation, coordinates).
+  # To load the entire file, use rswat_wdat
+  #
   
   # parse the `fname` argument, assigning all existing, non-weather files by default
-  cio = rswat_cio(trim=FALSE) %>% filter(exists) %>% filter(file!=path) 
+  cio = .rswat$cio %>% filter(exists) %>% filter( !endsWith(group, '_path') ) 
   listmode = length(fname) == 0
   if(listmode) fname = cio %>% filter(!ignored) %>% pull(file) 
   cio.match = cio %>% filter( (file %in% fname) | (group %in% fname))
@@ -350,7 +408,7 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
       pb.width = getOption('width') - max(nchar(msg.console)) - 5
       pb = txtProgressBar(max=length(fname.toload) + 1, style=3, width=pb.width)
     }
-    
+
     # loop over files
     for(fname.load in fname.toload)
     {
@@ -361,7 +419,11 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
         cat(msg.console[which(fname.toload == fname.load)])
         flush.console()
       }
-      rswat_rfile(fname.load)
+      
+      # load the file, limit to first nmax lines for weather files
+      nmax = .rswat$gv$weather.ln - 1
+      groupnm = cio %>% filter( file == fname.load ) %>% pull( group )
+      rswat_rfile( fname.load, nmax = ifelse(groupnm %in% names(.rswat$gv$weather.unit), nmax, -1) )
     }
     
     if(!quiet) 
@@ -370,23 +432,9 @@ rswat_open = function(fname=character(0), reload=FALSE, simplify=TRUE, quiet=FAL
       close(pb)
     }
   }
-
+  
   # prepare the requested data in a named list, then simplify if requested
   values.out = .rswat$stor$data[cio.match$file]
-  if( simplify )
-  {
-    # collapse redundant within-file lists, then deal with single-file lists
-    idx.singles = sapply(values.out, length) == 1
-    values.out[idx.singles] = lapply(values.out[idx.singles], function(x) x[[1]])
-    
-    # collapse redundant 
-    if(length(values.out) == 1) values.out = values.out[[1]]
-  }
-  
-  # pull a copy of the requested dataframes
-  values.out = .rswat$stor$data[cio.match$file]
-  
-  # simplify as needed before returning the list
   if( simplify )
   {
     # collapse redundant within-file lists, then collapse any single-file lists
@@ -562,7 +610,7 @@ rswat_write = function(value, fname=NULL, tablenum=NULL, preview=TRUE, reload=TR
   #
   
   # grab a list of all filenames and the input object names
-  cio = rswat_cio(trim=FALSE)
+  cio = .rswat$cio
   nm.head = names(value)
   
   # coerce vector input to dataframe
@@ -779,7 +827,7 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
   
   # grab current config files list
-  cio = rswat_cio(trim=F)
+  cio = .rswat$cio
   
   # set default source and destination paths as needed
   to.default = file.path(textio, paste0('_rswat_backup_', basename(tempfile()) ) )
@@ -1047,7 +1095,7 @@ rswat_compare = function(compare, reference=NULL, ignore=NULL, quiet=FALSE)
 }
 
 #' construct an anonymous function that reads/modifies a selection of SWAT+ parameters
-rswat_amod = function(parm)
+rswat_amod = function(parm=NULL)
 {
   # 
   # ARGUMENTS:
@@ -1064,21 +1112,41 @@ rswat_amod = function(parm)
   #
   # DETAILS:
   #
-  # This is a helper function to assist in building anonymous functions that perform
-  # simple read/write operations, where we aren't interested in the entire config file.
+  # This is a helper function to assist in simple read/write operations when we aren't
+  # interested in the entire config file(s). It builds an anonymous function that modifies or
+  # returns the current value of a specified vector of parameters. 
   #
   # `parm` must contain fields 'name' and 'file', and these must correspond to numeric
-  # SWAT+ parameters. Optionally, the field 'i' (row number) can be supplied to specify
-  # particular HRUs/LSUs etc. `i=NA` is taken to mean "all rows of this parameter column",
-  # and negative integers specify all EXCEPT a particular row. The outputs from `rswat_find`
-  # and/or `rswat_compare` calls are valid input to `parm`.  
+  # or integer valued  SWAT+ parameters. Optionally, the field 'i' (row number) can be supplied
+  # to specify particular HRUs/LSUs etc. `i=NA` is taken to mean "all rows of this parameter
+  # column", and negative integers specify all EXCEPT a particular row. The outputs from
+  # `rswat_find` and/or `rswat_compare` calls are valid input to `parm`.  
   # 
   # The returned function, when called with default arguments, will return a dataframe
   # of the form returned by `rswat_find` with the additional column `value` appended,
-  # displaying the parameter value(s) as currently specified in the SWAT+ config file(s).
+  # displaying the parameter value(s) as currently written in the SWAT+ config file(s).
   # If the first argument `x` is supplied, its entries overwrite the value(s) on disk, and
   # the function returns the new value(s) in the dataframe
   #
+  # Special default argument `parm=NULL` produces a function that modifies the SWAT+ random
+  # number seed ('igen' in file "parameters.bsn", an integer in `0:1e8`). Note that the
+  # documentation (as of June 2021) doesn't seem to be correct in that with 'igen'=1 we get
+  # identical simulations every time. However different value of `igen` produce different 
+  # simulations in a repeatable way, so the parameter appears to serve as the random seed
+  # itself for SWAT+. The weird thing is that the higher we set 'igen', the longer the delay
+  # in the "reading from wgn file" step of SWAT+ execution... I'm thinking SWAT+ is generating a
+  # long, deterministic, but computationally expensive, sequence of random seeds and selecting
+  # the 'igen'th one?
+  # TODO: look into this more
+  #
+  
+  # handle invalid input and default
+  if( !is.data.frame(parm) ) 
+  {
+    # NULL input makes a random seed changer 
+    err.msg = 'parm in rswat_amod(parm) has unrecognized class'
+    if( is.null(parm) ) { parm = rswat_find('igen') } else { stop(err.msg) }
+  }
   
   # rswat_find each requested parameter to get its class and dimension
   parm.fname = sapply(split(parm, parm$file), function(x) x$name, simplify=FALSE)
@@ -1092,13 +1160,13 @@ rswat_amod = function(parm)
   # reorder to match input parm and overwrite it
   parm = parm.new[match(parm$name, parm.new$name),]
   
-  # scan for non-numerics
-  idx.nn = parm$class != 'numeric'
+  # scan for invalid classes
+  idx.nn = !( parm$class %in% c('integer', 'numeric') )
   if( any(idx.nn) )
   {
     # print a warning
-    msg.info = paste(cal$name[idx.nn], collapse=', ')
-    warning(paste('removed non-numeric entries from parm:', msg.info))
+    msg.info = paste(parm$name[idx.nn], collapse=', ')
+    warning(paste('parameters must be numeric or integer. Removed:', msg.info))
   }
   
   # copy `parm`, omitting any non-numeric entries / string column
@@ -1393,7 +1461,7 @@ rswat_rtext = function(fname, yn=FALSE)
 }
 
 #' read and interpret a SWAT+ configuration file
-rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
+rswat_rfile = function(fname, reload=TRUE, yn=FALSE, nmax=-1L)
 {
   # ARGUMENTS:
   #
@@ -1410,8 +1478,8 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
   #
   # This function parses data tables by identifying lines with all character type fields as
   # headers, then scanning the lines below for a consistent class/length structure. It does
-  # this iteratively until the end of the file, writing what it finds to package storage as a
-  # list of dataframes (`.rswat$stor$data[[fname]]`).
+  # this iteratively until the end of the file (or until `nmax` lines are read), writing what
+  # it finds to package storage as a list of dataframes (`.rswat$stor$data[[fname]]`).
   #
   # Entries of these dataframes are mapped to segments of the source text file in the output
   # dataframe `linedf`, with one row per data field. The columns 'file', 'line_num', 'class',
@@ -1421,9 +1489,6 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
   # Note that the `yn` flag should be used with care, as it causes problems with files containing
   # the string 'n' as a description or name field (eg cal_parms.cal).
   # 
-    
-  # full path the file
-  txtpath = rswat_cio(trim=FALSE) %>% filter(file==fname) %>% pull(path)
   
   # reload if requested and/or the data aren't loaded 
   txt.loaded = !is.null(.rswat$stor$txt[[fname]])
@@ -1432,7 +1497,7 @@ rswat_rfile = function(fname, reload=TRUE, yn=FALSE)
   if( reload | !txt.loaded | !linedf.loaded | !values.loaded )
   {
     # load and parse the text, add comment to package storage
-    rswat_rlines(.rswat$cio$path[.rswat$cio$file == fname] )
+    rswat_rlines( .rswat$cio$path[ .rswat$cio$file == fname ], nmax = nmax )
     .rswat$cio$msg[.rswat$cio$file == fname] = .rswat$stor$txt[[fname]][[1]]
     
     # detect class and coerce all fields, then make storage in package environment for the output
@@ -1636,12 +1701,93 @@ rswat_rcio = function()
   .rswat$stor$data[['file.cio']] = list(tmake.result$values)
   
   # update the cio dataframe in memory (maintaining ignored files list)
-  ignore = rswat_cio(trim=F) %>% filter(ignored) %>% pull(file)
+  ignore = .rswat$cio %>% filter(ignored) %>% pull(file)
   rswat_cio(.rswat$ciopath, ignore=ignore, quiet=TRUE)
 
   # tidy and quit
   .rswat$stor$temp[['file.cio']] = list()
   return(invisible())
+  
+}
+
+#' read/write data from a weather input file (listed in pcp.cli, tmp.cli, etc)
+rswat_wdat = function(fname, reload=TRUE, makedates=TRUE)
+{
+  # IN DEVELOPMENT 
+  #
+  # The line-by-line parsing approach used for config files is usually going to be too
+  # slow for daily weather input files, so we have this faster implementation instead.
+  #
+  # ARGUMENTS:
+  #
+  # `fname`: (character) the name of the SWAT+ config file
+  # `reload`: (logical), indicating to reload the file
+  #
+  # RETURN:
+  #
+  #
+  # DETAILS:
+  #
+  # 
+  #
+  # Note that the first 3 lines of the weather files contain a table of parameters that
+  # can be read/overwritten using `rswat_open` and `rswat_write` (like any other config
+  # file). This function is for fast reading and writing of the data rows *after* the third.
+  #
+
+  # pull metadata about this file
+  idx.file = .rswat$cio$file == fname
+  fpath = .rswat$cio$path[ idx.file ]
+  grp = .rswat$cio$group[ idx.file ]
+  
+  # set expected classes
+  col.class = c('integer', 'integer', 'numeric')
+  grp.suffix = NULL
+  
+  # temperature is a special case (2 data fields instead of 1)
+  if(grp == 'tmp')
+  {
+    col.class = c(col.class, 'numeric')
+    grp.suffix = c('_min', '_max')
+  }
+  
+  # set indicator for units, column names
+  has.units = c(FALSE, FALSE, rep(TRUE, length(grp.suffix)))
+  weather.nm = c('year', 'jday', paste0(grp, grp.suffix)) 
+  
+  # load the weather data into R as a dataframe
+  ln.skip = .rswat$gv$weather.ln - 1
+  weather.dt = as.data.frame(fread(fpath, 
+                                   skip=ln.skip, 
+                                   colClasses=col.class, 
+                                   col.names=weather.nm)) 
+    
+
+  # add units based on hard-coded look-up table
+  weather.dt[has.units] = mapply(function(x, y) set_units(x, y, mode='standard'),
+                                 x = as.list(weather.dt)[ has.units ], 
+                                 y = .rswat$gv$weather.unit[grp], 
+                                 SIMPLIFY = FALSE)
+
+  # parse dates and append a 'Date' class column, if requested
+  if( makedates )
+  {
+    # parse start and end dates
+    n = nrow(weather.dt)
+    date.start = as.Date( paste(weather.dt[1, c('year', 'jday')], collapse='-'), format='%Y-%j')
+    date.end = as.Date( paste(weather.dt[n, c('year', 'jday')], collapse='-'), format='%Y-%j')
+    
+    # construct and append Dates vector then remove redundant columns
+    weather.dt = weather.dt %>%
+      mutate( date = seq.Date(date.start, date.end, by='day') ) %>%
+      select( -c(year, jday) ) %>%
+      select( date, everything())
+  }
+
+  # # tidy and quit
+  # .rswat$stor$temp[['file.cio']] = list()
+  # return(invisible())
+  return(weather.dt)
   
 }
 
