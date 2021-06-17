@@ -717,10 +717,10 @@ rswat_oparse = function(fname=NULL, textio=NULL)
           
           # make the replacement
           vdf$units[idx.hasunits] = vname.lu$units[ match(head.pattern, vname.lu$name) ]
-          
-          # BUGFIX: 'flo' in OHG files has per-day units (not per-second, like 'flo_out')
-          vdf$units[vdf$name == 'flo'] = 'm3/day'
         }
+        
+        # BUGFIX: 'flo' in OHG files has per-day units (not per-second, like 'flo_out')
+        vdf$units[vdf$name == 'flo'] = 'm3/day'
       }
     }
   }
@@ -2189,10 +2189,10 @@ rswat_cluster = function(nc=NULL, cpath=NULL, wipe=FALSE, quiet=FALSE, export=ch
   return(.rswat$cluster)
 }
 
-#' 
+#' TODO: move this stuff to helper_analysis?
 #' ## miscellaneous
 
-#'  compute Nash–Sutcliffe model efficiency coefficient (NSE) 
+#' compute Nash–Sutcliffe model efficiency coefficient (NSE) 
 my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 {
   # compute the standard NSE coefficient
@@ -2206,6 +2206,27 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
   
   return(nse)
 }
+
+#' make hydrographs using ggplot
+rswat_hg = function(add=NULL)
+{
+  # ARGUMENTS:
+  #
+  # `add`: ggplot grob
+  #
+  # RETURN:
+  # 
+  # ggplot object
+  #
+  # DETAILS:
+  #
+  
+  
+  
+  
+}
+
+
 
 
 
