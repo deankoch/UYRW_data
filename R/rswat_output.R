@@ -1304,9 +1304,9 @@ rswat_ohg_toggle = function(overwrite=FALSE, otype='sdc', oid=1, htype='tot', de
   if( !delete ) writeLines(out.lines, prtpath)
   
   # open file.cio, modify the appropriate field and write the changes 
-  file.cio = rswat_open('file.cio') 
+  file.cio = rswat_open('file.cio', reload=TRUE, quiet=quiet) 
   file.cio$col_3[file.cio$group=='simulation'] = 'object.prt'
-  rswat_write(file.cio, preview=FALSE, quiet=quiet)
+  rswat_write(file.cio, preview=F, quiet=quiet)
   
   # load new file, or, in delete mode, return nothing 
   if(delete) return(NULL)
@@ -1392,8 +1392,8 @@ rswat_ohg_setup = function(dates=NULL, oid=1, quiet=FALSE, backup=TRUE, allout=F
   dates = rswat_time(dates, quiet=TRUE)
   
   # open fifth table of 'print.prt', toggle output files and write the changes
-  print.prt = rswat_open('print.prt')[[5]]
-  print.prt[, names(print.prt) != 'objects'] = c('n', 'y')[ as.integer(allout) + 1 ]
+  print.prt = rswat_open('print.prt')
+  print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = c('n', 'y')[ as.integer(allout) + 1 ]
   rswat_write(print.prt, preview=F, quiet=TRUE)
   
   # activate OHG output
@@ -1682,7 +1682,7 @@ my_objective = function(cal, gage, errfn, quiet=TRUE)
 
 # TODO: run dummy simulation to get OHG file units (if not already in memory)
 #' run a batch of simulations in parallel
-rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F, dbg=F)
+rswat_pexec = function(x=8, amod=NULL, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F, dbg=F)
 {
   #
   # Typical model fitting routines make a series of parameter modifications, running the model
@@ -1715,6 +1715,11 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   # SWAT+ config files, which are then copied to a temporary SWAT+ project folder, where the
   # simulation is run by a worker node created by `rswat_cluster()`.
   #
+  # The default `amod=NULL` is shorthand for setting the random seed ('igen') to an integer
+  # in [0, 100,000] (see `rswat_amod`). This is a temporary workaround until we build our
+  # own weather generation routines. When `amod=NULL`, `x` must be an integer specifying
+  # the number of simulations to execute
+  #
   # if `rswat_cluster(...)` has already been called to initialize a cluster (and it hasn't
   # been shut down), `rswat_pexec` will use the existing one instead of creating a new one.
   #
@@ -1723,7 +1728,6 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   # and saves a (numbered) copy in the .rswat_cluster folder to match the parameter files
   # also stored there. 
   #
-  
   
   # start function call timer
   rtimer.start = Sys.time()
@@ -1737,6 +1741,13 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   # make a backup of SWAT+ config files and configure for OHG-only simulations
   bdir = rswat_ohg_setup(dates=dates, oid=oid, quiet=quiet, backup=TRUE, allout=FALSE)
   
+  # set the default parameter modification function (random seed)
+  if( is.null(amod) ) 
+  {
+    amod = rswat_amod()
+    x = sample(1:1e5, as.integer(x))
+  }
+  
   # grab info on parameter files to modify, make a list of all files to backup
   fmod.df = amod(reload=TRUE)
   fmod = unique(fmod.df$file)
@@ -1745,7 +1756,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   bname.exists = file.exists( file.path(textio, bname) )
   
   # count number of parameters and coerce x to matrix if needed 
-  np = nrow(fmod.df)
+  np = ifelse( is.null(fmod.df), 1, nrow(fmod.df) )
   x = matrix(x, np)
   nx = ncol(x)
   
@@ -1769,8 +1780,11 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
   path.src = setNames(file.path(textio, fmod), fmod)
   fmod.pop = lapply(1:nx, function(x) setNames(file.path(cpath, paste0(x, '_', fmod)), fmod))
   
+  # when `path.src` contains no files, we set `fmod.pop = NULL` to disable file copying 
+  if( length(path.src) == 0 ) fmod.pop = NULL
+  
   # console output for loop below
-  if( !quiet ) cat(paste('writing', nx, 'parameter sets to disk...\n')) 
+  if( !quiet & !is.null(fmod.pop) ) cat(paste('writing', nx, 'parameter sets to disk...\n')) 
   
   # create temporary config files for each simulation in the population, in a loop
   for(idx.pop in 1:nx)
@@ -1778,7 +1792,7 @@ rswat_pexec = function(x, amod, dates=NULL, oid=1, vname='flo', wipe=T, quiet=F,
     # write the files in the currently loaded SWAT+ project folder
     amod(x[,idx.pop], quiet=TRUE, reload=FALSE)
     
-    # copy them to the staging area
+    # copy them to the staging area (note: if `fmod.pop` are NULL, nothing is copied)
     file.copy(path.src, fmod.pop[[idx.pop]], overwrite=TRUE)
   }
   
