@@ -2208,21 +2208,224 @@ my_nse = function(qobs, qsim, L=2, normalized=FALSE)
 }
 
 #' make hydrographs using ggplot
-rswat_hg = function(add=NULL)
+rswat_hg = function(dat, yunit=NULL, add=NULL, cfg=list())
 {
   # ARGUMENTS:
   #
-  # `add`: ggplot grob
+  # `dat`: dataframe with dates column and at least one numeric data column to plot (see DETAILS) 
+  # `yunit`: units or string object, optional units for plotting (passed to `units::units`)
+  # `add`: a ggplot object, to which the new data graph is added
+  # 
+  # `cfg`: plotting parameters, a list with (any of) the following named entries
+  #
+  #   'cols': character vector, palette name (see `hcl.pals()`) or color strings
+  #   'alpha': numeric, in [0,1], the alpha transparency value for ribbons and lines
+  #   'ynm': character, the y axis label (default '')
+  #   'legnm': character, the legend title (default '')
+  #   'qnm': character, legend label for the ribbon in quantile plot mode 
+  #   'legz': numeric vector, legend values for the data columns of `dat` (see DETAILS)
+  #   'legp': character or length-2 numeric vector, passed as 'legend.position' to `theme`
+  #   'smooth': logical, whether to apply `smooth.spline` before plotting (default FALSE)
+  #   'spar': numeric, smoothing parameter (passed to `smooth.spline`) 
+  #   'lb': numeric, when supplied, plots the parallel max of `lb` and the data (default -Inf)
+  #   'yfn' function, a transformation to apply to the data (after any/all others)
+  #   'newz' logical, when TRUE (and `add` is supplied) adds new scale for data
   #
   # RETURN:
   # 
-  # ggplot object
+  #   The `print`able ggplot object
   #
   # DETAILS:
   #
+  # `dat` must contain a dates field, detected as the first Date class column, or (failing
+  # that) the first column name beginning with the string 'date'. Other columns of `dat`
+  # which are of 'numeric' (or, optionally, 'units') class are plotted against the date.
+  # Non-date columns that aren't 'numeric' or 'units' class are ignored.
+  #
+  # `yunit` can be any valid input to `units::units` (eg. 'm3/s' or a vector having units).
+  # Numeric columns that don't have units are assigned units of `yunit` (if it is supplied),
+  # and all other data columns are converted to these units before plotting.
+  #
+  # Note that `rswat_hg` doesn't check for unit conflicts when adding to an existing plot
+  # (with `add`), so `yu` should be set to match it, as needed. If `yunit` is not supplied,
+  # it is set to match the first column having units (if any).
+  #
+  # `legsc` can be a numeric of length equal to the number of data columns in `dat`, in order
+  # to map different colours to different lines. The mapping is based on order (names in
+  # `legsc` are ignored). Alternatively, `legsc` can be a numeric in [0,1] specifying
+  # quantiles for a ribbon plot. 
+  #
+  # When units are in use, they are pasted to the y axis label, `nm['y']`. If not supplied,
+  # this is set to the first non-date column name by default.
+  #
+  # Note that `newz=TRUE` mode requires the `ggnewscale` library
+  
+  # set some default plotting parameters
+  if( is.null(cfg$cols) ) cfg$cols = 'Plasma'
+  if( is.null(cfg$alpha) ) cfg$alpha = 0.5
+  if( is.null(cfg$ynm) ) cfg$ynm = ''
+  if( is.null(cfg$legnm) ) cfg$legnm = ''
+  if( is.null(cfg$qnm) ) cfg$qnm = NULL
+  if( is.null(cfg$legz) ) cfg$legz = NULL
+  if( is.null(cfg$legp) ) cfg$legp = 'right'
+  if( is.null(cfg$smooth) ) cfg$smooth = FALSE
+  if( is.null(cfg$spar) ) cfg$spar = NULL
+  if( is.null(cfg$lb) ) cfg$lb = -Inf
+  if( is.null(cfg$yfn) ) cfg$yfn = identity
+  if( is.null(cfg$newz) ) cfg$newz = FALSE
+    
+  # detect dates field based on names and column classes
+  dat.cl = sapply(dat, class)
+  dat.nm = names(dat)
+  idx.date = c(which( dat.cl == 'Date' ), which( startsWith(dat.nm, 'date') ) )[1]
+  
+  # stop on no-date calls, otherwise normalize the date column
+  if( is.na(idx.date) ) stop('dat appears to have no date column') 
+  names(dat)[idx.date] = 'date'
+  dat$date = as.Date(dat$date)
+  
+  # identify data columns and check for units, stopping on no-data calls
+  is.num = dat.cl == 'numeric'
+  is.unit = dat.cl == 'units'
+  is.data = is.num | is.unit
+  if( !any( is.data ) ) stop('dat appears to have no data columns')
+  
+  # set units according to `dat` when `yunit` not supplied
+  if( is.null(yunit) & any(is.unit) ) yunit = dat[[ which(is.unit)[1] ]]
+
+  # deal with unit conversions
+  if( any(is.unit) ) 
+  {
+    # standardized units code string
+    yunit = ifelse(is.character(yunit), yunit, as.character( units(yunit) ))
+    
+    # unit assignment/conversion, then drop units for simpler code below
+    if( any(is.unit) ) dat[is.unit] = lapply(dat[is.unit], function(x) {
+      set_units(x, yunit, mode='s') %>% drop_units
+      })
+    
+    # add units to y axis label
+    cfg$ynm = ifelse(cfg$ynm == '', yunit, paste0(cfg$ynm, ' (', yunit, ')'))
+  }
+
+  # apply smoother and pmax transformations, then user-supplied function yfn
+  if( cfg$smooth ) dat[is.data] = lapply(dat[is.data], function(x) smooth.spline(x, spar=cfg$spar)$y)
+  dat[is.data] = lapply(dat[is.data], function(x) pmax(cfg$lb, x) ) 
+  dat[is.data] = lapply(dat[is.data], cfg$yfn )
+  
+  # set flags for legend type
+  has.legend = !is.na( cfg$legnm )
+  is.continuous = !is.null( cfg$legz )
+  is.ribbon = ( length(cfg$legz) == 1 ) & ( sum(is.data) > 2 )
+  guide = ifelse(has.legend, ifelse(is.continuous & !is.ribbon, 'colourbar', 'legend'), FALSE)
+  
+  # dummy name when legends disabled
+  if( !has.legend ) cfg$legnm = ''
+  
+  # processing for ribbon plot calls
+  
+  if( is.ribbon )
+  {
+    # check for invalid input
+    if( (cfg$legz < 0) | ( cfg$legz > 1 ) ) stop('expected legz to be a number in [0,1]')
+    
+    # legz is a probability to pass to the quantile function
+    pq = ( 1 - cfg$legz ) / 2
+    uq = apply( dat[is.data], 1, function(x) quantile(x, 1-pq) )
+    lq = apply( dat[is.data], 1, function(x) quantile(x, pq) )
+    
+    # drop existing data columns and replace with quantiles
+    dat = data.frame(date = dat$date, lq=lq, uq=uq)
+    is.data = c(FALSE, TRUE, TRUE)
+    
+    # construct default label if none supplied
+    if( is.null(cfg$qnm) ) cfg$qnm = paste0(100*cfg$legz, '% central quantile')
+  }
+  
+  #
   
   
+  # extend/crop colours as needed to match number of data columns
+  nc = length(cfg$cols)
+  ny = sum(is.data)
+  if( nc > ny )  cfg$cols = cfg$cols[ seq(ny) ]
+  if( nc < ny )  cfg$cols = c( cfg$cols, rep( last(cfg$cols), ny-nc ) )
   
+  # check for palette strings and assign hcl colour palettes (+1 to avoid errors on ny==1 calls) 
+  is.hcl = cfg$cols %in% hcl.pals()
+  if( all(is.hcl) ) cfg$cols = hcl.colors(ny+1, palette=cfg$cols[1]) %>% head(ny)
+  
+  # initialize the ggplot object as needed
+  if( !( 'ggplot' %in% class(add) ) )
+  {
+    ggp.out = ggplot(data=dat, aes(x=date)) +
+      geom_line(aes(y=0), color='grey50') +
+      theme_minimal()
+    
+  } else { 
+    
+    # initialize with user-supplied gglot object
+    ggp.out = add 
+    
+    # experimental ggnewscale mode to add separate colour/fill scale
+    if( cfg$newz & require(ggnewscale) )
+    {
+      ztype = c('color', 'fill')[ 1 + as.integer(is.ribbon) ]
+      ggp.out = ggp.out + new_scale(ztype)
+      
+    } else {
+      
+      # otherwise we have to concatenate the new colour scale with the existing one
+      if( !is.ribbon & !is.continuous )
+      {
+        # # build the render object so we can extract scales 
+        # ggp.built = ggplot_build(ggp.out)
+        # ggp.built$plot$scales$scales
+        # 
+      }
+      
+    }
+  }
+  
+  # ribbon plots
+  if( is.ribbon )
+  {
+    # add the ribbon plot geometry
+    ggp.out = ggp.out +
+      geom_ribbon(aes_(ymin=dat$lq, ymax=dat$uq, fill='rib'), alpha=cfg$alpha) +
+      scale_fill_manual(name=cfg$legnm, values=c(rib=cfg$cols[1]), labels=cfg$qnm, guide=guide)
+    
+  } else {
+    
+    # set up appropriate color mapping scheme for the plot type
+    colmap = dat.nm[is.data]
+    if( is.continuous ) colmap = cfg$legz
+    
+    # create the ggplot line objects
+    ggp.out = ggp.out + lapply(seq(ny), function(x) {
+      geom_line(aes_(y=dat[[ which(is.data)[x] ]], color=colmap[x]), alpha=cfg$alpha)
+    })
+    
+    # in newz=FALSE mode need to check existing color scale 
+    #ggp.built = ggplot_build(ggp.out)
+    #ggp.built$data[[2]]
+    
+    
+    # line plot mode with discrete color scale
+    if( !is.continuous ) ggp.out = ggp.out + 
+      scale_color_manual(cfg$legnm, values=setNames(cfg$cols, dat.nm[is.data]), guide=guide)
+
+    # line plot mode with continuous color scale
+    if( is.continuous ) ggp.out = ggp.out + 
+      scale_colour_gradientn(cfg$legnm, colors=cfg$cols, guide=guide)
+    
+    # override transparency in legend entries
+    if( has.legend ) ggp.out = ggp.out + 
+      guides(color = guide_legend(override.aes = list(size=1, alpha=1)))
+  }
+  
+  # finish and apply aesthetics
+  ggp.out + theme(legend.position = cfg$legp) + labs(x='date', y=cfg$ynm)
   
 }
 
