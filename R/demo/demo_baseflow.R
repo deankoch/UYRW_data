@@ -9,7 +9,16 @@
 #' 
 #' **demo_baseflow.R**: (in development) the SWAT+ process model for baseflow
 #' 
-#' This includes a description of the relevant parameters for groundwater movement and,
+#' ## introduction
+#' 
+#' The model for groundwater in SWAT+ conceptualizes the "shallow aquifer" as a constant depth reservoir
+#' which receives water via percolation from the lowest soil layer and drains, with a fixed delay period,
+#' into channels. A small fraction of percolation is redirected to the "deep aquifer", and that water is
+#' effectively lost from the system (ie it never makes its way into channels). Another fraction is redirected
+#' back upwards to the soil to account for evaporation and root uptake. All of these processes have threshold
+#' water storage values below which no flow occurs, and all parameters are spatially uniform within an HRU.
+#' 
+#' The script below includes a description of the parameters for this groundwater model,
 #' and notes on calibrating `aquifer.aqu` and related files in SWAT+
 #' 
 #' This script uses for demonstration the SWAT+ model generated in
