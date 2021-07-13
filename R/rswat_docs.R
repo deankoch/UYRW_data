@@ -17,6 +17,8 @@
 #' ("rswat_config.R", "rswat_output.R", etc). ie you can download/source "rswat_docs.R" on its
 #' own and it should work without issues.
 #' 
+#' TODO: look into parameters.bsn ('igen' missing, possibly others)
+#' 
 #' ## .rswat environment
 #' 
 #' We need a place to store the text data from the PDF. The line below defines an environment
@@ -48,7 +50,7 @@ library(pdftools)
 #' ## core functions
 
 #' case-insensitive search of SWAT+ IO documentation PDF from within R
-rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, quiet=FALSE)
+rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, quiet=FALSE, doc='b')
 {
   # ARGUMENTS:
   # 
@@ -58,6 +60,7 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
   # `descw`, numeric in [0,1], the weight given to description (versus name) matches 
   # `full`, logical, whether to include full descriptions instead of abbreviated ones
   # `quiet`, logical, suppresses progress bar (passed to `rswat_pdf_open`)
+  # `doc`, character, either 'inputs', 'outputs', or 'both' (or leading substrings)
   #
   # RETURN:
   #
@@ -65,7 +68,8 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
   # known to `rswat_docs`.
   #
   # For non-NULL `pattern`, the function returns a dataframe containing names and descriptions
-  # of matching entries in the SWAT+ inputs documentation.
+  # of matching entries in the SWAT+ inputs/outputs documentation. One or both documents are
+  # searched, depending on the value of `doc` (default both)
   #
   # DETAILS:
   #
@@ -89,12 +93,34 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
   # formatting for console printout headers
   lrule = c('\n~~~', '~~~\n') 
   
-  # make sure weighting factor lies in the correct range and the PDF has been loaded
+  # sort out search target(s) and initialize dataframe variables 
+  include.in = grepl('^i|^b', doc)
+  include.out = grepl('^o|^b', doc)
+  filetable = vartable = NULL
+
+  # make sure weighting factor lies in the correct range and the PDF(s) are loaded
   descw = max(min(descw, 1), 0)
-  if( is.null(.rswat$docs$filetable) ) rswat_pdf_open(quiet=quiet)
+  in.loaded = !is.null(.rswat$docs_in$filetable)
+  out.loaded = !is.null(.rswat$docs_out$filetable)
+  if( include.in & !in.loaded ) rswat_inputs_pdf_open(quiet=quiet, reload=TRUE)
+  if( include.out & !out.loaded ) rswat_outputs_pdf_open(reload=TRUE)
+  
+  # copy the inputs database list from storage if needed
+  if(include.in)
+  {
+    vartable = .rswat$docs_in$vartable
+    filetable = .rswat$docs_in$filetable
+  }
+  
+  # copy the outputs database list from storage if needed 
+  if(include.out)
+  {
+    vartable = vartable %>% rbind(.rswat$docs_out$vartable)
+    filetable = filetable %>% rbind(.rswat$docs_out$filetable)
+  }
   
   # default return value is the files summary table
-  if( is.null(pattern) & is.null(fname) ) return( .rswat$docs$filetable )
+  if( is.null(pattern) & is.null(fname) ) return( filetable )
   
   # TODO: handle dataframe input similar to `rswat_write`
   if( is.data.frame(pattern) )
@@ -106,15 +132,22 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
   # handle integer input to `pattern`, treated as list of page numbers
   if( is.numeric(pattern) )
   {
+    # can't request a page number in 'b' mode
+    if(include.in & include.out) stop('doc must be set to "i" or "o" to specify the document')
+  
+    # load the raw text
+    if( include.in ) rawtext = .rswat$docs_in$rawtext
+    if( include.out  ) rawtext = .rswat$docs_out$rawtext
+    
     # coerce to integer and correct range if necessary
-    page.nmax = length(.rswat$docs$rawtext)
+    page.nmax = length(rawtext)
     page.warn = paste('valid page numbers are: 1, 2, ...,', page.nmax)
     if( ( pattern > page.nmax ) | ( pattern > page.nmax ) ) warning(page.warn)
     pattern = max(min(as.integer(pattern), page.nmax), 1)
     
     # extract printable text and append page number indicators
     page.msg = paste(lrule[1], 'page', pattern, lrule[2])
-    cat.out = paste0(page.msg, .rswat$docs$rawtext[pattern])
+    cat.out = paste0(page.msg, rawtext[pattern])
     
     # print the data and finish
     cat(cat.out)
@@ -148,9 +181,9 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
     fuzzy = 0
   }
   
-  # load the relevant rows of the PDF text databases
-  vartable = .rswat$docs$vartable %>% filter( grepl(fname, file) )
-  filetable = .rswat$docs$filetable %>% filter( grepl(fname, file) )
+  # prune to the relevant rows of the PDF text databases
+  vartable = vartable %>% filter( grepl(fname, file) )
+  filetable = filetable %>% filter( grepl(fname, file) )
   
   # catch unknown filename requests
   if( (fname != '*') & !( fname %in% filetable$file ) )
@@ -267,8 +300,9 @@ rswat_docs = function(pattern=NULL, fname=NULL, fuzzy=0, descw=0.5, full=FALSE, 
   return( vartable.out )
 }
 
-#' load and parse the SWAT+ I/O documentation PDF
-rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=60)
+
+#' load and parse the SWAT+ inputs documentation PDF
+rswat_inputs_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=60)
 {
   # ARGUMENTS:
   # 
@@ -279,7 +313,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   #
   # RETURN:
   # 
-  # returns nothing but writes the following entries to the list `.rswat$docs` (in package
+  # returns nothing but writes the following entries to the list `.rswat$docs_in` (in package
   # environment), initializing/overwriting as needed:
   #
   #  `path`, the path to the PDF
@@ -307,10 +341,10 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   section = last.section = 'FILE.CIO'
   
   # initialize internal storage if necessary
-  if( !( 'docs' %in% ls(.rswat) ) )
+  if( !( 'docs_in' %in% ls(.rswat) ) )
   {
     # `rawtext` stores output of `pdftools::pdf_text`, `vartable` and `filetable` are derived
-    .rswat$docs = list( path=character(), 
+    .rswat$docs_in = list( path=character(), 
                         rawtext=character(), 
                         vartable=data.frame(), 
                         filetable=data.frame() )
@@ -320,26 +354,27 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   if( is.null(pdfpath) )
   {
     # carry forward the existing path, or assign a default one
-    pdfpath = ifelse( length(.rswat$docs$path) == 1,  .rswat$docs$path, pdfpath.def)
+    pdfpath = ifelse( length(.rswat$docs_in$path) == 1,  .rswat$docs_in$path, pdfpath.def)
   }
   
   # update path in package storage then load the PDF using `pdftools`
-  .rswat$docs$path = pdfpath
-  .rswat$docs$rawtext = pdftools::pdf_text(pdfpath)
+  .rswat$docs_in$path = pdfpath
+  .rswat$docs_in$rawtext = pdftools::pdf_text(pdfpath)
   
   # handle calls that don't load anything
-  if( nrow(.rswat$docs$filetable) > 0 & !reload)
+  if( nrow(.rswat$docs_in$filetable) > 0 & !reload)
   {
     # print the first page of the doc to console and return loaded path
-    if( !quiet ) cat(.rswat$docs$rawtext[1])
+    if( !quiet ) cat(.rswat$docs_in$rawtext[1])
     return(pdfpath)
   } 
   
   # split page data at newlines
-  pdf.delim =  strsplit(.rswat$docs$rawtext, '\n')
+  pdf.delim =  strsplit(.rswat$docs_in$rawtext, '\n')
   pdf.npage = length(pdf.delim)
   
   # loop over pages to get a list of dataframes containing page metadata and parsed text 
+  cat('reading inputs PDF...')
   pageout.list = vector(mode='list', length=pdf.npage)
   for(pnum in seq_along(pdf.delim))
   {
@@ -355,7 +390,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     pdftext = pdf.delim[[pnum]]
     
     # run the parser, append a page number, and add result to storage list
-    pageout.list[[pnum]] = .rswat_pdf_parse(pdftext, ragged=ragged, section=section)
+    pageout.list[[pnum]] = .rswat_inputs_pdf_parse(pdftext, ragged=ragged, section=section)
     
     # pull the last row of the output, assign section name to carry forward
     pageout.last = data.table::last(pageout.list[[pnum]])
@@ -375,13 +410,13 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   }
   
   # row-bind, filter redundant entries, switch to lowercase names, autofill 'name' field
-  .rswat$docs$vartable = do.call(rbind, pageout.list)  %>% filter(table) %>% filter(!t_head) %>% 
+  .rswat$docs_in$vartable = do.call(rbind, pageout.list)  %>% filter(table) %>% filter(!t_head) %>% 
     mutate( file = tolower(section) ) %>%
     mutate( nm = tolower(nm) ) %>%
-    mutate( nm = gsub(',cont.', '', nm)) %>%
+    mutate( nm = gsub(',cont.', '', nm) ) %>%
     mutate( name = nm[nafill(replace(seq_along(nm), is.na(nm), NA_integer_), 'locf')] ) %>%
     mutate( description = desc ) %>%
-    dplyr::select( page, line, file, name, description) %>%
+    dplyr::select( page, line, file, name, description ) %>%
     
     # concatenate description lines for each variable name and summarize page numbers
     group_by( file, name ) %>%
@@ -401,10 +436,11 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     filter( nchar(description) > 1 ) %>%
     filter( name != 'header' ) %>%
     arrange(pstart, line) %>%
+    mutate( step = NA ) %>%
     data.frame
   
   # build summary table of all filenames and variables parsed by the function
-  .rswat$docs$filetable = .rswat$docs$vartable %>% group_by(file) %>%
+  .rswat$docs_in$filetable = .rswat$docs_in$vartable %>% group_by(file) %>%
     summarize( startpage = first(pstart), 
                npage = 1 + last(pend) - first(pstart), 
                ndef = n(), 
@@ -413,19 +449,182 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     # arrange in same order as pdf
     arrange(startpage) %>% 
     dplyr::select(file, ndef, npage, startpage) %>% 
+    mutate( type='input' ) %>%
+    mutate( step = NA ) %>%
     data.frame
   
   # finish
   cat('done\n')
 }
 
+#' load and parse the SWAT+ outputs documentation PDF
+rswat_outputs_pdf_open = function(pdfpath=NULL, reload=FALSE, desc.maxlen=60)
+{
+  # ARGUMENTS:
+  # 
+  # `pdfpath`, character, the absolute path to the IO PDF document
+  # `reload`, logical, whether to proceed if the file has been loaded already
+  # `desc.maxlen`, integer > 0, the number of characters to include in shortened descriptions
+  #
+  # RETURN:
+  # 
+  # returns nothing but writes the following entries to the list `.rswat$docs_out` (in package
+  # environment), initializing/overwriting as needed:
+  #
+  #  `path`, the path to the PDF
+  #  `rawtext`, large list of character vectors (one per page), the newline-delimited strings
+  #  `vartable`, dataframe of parsed text from the doc
+  #  `filetable`, dataframe summarizing filenames found in the doc
+  #
+  # DETAILS:
+  #
+  # Loads and renders the PDF using `pdftools`, parses each page using `rswat_output_pdf_parse`,
+  # handling table joins, garbage collection, and tidying of output.
+  #
+  # Users may want to adjust `desc.maxlen` to fit the width of their console.
+  #
+  # For now this has only been tested on the latest outputs doc (as of July 2021) 
+  
+  # a default path to look for the PDF
+  pdfpath.def = 'D:/UYRW_data/development/outputs_swatplus_rev60_5.pdf'
+  
+  # suffix used to indicate a clipped description
+  desc.suffix = '...'
+  
+  # initial data to keep track (in a loop) of the tables spanning multiple pages 
+  ragged = FALSE
+  section = last.section = 'Water Balance Landscape Output Files'
+  
+  # initialize internal storage if necessary
+  if( !( 'docs_out' %in% ls(.rswat) ) )
+  {
+    # `rawtext` stores output of `pdftools::pdf_text`, `vartable` and `filetable` are derived
+    .rswat$docs_out = list( path=character(), 
+                            rawtext=character(), 
+                            vartable=data.frame(), 
+                            filetable=data.frame() )
+  }
+  
+  # handle unspecified path 
+  if( is.null(pdfpath) )
+  {
+    # carry forward the existing path, or assign a default one
+    pdfpath = ifelse( length(.rswat$docs_out$path) == 1,  .rswat$docs_out$path, pdfpath.def)
+  }
+  
+  # update path in package storage then load the PDF using `pdftools`
+  .rswat$docs_out$path = pdfpath
+  .rswat$docs_out$rawtext = pdftools::pdf_text(pdfpath)
+  
+  # handle calls that don't load anything
+  if( nrow(.rswat$docs_out$filetable) > 0 & !reload)
+  {
+    # print the first page of the doc to console and return loaded path
+    if( !quiet ) cat(.rswat$docs_out$rawtext[1])
+    return(pdfpath)
+  } 
+  
+  cat('reading outputs PDF...')
+  
+  # split page data at newlines
+  pdf.delim = strsplit(.rswat$docs_out$rawtext, '\n')
+  pdf.npage = length(pdf.delim)
+  
+  # loop over pages to get a list of dataframes - omit last two pages (incomplete/unreliable)
+  pageout.list = vector(mode='list', length=pdf.npage-2)
+  for(pnum in seq(length(pdf.delim)-2))
+  {
+    # line-by-line text from the pdf page
+    pdftext = pdf.delim[[pnum]]
+    
+    # run the parser and append a page number
+    pageout.list[[pnum]] = .rswat_outputs_pdf_parse(pdftext, section=section) %>%
+      mutate(page = pnum)
+    
+    # pull the last row of the output, assign section name to carry forward
+    pageout.last = last(pageout.list[[pnum]])
+    last.section = section
+    section = ifelse(is.null(pageout.list[[pnum]]), last.section, pageout.last$section)
+    
+  }
+  
+  # concatenate the pages into a single dataframe, keeping only info on relevant lines
+  pageout = do.call(rbind, pageout.list) %>% filter( table | !is.na(filename) )
+  
+  # expand the short-form filenames by replacing wildcard with time period string
+  tstrings = c(day='day', mon='month', yr='year', aa='year')
+  fn.short = pageout %>% filter(!table) %>% select(section, filename)
+  fn.shortlist = split(fn.short$filename, fn.short$section)
+  fn.longlist = lapply(fn.shortlist, function(fnvec) {
+    fn = unlist( lapply( names(tstrings), function(tstr) gsub('\\*', tstr, fnvec)) )
+    setNames( rep(tstrings, each=length(fnvec)), fn )
+    })
+  
+  # expand the variables info dataframe by appending long-form filenames
+  vars.list = pageout %>% filter(table) %>% group_split(section) 
+  vars.expanded = lapply(seq_along(vars.list), function(idx) {
+    
+    group.list = mapply(function(fn, step) vars.list[[idx]] %>% mutate(filename=fn, step=step),
+                         fn=names(fn.longlist[[idx]]),
+                         step=fn.longlist[[idx]],
+                         SIMPLIFY=FALSE)
+    
+    do.call(rbind, group.list)
+    
+    })
+  
+  # collapse into single dataframe and tidy up
+  .rswat$docs_out$vartable = do.call(rbind, vars.expanded) %>% 
+    rename( file = filename ) %>%
+    rename( description = desc ) %>%
+    dplyr::select(page, line, section, file, name, step, description) %>%
+    
+    # concatenate description lines for each variable name and summarize page numbers
+    group_by( step, file, name ) %>%
+    summarize(line = first(line),
+              pstart = min(page),
+              pend = max(page),
+              description_full = paste0(description, collapse = '\n'), .groups='keep') %>%
+
+    # trim whitespace and clip descriptions for dataframe printing
+    mutate( description = gsub('\n+', ' ', description_full) ) %>%
+    mutate( description = gsub('\\s+', ' ', description) ) %>%
+    mutate( suffix = c('', '...')[ 1 + as.integer( nchar(description) > desc.maxlen + 1 ) ] ) %>%
+    mutate( description = paste0(strtrim(description, desc.maxlen), suffix) ) %>%
+    dplyr::select( -suffix ) %>%
+
+    # omit entries with empty descriptions, header listings, reorder to match pdf
+    filter( nchar(description) > 1 ) %>%
+    filter( name != 'header' ) %>%
+    arrange(pstart, line) %>%
+    data.frame
+
+  # build summary table of all filenames and variables parsed by the function
+  .rswat$docs_out$filetable = .rswat$docs_out$vartable %>% group_by(step, file) %>%
+    summarize( startpage = first(pstart),
+               npage = 1 + last(pend) - first(pstart),
+               ndef = n(),
+               .groups='keep') %>%
+
+    # arrange in same order as pdf
+    arrange(startpage) %>%
+    dplyr::select(file, ndef, npage, startpage, step) %>%
+    mutate(type='output') %>%
+    data.frame
+    
+  # finish
+  cat('done\n')
+}
+
+
 #' 
 #' ## internal functions
 #' These are used by core functions and not meant to be called by the user
 #' 
 
-#' parse a page from the I/O pdf
-.rswat_pdf_parse = function(pdftext, ragged=FALSE, header=NULL, section=NA)
+
+#' parse a page from the inputs pdf
+.rswat_inputs_pdf_parse = function(pdftext, ragged=FALSE, header=NULL, section=NA)
 {
   # Line-by-line parsing of pages from SWAT+ IO PDF document using `pdftools` output
   #
@@ -457,7 +656,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   # handle empty pages
   if( length(pdftext) == 0 ) return(NULL)
   
-  # this default should work for parsing SWAT+ IO docs
+  # this default should work for parsing SWAT+ inputs docs
   if( is.null(header) ) header = c('Variable name', 'Definition')
 
   # regex for table header lines 
@@ -556,7 +755,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     {
       # identify the unprocessed lines, parse them
       ln.remaining = page.df$line[ !( page.df$line < which(page.df$t_head)[2] ) ] 
-      df.remaining = .rswat_pdf_parse(pdftext[ln.remaining], header=header)
+      df.remaining = .rswat_inputs_pdf_parse(pdftext[ln.remaining], header=header)
       df.remaining$line = ln.remaining
       
       # join with the rest
@@ -599,7 +798,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     is.nm = grepl(paste0(regex.ragnm1, '|', regex.ragnm2), pdftext[ln.min:ln.max])
     
     # bail if we can't find any by calling the function again with `ragged=FALSE`
-    if( !any(is.nm) ) return( .rswat_pdf_parse(pdftext, header=header, section=section) )
+    if( !any(is.nm) ) return( .rswat_inputs_pdf_parse(pdftext, header=header, section=section) )
 
     # get name column start position from first match
     ln.nm = c(ln.min:ln.max)[is.nm][1]
@@ -615,7 +814,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
 
     # proceed only if we can match a header description
     is.unmatched = desc.pos < nm.pos + 1
-    if( is.unmatched ) return( .rswat_pdf_parse(pdftext, header=header, section=section) )
+    if( is.unmatched ) return( .rswat_inputs_pdf_parse(pdftext, header=header, section=section) )
     
     # build a dummy header line so we can parse table by a recursive call
     header.dummy = c('XxXx', 'YyYy')
@@ -626,7 +825,7 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
     
     # recursive call to get table data (removing the dummy header and matching line numbers)
     pdftext.sub = c(text.header, pdftext[ln.min:ln.max])
-    ragged.out = .rswat_pdf_parse(pdftext.sub, header=header.dummy, section=section )[-1,]
+    ragged.out = .rswat_inputs_pdf_parse(pdftext.sub, header=header.dummy, section=section )[-1,]
     ragged.out$line = ln.min:ln.max
     
     # join with existing output table
@@ -658,6 +857,127 @@ rswat_pdf_open = function(pdfpath=NULL, reload=FALSE, quiet=FALSE, desc.maxlen=6
   page.df$section[ is.na(page.df$section) ] = section
   return(page.df)
 }
+
+#' parse a page from the outputs pdf
+.rswat_outputs_pdf_parse = function(pdftext, section=NA)
+{
+  # Line-by-line parsing of pages from SWAT+ outputs PDF document using `pdftools` output
+  #
+  # ARGUMENTS
+  #
+  # `pdftext`: character, one page of (newline delimited) output from `pdftools::pdf_text` 
+  # `section`: character, default string to use for section titles
+  #
+  # RETURN:
+  #
+  # A dataframe with nrow == length(pdftext) summarizing the table(s) found in
+  # the supplied page of text lines. 
+  #
+  #
+  # DETAILS:
+  #
+  # This is an internal function meant to be called by `rswat_pdf_open`
+  #
+  # Table entries are identified as starting with the string "real ::" 
+  # Filename lines (preceeding a table) have a single word with no spaces and end in
+  # '*.txt'.
+  #
+  # There are no headers in this document, so sections are labelled according to the
+  # document section titles. This are identified as the first line of text following a
+  # table.
+  #
+  # In `ragged` mode, the first line(s) of `pdftext` should belong to an earlier table
+
+  # regex for table entry lines and their values
+  regex.tline = '^\\s+real\\s+::' 
+  regex.name = '::.*\\!'
+  regex.units = '\\!.*\\s+\\|'
+  regex.desc = '\\|.*'
+
+  # regex for leading filename definitions
+  regex.filename = '[a-z_-]\\*.txt$'
+  
+  # identify and repair hanging descriptions with the too-long lines describing organic pool
+  regex.hanging = 'org\\(20\\%\\)'
+  is.hanging = grepl(regex.hanging, pdftext)
+  idx.hanging = which( is.hanging )
+  if( length(idx.hanging) > 0 )
+  {
+    # clean up whitespace, cut/paste hanging text to the correct line
+    hanging.clean = gsub('^\\s+', '', pdftext[idx.hanging])
+    pdftext[idx.hanging-1] = paste(pdftext[idx.hanging-1], hanging.clean)
+    
+    # remove the offending line
+    pdftext = pdftext[-idx.hanging]
+  }
+  
+  # remove header line
+  if( grepl('\\s+C:\\\\', pdftext[1]) ) pdftext = pdftext[-1] 
+  
+  # remove empty lines
+  is.empty = nchar(pdftext) == 0
+  if( any(nchar(pdftext) == 0) ) pdftext = pdftext[ !is.empty ]
+  
+  # handle empty pages
+  if( length(pdftext) == 0 ) return(NULL)
+  
+  # identify filename lines, variable definition lines, and empty lines
+  is.filename = grepl(regex.filename, pdftext)
+  is.tab = grepl(regex.name, pdftext)
+  
+  # capture the relevant text (and some junk)
+  name.capt = regmatches(pdftext[is.tab], gregexec(regex.name, pdftext[is.tab]))
+  units.capt = regmatches(pdftext[is.tab], gregexec(regex.units, pdftext[is.tab]))
+  desc.capt = regmatches(pdftext[is.tab], gregexec(regex.desc, pdftext[is.tab]))
+
+  # make dataframe to store text metadata for the trimmed page
+  page.n = length(pdftext)
+  page.df = data.frame(line = 1:length(pdftext),
+                       section = section,
+                       table = is.tab,
+                       filename = NA,
+                       name = NA,
+                       units = NA,
+                       desc = NA)
+  
+  # add variable info fields after trimming delimiters and whitespace
+  page.df$name[ is.tab ] = gsub(':|= 0|\\s|\\!|\\.', '', unlist(name.capt))
+  page.df$units[ is.tab ] = gsub('\\!|\\s+\\|', '', unlist(units.capt))
+  page.df$desc[ is.tab ] = gsub('\\|', '', unlist(desc.capt))
+  page.df$filename[ is.filename ] = pdftext[ is.filename ]
+  
+  # tidy up leading and doubled whitespace
+  page.df$units = gsub('^\\s+', '', page.df$units)
+  page.df$units = gsub('\\s{2,}', ' ', page.df$units)
+  page.df$desc = gsub('\\s{2,}', ' ', page.df$desc)
+  
+  # section title is first line of text unless there is a hanging table from prev page
+  idx.tbreak = NULL
+  if( !is.tab[1] ) idx.tbreak = 0
+  
+  # identify line numbers where a table has ended mid-page
+  is.midbreak = ( diff(is.tab) < 0 ) & head(is.tab, -1)
+  idx.tbreak = c( idx.tbreak, which( is.midbreak ) )
+  
+  # if a table ends, look ahead to next (nonempty) line for next section title
+  if( length(idx.tbreak) > 0 )
+  {
+    for(idx.table in seq_along(idx.tbreak) )
+    {
+      # scan for nonempty lines following the end of the table
+      ln.expected = 1 + idx.tbreak[idx.table]
+      if( !( ln.expected > length(pdftext) ) )
+      {
+        # set all subsequent table rows to have this section label
+        page.df$section[ !( page.df$line < ln.expected ) ] = pdftext[ln.expected]
+      }
+    }
+  }
+  
+  # finished
+  return(page.df)
+}
+
 
 #' 
 #' ## cross-listed functions
