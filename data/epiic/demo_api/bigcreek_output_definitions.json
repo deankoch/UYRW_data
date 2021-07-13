@@ -1,0 +1,1210 @@
+[
+  {
+    "name": "flo",
+    "units": "mm",
+    "description": "lateral flow from aquifer",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "dep_wt",
+    "units": "m",
+    "description": "average depth from average surface elevation to water table",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "stor",
+    "units": "mm",
+    "description": "average water storage in aquifer during timestep",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "rchrg",
+    "units": "mm",
+    "description": "recharge entering aquifer from other objects",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "seep",
+    "units": "mm",
+    "description": "seepage from bottom of aquifer",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "revap",
+    "units": "mm",
+    "description": "plant water uptake and evaporation",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "minp",
+    "units": "kg",
+    "description": "mineral phosphorus transported in return (lateral) flow",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "orgn",
+    "units": "kg/ha",
+    "description": "organic nitrogen in aquifer – currently static",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "nloss",
+    "units": "kg/ha",
+    "description": "nitrate NO3-N loss",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "no3gw",
+    "units": "kg/ha",
+    "description": "nitrate loading to reach in groundwater",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "seepno3",
+    "units": "kg",
+    "description": "seepage of no3 to next object",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "flo_cha",
+    "units": "m^3",
+    "description": "aquifer flow into channels",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "flo_res",
+    "units": "m^3",
+    "description": "aquifer flow into reservoirs",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "flo_ls",
+    "units": "m^3",
+    "description": "aquifer flow into a landscape element (hru or ru)",
+    "file": "aquifer_day.txt",
+    "pstart": 5,
+    "obj": "hru"
+  },
+  {
+    "name": "sedyld",
+    "units": "t ha",
+    "description": "sediment yield leaving the landscape caused by water erosion",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "sedorgn",
+    "units": "kg ha",
+    "description": "organic nitrogen transported in surface runoff",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "sedorgp",
+    "units": "kg ha",
+    "description": "organic phosphorus transported in surface runoff",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "surqno3",
+    "units": "kg ha",
+    "description": "nitrate NO3-N transported in surface runoff",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "surqsolp",
+    "units": "kg ha",
+    "description": "soluble phosphorus transported in surface runoff",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "usle",
+    "units": "tons",
+    "description": "sediment erosion predicted with the USLE equation",
+    "file": "hru_ls_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "lab_min_p",
+    "units": "kg ha",
+    "description": "phosphorus moving from the labile mineral pool to the active...",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "act_sta_p",
+    "units": "kg ha",
+    "description": "phosphorus moving from the active mineral pool to the stable...",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "fertn",
+    "units": "kg ha",
+    "description": "total nitrogen applied to soil",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "fertp",
+    "units": "kg ha",
+    "description": "total phosphorus applied to soil",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "fixn",
+    "units": "kg ha",
+    "description": "nitrogen added to plant biomass via fixation",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "denit",
+    "units": "kg ha",
+    "description": "nitrogen lost from nitrate pool by denitrification",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "act_nit_n",
+    "units": "kg ha",
+    "description": "nitrogen moving from active organic pool to nitrate pool",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "act_sta_n",
+    "units": "kg ha",
+    "description": "nitrogen moving from active organic pool to stable organic p...",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "org_lab_p",
+    "units": "kg ha",
+    "description": "phosphorus moving from the organic pool to labile pool",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "rsd_nitorg_n",
+    "units": "kg ha",
+    "description": "nitrogen moving from the fresh organic pool (residue) to the...",
+    "file": "hru_nb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "rsd_laborg_p",
+    "units": "kg ha",
+    "description": "phosphorus moving from the fresh organic pool (residue) to t...",
+    "file": "hru_nb_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "no3atmo",
+    "units": "kg ha",
+    "description": "nitrate added to the soil from atmospheric deposition (rainf...",
+    "file": "hru_nb_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "nh4atmo",
+    "units": "kg ha",
+    "description": "ammonia added to the soil from atmospheric deposition (rainf...",
+    "file": "hru_nb_day.txt",
+    "pstart": 3,
+    "obj": "hru"
+  },
+  {
+    "name": "lai",
+    "units": "m**2/m**2",
+    "description": "average leaf area index during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "bioms",
+    "units": "kg ha",
+    "description": "average total plant biomass during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "yield",
+    "units": "kg ha",
+    "description": "harvested biomass yield (dry weight) during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "residue",
+    "units": "kg ha",
+    "description": "average surface residue cover during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "sol_tmp",
+    "units": "degc",
+    "description": "average temperature of soil layer 2 during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "percn",
+    "units": "kg ha",
+    "description": "nitrate NO3-N leached from bottom of soil profile",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "pplnt",
+    "units": "kg ha",
+    "description": "plant uptake of phosphorus",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "tmx",
+    "units": "degc",
+    "description": "average maximum temperature during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "tmn",
+    "units": "degc",
+    "description": "average minimum temperature during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "tmpav",
+    "units": "degc",
+    "description": "average of average daily air temperature during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "wndspd",
+    "units": "m/s",
+    "description": "average windspeed during timestep",
+    "file": "hru_pw_day.txt",
+    "pstart": 4,
+    "obj": "hru"
+  },
+  {
+    "name": "precip",
+    "units": "mm",
+    "description": "precipitation falling as rain and snow",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "snofall",
+    "units": "mm",
+    "description": "precipitation falling as snow, sleet or freezing rain",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "snomlt",
+    "units": "mm",
+    "description": "snow or ice melting",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_gen",
+    "units": "mm",
+    "description": "surface runoff generated from the landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "latq",
+    "units": "mm",
+    "description": "lateral soil flow",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "wateryld",
+    "units": "mm",
+    "description": "water yield – sum of surface runoff, lateral soil flow, and ...",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "perc",
+    "units": "mm",
+    "description": "amt of water perc out of the soil profile & into the vadose ...",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "et",
+    "units": "mm",
+    "description": "actual evapotranspiration from the soil",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "tloss",
+    "units": "mm",
+    "description": "not reported",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "eplant",
+    "units": "mm",
+    "description": "plant transpiration",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "esoil",
+    "units": "mm",
+    "description": "soil evaporation",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_cont",
+    "units": "mm",
+    "description": "surface runoff leaving the landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "sw_init",
+    "units": "mm",
+    "description": "initial soil water content of soil profile at start of time ...",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "sw_final",
+    "units": "mm",
+    "description": "final soil water content of soil profile at end of time step",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "sw_300",
+    "units": "mm",
+    "description": "final soil water content of upper 300 mm at end of time step",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "snopack",
+    "units": "mm",
+    "description": "water equivalent in snow pack",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "pet",
+    "units": "mm",
+    "description": "potential evapotranspiration",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "qtile",
+    "units": "mm",
+    "description": "subsurface tile flow leaving the landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "irr",
+    "units": "mm",
+    "description": "irrigation water applied",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_runon",
+    "units": "mm",
+    "description": "surface runoff from upland landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "latq_runon",
+    "units": "mm",
+    "description": "lateral soil flow from upland landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 1,
+    "obj": "hru"
+  },
+  {
+    "name": "overbank",
+    "units": "mm",
+    "description": "overbank flooding from channels",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_cha",
+    "units": "mm",
+    "description": "surface runoff flowing into channels",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_res",
+    "units": "mm",
+    "description": "surface runoff flowing into reservoirs",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "surq_ls",
+    "units": "mm",
+    "description": "surface runoff flowing onto the landscape",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "latq_cha",
+    "units": "mm",
+    "description": "lateral soil flow into channels",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "latq_res",
+    "units": "mm",
+    "description": "lateral soil flow into reservoirs",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "latq_ls",
+    "units": "mm",
+    "description": "lateral soil flow into a landscape element",
+    "file": "hru_wb_day.txt",
+    "pstart": 2,
+    "obj": "hru"
+  },
+  {
+    "name": "no3_st",
+    "units": "kg/ha",
+    "file": "aquifer_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "orgp",
+    "units": "kg/ha",
+    "file": "aquifer_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "rchrgn",
+    "units": "kg/ha",
+    "file": "aquifer_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "lat3no3",
+    "units": "kg ha",
+    "file": "hru_ls_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "grzn",
+    "units": "kg ha",
+    "file": "hru_nb_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "grzp",
+    "units": "kg ha",
+    "file": "hru_nb_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "nplt",
+    "units": "kg ha",
+    "file": "hru_pw_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "solarad",
+    "units": "mJ/m^2",
+    "file": "hru_pw_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "phubas0",
+    "units": "degc",
+    "file": "hru_pw_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "sw_ave",
+    "units": "mm",
+    "file": "hru_wb_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "sno_init",
+    "units": "mm",
+    "file": "hru_wb_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "sno_final",
+    "units": "mm",
+    "file": "hru_wb_day.txt",
+    "obj": "hru"
+  },
+  {
+    "name": "precip",
+    "units": "ha m",
+    "description": "precipitation on the water body",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "evap",
+    "units": "ha m",
+    "description": "evaporation from the water surface",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "seep",
+    "units": "ha m",
+    "description": "seepage from bottom of water body",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "flo_stor",
+    "units": "m^3/s",
+    "description": "water stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "sed_stor",
+    "units": "tons",
+    "description": "sediment stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "orgn_stor",
+    "units": "kg",
+    "description": "organic N stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "sedp_stor",
+    "units": "kg",
+    "description": "organic P stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "no3_stor",
+    "units": "kg",
+    "description": "NO3-N stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "solp_stor",
+    "units": "kg",
+    "description": "mineral (soluble P) stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "chla_stor",
+    "units": "kg",
+    "description": "chlorophyll-a stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "nh3_stor",
+    "units": "kg",
+    "description": "NH3-N (ammonium) stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "no2_stor",
+    "units": "kg",
+    "description": "NO2-N (nitrite) stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 6,
+    "obj": "channel"
+  },
+  {
+    "name": "cbod_stor",
+    "units": "kg",
+    "description": "carbonaceous biological oxygen demand stored at end of time ...",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "dox_stor",
+    "units": "kg",
+    "description": "dissolved oxygen stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "san_stor",
+    "units": "tons",
+    "description": "detached sand stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sil_stor",
+    "units": "tons",
+    "description": "detached silt stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "cla_stor",
+    "units": "tons",
+    "description": "detached clay stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sag_stor",
+    "units": "tons",
+    "description": "detached small ag stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "lag_stor",
+    "units": "tons",
+    "description": "detached large ag stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "grv_stor",
+    "units": "tons",
+    "description": "gravel stored at end of time period",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "flo_in",
+    "units": "m^3/s",
+    "description": "water in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sed_in",
+    "units": "tons",
+    "description": "sediment in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "orgn_in",
+    "units": "kg",
+    "description": "organic N in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sedp_in",
+    "units": "kg",
+    "description": "organic P in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "no3_in",
+    "units": "kg",
+    "description": "NO3-N (nitrate) in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "solp_in",
+    "units": "kg",
+    "description": "mineral (soluble P) in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "chla_in",
+    "units": "kg",
+    "description": "chlorophyll-a in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "nh3_in",
+    "units": "kg",
+    "description": "NH3-N (ammonium) in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "no2_in",
+    "units": "kg",
+    "description": "NO2-N (nitrite) in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "cbod_in",
+    "units": "kg",
+    "description": "carbonaceous biological oxygen demand in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "dox_in",
+    "units": "kg",
+    "description": "dissolved oxygen in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "san_in",
+    "units": "tons",
+    "description": "detached sand in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sil_in",
+    "units": "tons",
+    "description": "detached silt in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "cla_in",
+    "units": "tons",
+    "description": "detached clay in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sag_in",
+    "units": "tons",
+    "description": "detached small ag in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "lag_in",
+    "units": "tons",
+    "description": "detached large ag in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "grv_in",
+    "units": "tons",
+    "description": "gravel in",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "flo_out",
+    "units": "m^3/s",
+    "description": "water out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sed_out",
+    "units": "tons",
+    "description": "sediment out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "orgn_out",
+    "units": "kg",
+    "description": "organic N out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sedp_out",
+    "units": "kg",
+    "description": "organic P out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "no3_out",
+    "units": "kg",
+    "description": "NO3-N out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "solp_out",
+    "units": "kg",
+    "description": "mineral (soluble P) out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "chla_out",
+    "units": "kg",
+    "description": "chlorophyll-a out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "nh3_out",
+    "units": "kg",
+    "description": "NH3-N (ammonium) out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "no2_out",
+    "units": "kg",
+    "description": "NO2-N (nitrite) out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "cbod_out",
+    "units": "kg",
+    "description": "carbonaceous biological oxygen demand out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "dox_out",
+    "units": "kg",
+    "description": "dissolved oxygen out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "san_out",
+    "units": "tons",
+    "description": "detached sand out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sil_out",
+    "units": "tons",
+    "description": "detached silt out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "cla_out",
+    "units": "tons",
+    "description": "detached clay out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "sag_out",
+    "units": "tons",
+    "description": "detached small ag out",
+    "file": "channel_sd_day.txt",
+    "pstart": 7,
+    "obj": "channel"
+  },
+  {
+    "name": "lag_out",
+    "units": "tons",
+    "description": "detached large ag out",
+    "file": "channel_sd_day.txt",
+    "pstart": 8,
+    "obj": "channel"
+  },
+  {
+    "name": "grv_out",
+    "units": "tons",
+    "description": "gravel out",
+    "file": "channel_sd_day.txt",
+    "pstart": 8,
+    "obj": "channel"
+  },
+  {
+    "name": "aqu_in",
+    "units": "m^3/s",
+    "description": "average daily aquifer inflow rate during time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "peakr",
+    "units": "m^3/s",
+    "description": "average peak runoff rate during time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "washld",
+    "units": "tons",
+    "description": "wash load (suspended) out",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "bedld",
+    "units": "tons",
+    "description": "bed load out",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "dep",
+    "units": "tons",
+    "description": "deposition in channel and flood plain",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "deg_btm",
+    "units": "tons",
+    "description": "erosion of channel bottom",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "deg_bank",
+    "units": "tons",
+    "description": "erosion of channel bank",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "hc_sed",
+    "units": "tons",
+    "description": "erosion from gully head cut",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "width",
+    "units": "m",
+    "description": "channel bank full top width at end of time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "depth",
+    "units": "m",
+    "description": "channel bank full depth at end of time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "slope",
+    "units": "m/m",
+    "description": "channel slope",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "flo_in_mm",
+    "units": "mm",
+    "description": "inflow rate total sum for each time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "aqu_in_mm",
+    "units": "mm",
+    "description": "aquifer inflow rate total sum for each time step",
+    "file": "channel_sdmorph_day.txt",
+    "pstart": 9,
+    "obj": "channel"
+  },
+  {
+    "name": "area",
+    "units": "ha",
+    "file": "channel_sd_day.txt",
+    "obj": "channel"
+  },
+  {
+    "name": "water_temp",
+    "units": "degc",
+    "file": "channel_sd_day.txt",
+    "obj": "channel"
+  },
+  {
+    "name": "hc_len",
+    "units": "m",
+    "file": "channel_sdmorph_day.txt",
+    "obj": "channel"
+  },
+  {
+    "name": "flo_out_mm",
+    "units": "mm",
+    "file": "channel_sdmorph_day.txt",
+    "obj": "channel"
+  }
+]
