@@ -4,6 +4,8 @@
 .Ruserdata
 README.html
 R/deprecated
+R/demo/BOD_meeting
+graphics/BOD_meeting
 data/analysis
 data/prepared
 data/source
