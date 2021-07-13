@@ -4,13 +4,10 @@
 #' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
-<<<<<<< HEAD
 #' 
 #' ```{r opts, echo = FALSE}
 #' knitr::opts_chunk$set(fig.path='D:/UYRW_data/graphics/swat_outputs_API/')
 #' ```
-=======
->>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 #'
 #' **Mitacs UYRW project**
 #' 
