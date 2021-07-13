@@ -1075,6 +1075,22 @@ rswat_time = function(dates=NULL, nyskip=0, daily=FALSE, quiet=TRUE)
   
 }
 
+#' TODO: flesh this out and refactor everything else
+rswat_print = function(swat_file, step='day')
+{
+  # for now this just parses a filename argument (fn) to set the associated
+  # value in table 5 of print.prt to 'y' and everything else to 'n'. 
+  #
+  # For now only step='day' is supported
+  
+  print.prt = rswat_open('print.prt')
+  print.prt[[5]][, names(print.prt[[5]]) != 'objects'] = 'n'
+  idx.activate = which( print.prt[[5]]$objects == gsub('_day.txt', '', swat_file) )
+  print.prt[[5]]$daily[idx.activate] = 'y'
+  invisible( rswat_write(print.prt, preview=F, quiet=TRUE))
+    
+  
+}
 
 #' 
 #' ## OHG files
@@ -2333,10 +2349,12 @@ rswat_hg = function(dat, yunit=NULL, add=FALSE, cfg=list())
     # standardized units code string
     yunit = ifelse(is.character(yunit), yunit, as.character( units(yunit) ))
     
-    # adjust y axis label, do unit assignment/conversion, then drop units to simplify code below
-    cfg$ynm = ifelse(cfg$ynm == '', yunit, paste0(cfg$ynm, ' (', yunit, ')'))
+    # do unit assignment/conversion, then drop units to simplify code below
     dat[idx.unit] = lapply(dat[idx.unit], function(x) set_units(x, yunit, mode='s') %>% drop_units)
   }
+  
+  # adjust y axis label with units
+  cfg$ynm = ifelse(cfg$ynm == '', yunit, paste0(cfg$ynm, ' (', yunit, ')'))
 
   # apply smoother and pmax transformations, then user-supplied function yfn
   if( cfg$smooth ) dat[-1] = lapply(dat[-1], function(x) smooth.spline(x, spar=cfg$spar)$y)
@@ -2344,7 +2362,7 @@ rswat_hg = function(dat, yunit=NULL, add=FALSE, cfg=list())
   dat[-1] = lapply(dat[-1], cfg$yfn )
   
   # set flags for plot type and enable ribbon mode only if there are more than two data columns
-  has.legend = ifelse( is.null(cfg$legnm), TRUE, !is.na( cfg$legnm ) )
+  add.legend = ifelse( is.null(cfg$legnm), TRUE, !is.na( cfg$legnm ) )
   is.ribbon = ( length(cfg$legz) == 1 ) & ( ncol(dat[-1]) > 2 )
   atype = ifelse(is.ribbon, 'fill', 'colour')
   
@@ -2353,8 +2371,8 @@ rswat_hg = function(dat, yunit=NULL, add=FALSE, cfg=list())
   if( is.dline ) gmap = names(dat[-1])
   if( !is.dline & !is.ribbon ) gmap = cfg$legz
   
-  # set legend type string 
-  guide = ifelse(has.legend, ifelse(!is.dline & !is.ribbon, 'colourbar', 'legend'), FALSE)
+  # set legend type string (case FALSE required for colorscale plots without legends)
+  guide = ifelse(add.legend, ifelse(!is.dline & !is.ribbon, 'colourbar', 'legend'), FALSE)
 
   # pre-processing for ribbon plot calls
   if( is.ribbon )
@@ -2414,19 +2432,32 @@ rswat_hg = function(dat, yunit=NULL, add=FALSE, cfg=list())
   }
   
   # legend title is set to `cfg$legnm`, or existing title, or '' (in that order)
-  legnm = cfg$legnm
-  if( is.null(legnm) ) legnm = ifelse( is.null(name.old), '', name.old)
+  if( add.legend & is.null(cfg$legnm) ) cfg$legnm = ifelse( is.null(name.old), '', name.old)
+  
+  # transparency of the geom(s) to add and their number
+  al = cfg$alpha
+  y = seq(ny)
   
   # handle line plots with discrete color scale
   if( is.dline )
   {
-    # concatenate color mapping to include existing one (if any)
-    smap = c(pal.old, setNames(cfg$col, gmap))
+    # base mapping is whatever exists already, y is the index of lines to add
+    smap = pal.old
     
-    # add the ggplot line objects and (re)generate the legend
-    ggp = ggp + 
-      lapply(seq(ny), function(x) geom_line(aes_(y=dat[[x+1]], color=gmap[x]), alpha=cfg$alpha)) +
-      scale_color_manual(legnm, values=smap, breaks=names(smap), guide=guide) 
+    # different geom calls depending on whether legend is requested
+    if( add.legend )
+    {
+      # concatenate color mapping to include existing one (if any)
+      smap = c(smap, setNames(cfg$col, gmap))
+      ggp = ggp + lapply(y, function(x) geom_line(aes_(y=dat[[x+1]], color=gmap[x]), alpha=al)) +
+        scale_color_manual(cfg$legnm, values=smap, breaks=names(smap), guide=guide) 
+      
+    } else {
+      
+      # otherwise plot directly with no aes mapping
+      ggp = ggp + lapply(seq(ny), function(x) geom_line(y=dat[[x+1]], color=cfg$col[x], alpha=al))
+      
+    }
   }
   
   # handle line plots with continuous color scale
@@ -2434,21 +2465,29 @@ rswat_hg = function(dat, yunit=NULL, add=FALSE, cfg=list())
   {
     # add the ggplot lines and (re)generate the legend
     ggp = ggp + 
-      lapply(seq(ny), function(x) geom_line(aes_(y=dat[[x+1]], color=gmap[x]), alpha=cfg$alpha)) +
-      scale_colour_gradientn(legnm, colors=cfg$col, guide=guide)
+      lapply(seq(ny), function(x) geom_line(aes_(y=dat[[x+1]], color=gmap[x]), alpha=al)) +
+      scale_colour_gradientn(cfg$legnm, colors=cfg$col, guide=guide)
   }
   
   # handle ribbon plots
   if( is.ribbon )
   {
-    # set up mapping for scale colors, and carry over any existing legend labels
-    smap = c(pal.old, setNames(cfg$col[1], gmap))
-    lmap = c(lab.old, cfg$qnm)
-    
-    # add the ribbon plot geometry
-    ggp = ggp +
-      geom_ribbon(aes_(ymin=dat$lq, ymax=dat$uq, fill=gmap), alpha=cfg$alpha) +
-      scale_fill_manual(name=legnm, values=smap, labels=lmap, guide=guide)
+    # different geom calls depending on whether legend is requested
+    if( add.legend )
+    {
+      # set up mapping for scale colors, and carry over any existing legend labels
+      smap = c(pal.old, setNames(cfg$col[1], gmap))
+      lmap = setNames(c(lab.old, cfg$qnm), names(smap))
+      
+      # add the ribbon plot geometry
+      ggp = ggp + geom_ribbon(aes_(ymin=dat$lq, ymax=dat$uq, fill=gmap), alpha=al) +
+        scale_fill_manual(name=cfg$legnm, values=smap, labels=lmap, guide=guide)
+      
+    } else {
+      
+      # otherwise plot directly with no aes mapping
+      ggp = ggp + geom_ribbon(aes_(ymin=dat$lq, ymax=dat$uq), fill=cfg$col[1], alpha=al)
+    }
   }
   
   # finish and apply aesthetics

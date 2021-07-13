@@ -243,13 +243,13 @@ my_metadata = function(script.name, entries.list=NA, overwrite=FALSE,
 #' My R scripts are commented using a roxygen2 syntax that is interpretable by `rmarkdown`,
 #' for conversion to markdown via pandoc. This convenience function renders the markdown file
 #' for a given R script and writes to a file of the same name (but with a .md extension).
-my_markdown = function(script.name, script.dir='R', md.dir='markdown', type='md', inter.dir=NULL)
+my_markdown = function(script.name, script.dir='R', markdown.dir='markdown', type='md')
 {
   # ARGUMENTS:
   #
   # `script.name`: character, filename of the R script to render (without the .R extension).
   # `script.dir`: character, subfolder of project directory containing the R script.
-  # `md.dir`: character, subfolder of project directory for output markdown file(s).
+  # `markdown.dir`: character, subfolder of project directory for output markdown file(s).
   #
   # RETURN VALUE:
   #
@@ -267,8 +267,7 @@ my_markdown = function(script.name, script.dir='R', md.dir='markdown', type='md'
   paste('rendering markdown file', path.output, 'from the R script', path.input)
   rmarkdown::render(path.input, 
                     clean=TRUE, 
-                    output_file=path.output, 
-                    intermediates_dir=inter.dir)
+                    output_file=path.output)
   # ...so this call may generate an unwanted html file
   # TODO: fix this or delete the html 
 }

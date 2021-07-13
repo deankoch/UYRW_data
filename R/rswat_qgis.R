@@ -687,11 +687,35 @@ qswat_read = function(qswat)
   # DETAILS:
   #
   # The input dataframe can also be specified by passing a character string in `qswat`
-  # specifying the absolute path to the metadata CSV
+  # specifying the absolute path to the metadata CSV or its parent directory
   #
   
   # handle character string input
-  #if( is.character(qswat) ) 
+  if( is.character(qswat) )
+  {
+    # project files info loaded from csv with filename ending in this string
+    meta.suffix = '_metadata.csv'
+    
+    # handle absolute path to csv
+    if( endsWith(qswat, meta.suffix) )
+    {
+      # extract project name and load
+      meta.full = basename(qswat)
+      qswat.nm = substr(meta.full, 1, nchar(meta.full) - nchar(meta.suffix))
+      qswat = my_metadata(qswat.nm, data.dir=dirname(qswat))
+      
+    } else {
+      
+      # handle path to directory containing csv
+      qswat.files = list.files(qswat)
+      is.meta = endsWith(qswat.files, '_metadata.csv') 
+      if( !any(is.meta) ) stop('qswat should be a dataframe or a path containing *_metadata.csv')
+      
+      # recursive call with absolute path to csv
+      qswat = file.path(qswat, qswat.files[ which(is.meta)[1] ])
+      return( qswat_read(qswat) )
+    }
+  }
   
   # identify the shapefiles directory where we can find the HRU and LSU geometries 
   shpdir = file.path(qswat['proj', 'file'], 'Watershed/Shapes')

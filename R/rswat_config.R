@@ -817,6 +817,9 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
   # grab project directory from package environment
   if( exists('.rswat') )
   {
+    # if no SWAT+ project loaded, attempt to load source directory `from`
+    if( is.null(.rswat$ciopath) ) rswat_cio(from) 
+    
     # copy the path from the package environment
     ciopath = .rswat$ciopath
     
@@ -824,7 +827,7 @@ rswat_copy = function(from=NULL, to=NULL, fname=NULL, overwrite=FALSE, quiet=FAL
     if( is.null(ciopath) ) stop('ciopath not found. Try setting it with `rswat_cio`')
     textio = dirname(ciopath)
     
-  } else stop('"file.cio" not found. Run `rswat_cio` to set its path')
+  } else { stop('"file.cio" not found. Run `rswat_cio` to set its path') }
   
   # grab current config files list
   cio = .rswat$cio
@@ -1284,7 +1287,7 @@ rswat_amod = function(parm=NULL)
 #' reached.
 #' 
 
-#' step 0: read and interpret a SWAT+ configuration file (runs worflow below in a loop)
+#' step 0: read and interpret a SWAT+ configuration file (runs workflow below in a loop)
 rswat_rfile = function(fname, reload=TRUE, yn=FALSE, nmax=-1L)
 {
   # ARGUMENTS:
