@@ -88,9 +88,10 @@ HRUs and assign their plant/soil parameters to survey values. These steps are us
 * [demo_txtinout](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_txtinout.md) loads and modifies it
 * [demo_objective](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_objective.md) tunes parameters
 * [demo_baseflow](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_baseflow.md) adjusts aquifer parameters
+* [swat_outputs_API](https://github.com/deankoch/UYRW_data/blob/master/markdown/swat_outputs_API.md) exports model outputs
 
 [rswat_docs](https://github.com/deankoch/UYRW_data/blob/master/markdown/rswat_docs.md) is a small set
-of R functions that renders the [inputs documentation PDF](https://swatplus.gitbook.io/docs/user/io)
+of R functions that renders the [inputs and outputs documentation PDFs](https://swatplus.gitbook.io/docs/user/io)
 as text and extracts a large, easily searchable table of name-definition pairs. See [demo_rswat_docs](https://github.com/deankoch/UYRW_data/blob/master/markdown/demo_rswat_docs.md) for a vignette on searching the I/O PDF from within R.
 
 We may polish some/all of this code and release it as an R package at some point. Those interested in script-based workflows for SWAT are encouraged to also check out the [SWAT+AW](https://github.com/celray/swatplus-automatic-workflow) and [SWATPlusR](https://github.com/chrisschuerz/SWATplusR) projects. 
