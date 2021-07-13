@@ -4,10 +4,13 @@
 #' date: "`r format(Sys.Date())`"
 #' output: github_document
 #' ---
+<<<<<<< HEAD
 #' 
 #' ```{r opts, echo = FALSE}
 #' knitr::opts_chunk$set(fig.path='D:/UYRW_data/graphics/swat_outputs_API/')
 #' ```
+=======
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 #'
 #' **Mitacs UYRW project**
 #' 
@@ -113,9 +116,12 @@ rswat_copy(from=src.dir, to=temp.dir, fname='.', quiet=TRUE) %>% invisible
 # load this project directory in R
 cio = rswat_cio(temp.dir, reload=TRUE, ignore='decision_table', quiet=TRUE)
 
+<<<<<<< HEAD
 # make a directory for output files
 output.dir = here(data.dir, 'epiic/demo_api')
 my_dir(output.dir)
+=======
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 
 #'
 #' ## HRUs
@@ -128,9 +134,15 @@ my_dir(output.dir)
 #' This example has 50 HRUs. I save their geometry data in a single geoJSON below:
 
 # save the HRUs polygon collection as geoJSON
+<<<<<<< HEAD
 unlink(file.path(output.dir, 'bigcreek_hrus.geojson'))
 qswat$hru = qswat$hru %>% rename(geometry_id = id)
 st_write(qswat$hru, file.path(output.dir, 'bigcreek_hrus.geojson'))
+=======
+unlink('bigcreek_hrus.geojson')
+qswat$hru = qswat$hru %>% rename(geometry_id = id)
+st_write(qswat$hru, 'bigcreek_hrus.geojson')
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 
 # plot the polygons and colour by average elevation
 qswat$hru[,'elev'] %>% plot(border=NA, key.pos=1, main='elevation by HRU (m)')
@@ -158,9 +170,15 @@ qswat$hru[,'Landscape'] %>% plot(key.pos=1, reset=FALSE, main='HRU type')
 #' I save the channel geometries in a geoJSON below
 
 # save the HRUs polygon collection as geoJSON
+<<<<<<< HEAD
 unlink(file.path(output.dir, 'bigcreek_channels.geojson'))
 qswat$cha = qswat$cha %>% rename(geometry_id = Channel)
 st_write(qswat$cha, file.path(output.dir, 'bigcreek_channels.geojson'))
+=======
+unlink('bigcreek_channels.geojson')
+qswat$cha = qswat$cha %>% rename(geometry_id = Channel)
+st_write(qswat$cha, 'bigcreek_channels.geojson')
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 
 #' The plot below overlays the channel geometry with (exaggerated) line widths scaled according to
 #' physical stream width. 
@@ -239,7 +257,11 @@ channel.info = do.call( rbind, lapply( channel.fn, function(fn) rswat_docs(fn) )
 # join the HRU and channel variables info into a single table and save as JSON
 joined.info = rbind(HRU.info, channel.info)
 jsonlite::toJSON(joined.info, dataframe='rows', pretty=TRUE) %>% 
+<<<<<<< HEAD
   write(file.path(output.dir, 'bigcreek_output_definitions.json'))
+=======
+  write('bigcreek_output_definitions.json')
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 
 
 #' 
@@ -309,7 +331,11 @@ output.data[[swat_variable]] = output.data[[swat_variable]] %>%
   drop_units
 
 # write to JSON time series file and print the first few rows
+<<<<<<< HEAD
 write_json(output.data, file.path(output.dir, dest_file), dataframe='columns', Date='ISO8601', pretty=TRUE)
+=======
+write_json(output.data, dest_file, dataframe='columns', Date='ISO8601', pretty=TRUE)
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 output.data %>% head
 
 #' This output JSON has three fields: 'date', a string in [ISO8601](https://www.iso.org/iso-8601-date-and-time-format.html)
@@ -350,7 +376,11 @@ output.data[[swat_variable]] = output.data[[swat_variable]] %>%
   drop_units
 
 # write to JSON time series file and print the first few rows
+<<<<<<< HEAD
 write_json(output.data, file.path(output.dir, dest_file), dataframe='columns', Date='ISO8601', pretty=TRUE)
+=======
+write_json(output.data, dest_file, dataframe='columns', Date='ISO8601', pretty=TRUE)
+>>>>>>> 4335c3b7d208560686bb8e6293a6f01676ffde79
 output.data %>% head
 
 # delete the temporary folder 
