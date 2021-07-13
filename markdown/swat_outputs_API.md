@@ -22,9 +22,9 @@ watershed into subregions. Outputs are served at the level of these
 subregions. For the Big Creek demo I’ve saved copies of these geometry
 collections as geoJSON files:
 
--   **bigcreek\_channels.geojson** (136kb, geoJSON LineString Feature
+-   [**bigcreek\_channels.geojson**](https://raw.githubusercontent.com/deankoch/UYRW_data/master/data/epiic/demo_api/bigcreek_channels.geojson) (136kb, geoJSON LineString Feature
     collection)
--   **bigcreek\_hrus.geojson** (1MB, geoJSON MultiPolygons Feature
+-   [**bigcreek\_hrus.geojson**](https://raw.githubusercontent.com/deankoch/UYRW_data/master/data/epiic/demo_api/bigcreek_hrus.geojson) (1MB, geoJSON MultiPolygons Feature
     collection)
 
 Each feature in these collections corresponds to a physical region in
@@ -39,7 +39,7 @@ Individual features in these files are indexed by the attribute
 Many different hydrograph variables are available as SWAT+ outputs.
 Their names, definitions and units are summarized in the file:
 
--   **bigcreek\_output\_definitions.json** (28kb, JSON table with 6
+-   [**bigcreek\_output\_definitions.json**](https://raw.githubusercontent.com/deankoch/UYRW_data/master/data/epiic/demo_api/bigcreek_output_definitions.json) (28kb, JSON table with 6
     attributes)
 
 The most important attributes here are ‘name’ and ‘type’ (“channel” or
@@ -55,8 +55,9 @@ swat_file = 'aquifer_day.txt'
 dest_file = 'bigcreek_aquifer_day_flo_7_data.json'
 ```
 
-…produces the following file: \*
-**bigcreek\_aquifer\_day\_flo\_7\_data.json** (8kb, JSON time series,
+…produces the following file:
+
+-   [**bigcreek\_aquifer\_day\_flo\_7\_data.json**](https://raw.githubusercontent.com/deankoch/UYRW_data/master/data/epiic/demo_api/bigcreek_aquifer_day_flo_7_data.json) (8kb, JSON time series,
 daily)
 
 This contains the ‘flo’ output for the HRU with ID key 7, for a one year
@@ -93,7 +94,7 @@ new fields to the JSON file) or multiple `geometry_id`s (by adding new
 entries with identical dates) in the same JSON file. As an example, the
 following output file includes the first 10 geometry IDs:
 
--   **bigcreek\_aquifer\_day\_flo\_1-10\_data.json** (78kb, JSON time
+-   [**bigcreek\_aquifer\_day\_flo\_1-10\_data.json**](https://raw.githubusercontent.com/deankoch/UYRW_data/master/data/epiic/demo_api/bigcreek_aquifer_day_flo_1-10_data.json) (78kb, JSON time
     series, daily)
 
 The inputs to produce this file are the same as the first example except
