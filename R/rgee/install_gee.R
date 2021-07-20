@@ -122,3 +122,4 @@ ee_check_credentials()
 #library(here)
 #source(here('R/helper_main.R'))
 #my_markdown('install_gee', 'R/rgee')
+#reminder: check for email printout in the knitr process
